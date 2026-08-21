@@ -1,4 +1,4 @@
-# Summarizing Journal
+# Speak, Memory
 
 Turn stream-of-consciousness Google Doc entries into a zoomable life calendar — raw speech in, compact summaries out.
 
@@ -84,7 +84,7 @@ chmod +x scripts/cron-refresh.sh
 crontab -e
 
 # Refresh every hour:
-0 * * * * /Users/johndimm/projects/summerizing-journal/scripts/cron-refresh.sh >> /tmp/journal-refresh.log 2>&1
+0 * * * * /Users/johndimm/projects/speak-memory/scripts/cron-refresh.sh >> /tmp/journal-refresh.log 2>&1
 ```
 
 ## Images
