@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f1e8">
+  <title>Speak, Memory</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Speak, Memory">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="A phone-first journal: dictate an entry, add a photo, get a summary.">
+  <meta name="application-name" content="Speak, Memory">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="grain"></div>
+
+  <header class="app-bar">
+    <div class="app-bar-inner">
+      <div class="title-wrap">
+        <h1 class="app-title" id="app-title">Speak, Memory</h1>
+        <button class="title-edit" id="title-edit" type="button" aria-label="Rename journal" title="Rename">✎</button>
+      </div>
+      <nav class="mode-nav" aria-label="Section">
+        <button class="mode-btn active" data-mode="write">Write</button>
+        <button class="mode-btn" data-mode="browse">Journal</button>
+        <button class="mode-btn" data-mode="graph">Graph</button>
+        <button class="mode-btn mode-btn-gear" data-mode="settings" aria-label="Settings" title="Settings">⚙</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="app-main">
+    <section id="write-view" class="view"></section>
+    <section id="graph-view" class="view" hidden></section>
+
+    <section id="settings-view" class="view" hidden></section>
+
+    <section id="browse-view" class="view" hidden>
+      <div class="browse-header">
+        <nav class="breadcrumb" id="breadcrumb" aria-label="Location"></nav>
+        <div class="period-nav">
+          <button class="period-nav-btn" id="period-prev" hidden></button>
+          <button class="period-nav-btn" id="period-next" hidden></button>
+        </div>
+        <p class="period-label" id="period-label"></p>
+        <p class="period-brief" id="period-brief"></p>
+        <button class="period-summarize" id="period-summarize" hidden>Summarize this period</button>
+        <div class="period-summary" id="period-summary"></div>
+        <button class="period-delete" id="period-delete" hidden>Delete…</button>
+      </div>
+      <div id="calendar-root" class="calendar-root"></div>
+      <section class="period-outline" id="period-outline" hidden></section>
+    </section>
+  </main>
+
+  <aside id="detail-panel" class="detail-panel" hidden>
+    <button class="close-btn" id="close-detail" aria-label="Close">×</button>
+    <p class="detail-date" id="detail-date"></p>
+    <div class="detail-modes" id="detail-modes" hidden></div>
+    <p class="detail-badge" id="detail-badge" hidden>Verbatim · your own words</p>
+    <h2 class="detail-brief" id="detail-brief"></h2>
+    <div class="detail-full" id="detail-full"></div>
+    <div class="detail-actions" id="detail-actions">
+      <button class="detail-action" id="detail-edit">Edit</button>
+      <button class="detail-action danger" id="detail-delete">Delete</button>
+    </div>
+    <div class="detail-nav" id="detail-nav">
+      <button class="detail-nav-btn" id="detail-prev" hidden></button>
+      <button class="detail-nav-btn" id="detail-next" hidden></button>
+    </div>
+  </aside>
+  <div class="detail-backdrop" id="detail-backdrop" hidden></div>
+
+  <script src="js/main.js" type="module"></script>
+</body>
+</html>

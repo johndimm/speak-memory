@@ -1,0 +1,7 @@
+{
+  "name": "as-the-world-turns-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Phone-first journal: dictate into a text box, snap a photo, get an LLM summary. Stored locally in IndexedDB."
+}

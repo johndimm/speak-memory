@@ -1,0 +1,27 @@
+Many pages now start with a long prose section.  This drives people away.  I want to emphasise the summarization feature throughout the journal, and reserve long prose sections for users (me) who are really interested.
+
+Every page of the journal should follow the same pattern, similar to the current Life page:  
+
+- breadcrumbs
+- name of this node (Life, 1960's, 1963)
+- one word summary
+- phrase summary
+- sentence summary
+- paragraph summary, with link to get complete summary
+- list of elements (for a year, that would be the months), if any
+- outline
+- verbatim button to open transcript
+
+Memories are attached to years.  In the journal, that means they show up in the list of elements for a year.  They should also be included in the summarization to decade, and from decade to Life.  A memory has no elements but it does have a category, and we have category pages.  
+
+We need several levels of summarization for each input text.
+
+- one word
+- phrase
+- sentence
+- paragraph
+- complete summary
+- rewrite without condensing, covers every remark in the input text
+
+We have to request all of these levels at once from the LLM, on a single prompt.
+

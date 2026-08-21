@@ -1,0 +1,1 @@
+npx vercel --prod

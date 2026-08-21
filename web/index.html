@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Days of Our Lives</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="grain"></div>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="title-block">
+        <p class="eyebrow">Life atlas</p>
+        <h1 id="view-title">The Days of Our Lives</h1>
+        <p class="period-label" id="period-label"></p>
+      </div>
+      <nav class="zoom-nav" aria-label="Zoom level">
+        <button class="zoom-btn" data-zoom="year">Year</button>
+        <button class="zoom-btn" data-zoom="month">Month</button>
+        <button class="zoom-btn active" data-zoom="week">Week</button>
+      </nav>
+    </div>
+    <p class="period-brief" id="period-brief"></p>
+  </header>
+
+  <main id="calendar-root" class="calendar-root"></main>
+
+  <aside id="detail-panel" class="detail-panel" hidden>
+    <button class="close-btn" id="close-detail" aria-label="Close">×</button>
+    <p class="detail-date" id="detail-date"></p>
+    <h2 class="detail-brief" id="detail-brief"></h2>
+    <div class="detail-full" id="detail-full"></div>
+  </aside>
+
+  <div class="detail-backdrop" id="detail-backdrop" hidden></div>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

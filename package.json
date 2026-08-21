@@ -1,0 +1,22 @@
+{
+  "name": "summerizing-journal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch": "node scripts/fetch.js",
+    "parse": "node scripts/parse.js",
+    "images": "node scripts/extract-images.js",
+    "summarize": "node scripts/summarize.js",
+    "build": "node scripts/parse.js && node scripts/extract-images.js && node scripts/summarize.js && node scripts/build-summaries.js",
+    "refresh": "node scripts/refresh.js",
+    "watch": "node scripts/watch.js",
+    "new-week": "node scripts/new-week.js",
+    "set-doc": "node scripts/set-doc.js",
+    "dev": "npx serve web -l 3456",
+    "start": "npm run dev"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3"
+  }
+}

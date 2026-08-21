@@ -1,0 +1,28 @@
+# --- Dependencies & build output ---
+node_modules/
+.vercel/
+.DS_Store
+
+# --- Secrets: API keys live here. Never commit. ---
+.env
+.env.local
+# dev helper scripts that contain hardcoded keys
+test-anthropic.sh
+t.sh
+
+# --- Personal journal data (the real Google-Doc journal + its exports) ---
+/data/
+/web/data/
+*-import.json
+journal-2026-*.json
+journal-raw.*
+pepys-days/
+starting-prompt.txt
+
+# --- Large / non-source assets ---
+*.pdf
+example-graph.jpg
+Screenshot_*.jpg
+
+# --- Personal correspondence (outreach drafts) ---
+/outreach/
