@@ -26,3 +26,5 @@ Screenshot_*.jpg
 
 # --- Personal correspondence (outreach drafts) ---
 /outreach/
+.vercel
+.env*
