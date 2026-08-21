@@ -4,8 +4,7 @@
 import { getEntry, putEntry, getAllEntries, clearAllEntries, getAllMemories, putMemory, clearAllMemories, getAllPeriods, putPeriod, clearAllPeriods, photoToStored, storedToBlob } from "./db.js";
 import { withMode } from "./entry.js";
 import { isOutlineText } from "./render.js";
-import { jkey, activeJournalId, switchJournal } from "./journal.js";
-import { renderJournalsSection, wireJournalsSection } from "./samples.js";
+import { jkey } from "./journal.js";
 
 const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const LANDING_KEY = "journal-landing";
@@ -127,8 +126,6 @@ export function initSettings(root, { onImported } = {}) {
           <span class="field-hint">Used to name life decades — Childhood (0–12), Teenage years (13–19), then My 20s, My 30s, and so on.</span>
         </label>
       </section>
-
-      <section class="settings-group" id="journals-section"></section>
 
       <section class="settings-group">
         <h2 class="settings-h">Summaries</h2>
@@ -333,11 +330,6 @@ export function initSettings(root, { onImported } = {}) {
   syncGrouping();
   groupingEl.addEventListener("change", () => { localStorage.setItem(jkey("year-grouping"), groupingEl.value); syncGrouping(); });
   birthEl.addEventListener("input", () => save(jkey("birth-year"), birthEl.value));
-
-  // Sample lives — famous people & entities, each generated into its own isolated journal.
-  const journalsSection = root.querySelector("#journals-section");
-  journalsSection.innerHTML = renderJournalsSection();
-  wireJournalsSection(journalsSection);
 
   // Summary voice — an author style applied to all generated prose (stored in localStorage).
   const styleSelect = root.querySelector("#summary-style-select");

@@ -4,7 +4,7 @@
 // instant. Nabokov leads the list — a small repayment for borrowing the name of his memoir.
 
 import { escapeHtml } from "./render.js";
-import { seedJournal } from "./db.js";
+import { seedJournal, seedBaked } from "./db.js";
 import { dbNameFor, jkey, switchJournal, listJournals, registerJournal, journalExists, deleteJournal, slugify, activeJournalId } from "./journal.js";
 
 // Curated picks. kind is a hint to the model; it decides the final person/entity. `thumb` is an
@@ -34,9 +34,40 @@ function monogram(name) {
   const letters = (words.length >= 2 ? words[0][0] + words[1][0] : (words[0] || "?").slice(0, 2));
   return letters.toUpperCase();
 }
-function thumbHtml(name, emoji) {
-  if (emoji) return `<span class="sample-thumb" aria-hidden="true">${emoji}</span>`;
-  return `<span class="sample-thumb sample-thumb-mono" aria-hidden="true" style="background:${tint(name)}">${escapeHtml(monogram(name))}</span>`;
+// The thumbnail starts as a tinted monogram (so cards render instantly and offline); wirePhotos
+// then upgrades it to the subject's Wikipedia lead photo when one resolves. Works for curated and
+// custom subjects alike; the monogram simply stays when there's no photo.
+function thumbHtml(name, id) {
+  return `<span class="sample-thumb sample-thumb-mono photo-slot" data-name="${escapeHtml(name)}" style="background:${tint(name)}" aria-hidden="true">${escapeHtml(monogram(name))}</span>`;
+}
+
+// Resolve a subject → its Wikipedia lead-image URL (small thumb), cached in localStorage. "" means
+// "looked, none found" so we don't re-query. Wikipedia's API allows anonymous CORS via origin=*.
+async function wikiThumb(title) {
+  const cacheKey = "wikithumb::" + title;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached !== null) return cached || null;
+  try {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=200&titles=${encodeURIComponent(title)}`;
+    const j = await (await fetch(url)).json();
+    const page = Object.values(j.query?.pages || {})[0] || {};
+    const src = page.thumbnail?.source || "";
+    localStorage.setItem(cacheKey, src);
+    return src || null;
+  } catch { return null; }
+}
+
+function wirePhotos(root) {
+  root.querySelectorAll(".photo-slot").forEach(async (slot) => {
+    const src = await wikiThumb(slot.dataset.name || "");
+    if (!src) return; // keep the monogram
+    const img = new Image();
+    img.className = "sample-thumb sample-photo";
+    img.alt = "";
+    img.loading = "lazy";
+    img.onload = () => { if (slot.isConnected) slot.replaceWith(img); };
+    img.src = src; // if it fails to load, the monogram simply stays
+  });
 }
 
 function llmOverrides() {
@@ -68,31 +99,34 @@ export function renderJournalsSection() {
   const curatedSlugs = new Set(PICKS.map((p) => slugify(p.name)));
   const custom = registry.filter((j) => !curatedSlugs.has(j.id));
 
-  const banner = active
-    ? `<div class="sample-banner">You're reading a sample life. Your own journal is untouched.
-         <button type="button" class="sample-back" id="sample-back">← Back to your journal</button></div>`
-    : "";
+  const ownTitle = localStorage.getItem("journal-title") || "Speak, Memory";
+  const ownCard = `<button type="button" class="sample-card${active === "" ? " active" : ""}" data-own="1">
+       <span class="sample-thumb sample-thumb-mono" aria-hidden="true" style="background:${tint(ownTitle)}">${escapeHtml(monogram(ownTitle))}</span>
+       <span class="sample-text"><span class="sample-name">${escapeHtml(ownTitle)}</span><span class="sample-tag">your journal</span></span>
+     </button>`;
 
-  const pickCard = (name, kind, id, ready, note, emoji) =>
+  const pickCard = (name, kind, id, ready, note) =>
     `<button type="button" class="sample-card${active === id ? " active" : ""}" data-open="${escapeHtml(id)}" data-name="${escapeHtml(name)}" data-kind="${escapeHtml(kind)}">
-       ${thumbHtml(name, emoji)}
+       ${thumbHtml(name, id)}
        <span class="sample-text">
          <span class="sample-name">${escapeHtml(name)}</span>
          <span class="sample-tag">${ready ? "ready" : (kind === "entity" ? "entity" : "person")}${note ? ` · ${escapeHtml(note)}` : ""}</span>
        </span>
      </button>`;
 
-  const picks = PICKS.map((p) => { const id = slugify(p.name); return pickCard(p.name, p.kind, id, readyIds.has(id), p.note, p.thumb); }).join("");
+  const picks = PICKS.map((p) => { const id = slugify(p.name); return pickCard(p.name, p.kind, id, readyIds.has(id), p.note); }).join("");
   const customCards = custom.map((j) =>
     `<div class="sample-card-wrap">
-       ${pickCard(j.title || j.id, j.kind || "person", j.id, true, "", j.thumb)}
+       ${pickCard(j.title || j.id, j.kind || "person", j.id, true, "")}
        <button type="button" class="sample-del" data-del="${escapeHtml(j.id)}" title="Delete this sample" aria-label="Delete">×</button>
      </div>`).join("");
 
   return `
-    <h2 class="settings-h">Sample lives</h2>
-    <p class="field-hint" style="margin-bottom:0.9rem">Fictional journals the app dreams up for famous people and things — each written in the first person across a whole life. They live in their own separate space; your journal stays private and untouched. The first time you open one it's generated (up to a minute); after that it's saved and instant.</p>
-    ${banner}
+    <h2 class="settings-h">Lives</h2>
+    <p class="field-hint" style="margin-bottom:1rem">Your own journal, plus fictional lives the app dreams up for famous people and things — each written in the first person across a whole life. Sample lives live in their own separate space; your journal stays private and untouched. The first time you open a sample it's generated (up to a minute), then saved and instant.</p>
+    <p class="nav-hint">Your journal</p>
+    <div class="sample-grid">${ownCard}</div>
+    <p class="nav-hint" style="margin-top:1.2rem">Sample lives</p>
     <div class="sample-grid">${picks}${customCards}</div>
     <label class="field" style="margin-top:1rem">
       <span class="field-label" for="sample-input">Or dream up anyone</span>
@@ -105,38 +139,64 @@ export function renderJournalsSection() {
 }
 
 export function wireJournalsSection(root) {
+  wirePhotos(root); // upgrade the monogram tiles to Wikipedia photos where available
   const status = root.querySelector("#sample-status");
   let busy = false;
   const setStatus = (msg, kind = "") => { status.textContent = msg; status.className = `sample-status${kind ? " " + kind : ""}`; };
 
+  // A subject's pre-baked bundle, if one was shipped (curated picks). Fully summarized → instant.
+  async function fetchBundle(id) {
+    try {
+      const r = await fetch(`./data/samples/${id}.json`, { cache: "force-cache" });
+      if (!r.ok) return null;
+      const b = await r.json();
+      return (b && b.sample) ? b : null;
+    } catch { return null; }
+  }
+
+  function applyMeta(id, meta, name) {
+    localStorage.setItem(jkey("journal-title", id), meta.title || name);
+    localStorage.setItem(jkey("year-grouping", id), meta.grouping === "calendar" ? "calendar" : (meta.kind === "entity" ? "calendar" : "life"));
+    if (meta.birthYear) localStorage.setItem(jkey("birth-year", id), String(meta.birthYear));
+  }
+
   async function openJournal(id, name, kindHint) {
     if (!id) return;
-    if (journalExists(id)) { switchJournal(id); return; } // already generated → just switch (reloads)
+    if (journalExists(id)) { switchJournal(id); return; } // already loaded → just switch (reloads)
     if (busy) return;
     busy = true;
     root.querySelectorAll("button").forEach((b) => (b.disabled = true));
-    setStatus(`Dreaming up ${name}'s whole life — this usually takes up to a minute. Hang tight…`, "working");
     try {
+      // Fast path: a shipped, fully-summarized bundle. No model calls — load and open.
+      const bundle = await fetchBundle(id);
+      if (bundle) {
+        setStatus(`Opening ${bundle.meta?.title || name}…`, "working");
+        await seedBaked(dbNameFor(id), bundle);
+        applyMeta(id, bundle.meta || {}, name);
+        localStorage.setItem(jkey("baked", id), "1"); // prebuilt: skip the background pass
+        registerJournal({ id, title: bundle.meta?.title || name, kind: bundle.meta?.kind || "person", subtitle: "" });
+        switchJournal(id);
+        return;
+      }
+      // Slow path (custom subjects): generate raw content; the client summarizes on open.
+      setStatus(`Dreaming up ${name}'s whole life — this usually takes up to a minute. Hang tight…`, "working");
       const data = await postGenerate(name, kindHint || "");
       const meta = data.meta || {};
       await seedJournal(dbNameFor(id), { entries: data.entries || [], memories: data.memories || [] });
-      // Per-journal settings, written under the sample's namespace before we switch into it.
-      localStorage.setItem(jkey("journal-title", id), meta.title || name);
-      localStorage.setItem(jkey("year-grouping", id), meta.grouping === "calendar" ? "calendar" : (meta.kind === "entity" ? "calendar" : "life"));
-      if (meta.birthYear) localStorage.setItem(jkey("birth-year", id), String(meta.birthYear));
+      applyMeta(id, meta, name);
       registerJournal({ id, title: meta.title || name, kind: meta.kind || "person", subtitle: "" });
       setStatus(`Ready! Opening ${meta.title || name}…`, "ok");
       switchJournal(id); // reloads into the new isolated journal
     } catch (e) {
-      setStatus(`Couldn't generate that one: ${e.message}. ${llmOverrides().apiKey ? "" : "You may need to add an API key in the AI model section above."}`, "error");
+      setStatus(`Couldn't open that one: ${e.message}. ${llmOverrides().apiKey ? "" : "You may need to add an API key in the AI model section above."}`, "error");
       root.querySelectorAll("button").forEach((b) => (b.disabled = false));
       busy = false;
     }
   }
 
   root.addEventListener("click", (e) => {
-    const back = e.target.closest("#sample-back");
-    if (back) { switchJournal(""); return; }
+    const own = e.target.closest("[data-own]");
+    if (own) { switchJournal(""); return; } // back to your own journal
     const del = e.target.closest("[data-del]");
     if (del) {
       const id = del.dataset.del;

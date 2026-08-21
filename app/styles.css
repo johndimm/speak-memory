@@ -1243,6 +1243,7 @@ body { position: relative; }
   font-size: 1.5rem; line-height: 1; background: var(--paper-deep); border: 1px solid var(--line);
 }
 .sample-thumb-mono { font-family: var(--font-display); font-size: 1.25rem; color: var(--ink); font-weight: 400; }
+img.sample-photo { object-fit: cover; }
 .sample-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .sample-name { font-family: var(--font-display); font-size: 1.1rem; line-height: 1.15; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
 .sample-tag { font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-soft); }

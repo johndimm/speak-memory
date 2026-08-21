@@ -869,6 +869,7 @@ function makeLimiter(max) {
 }
 
 function autoSummarize() {
+  if (localStorage.getItem(jkey("baked")) === "1") return; // prebuilt sample: summaries are shipped
   if (summarizing) { rerunPending = true; return; }
   summarizing = true;
   (async () => {

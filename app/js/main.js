@@ -1,6 +1,7 @@
 import { initRecord } from "./record.js";
 import { initCalendar, initGraphView } from "./calendar.js";
 import { initSettings } from "./settings.js";
+import { renderJournalsSection, wireJournalsSection } from "./samples.js";
 import { purgeRaw } from "./db.js";
 import { jkey } from "./journal.js";
 
@@ -46,12 +47,19 @@ const writeView = document.getElementById("write-view");
 const browseView = document.getElementById("browse-view");
 const settingsView = document.getElementById("settings-view");
 const graphView = document.getElementById("graph-view");
+const livesView = document.getElementById("lives-view");
 const modeBtns = [...document.querySelectorAll(".mode-btn")];
+
+// The "Lives" tab: your own journal + the sample-lives gallery (switching journals reloads).
+function renderLives() {
+  livesView.innerHTML = renderJournalsSection();
+  wireJournalsSection(livesView);
+}
 
 // Open a memory's page in the Journal (after saving/editing it in Write).
 function openMemoryInJournal(mem) {
   modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "browse"));
-  writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true;
+  writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true;
   browseView.hidden = false;
   graph.close();
   calendar.showMemory(mem);
@@ -94,10 +102,12 @@ function setMode(mode, arg, zoom) {
   browseView.hidden = mode !== "browse";
   settingsView.hidden = mode !== "settings";
   graphView.hidden = mode !== "graph";
+  livesView.hidden = mode !== "lives";
   if (mode !== "graph") graph.close(); // stop live graph updates when leaving the tab
   if (mode === "browse") calendar.reload(arg, zoom);
   else if (mode === "graph") graph.open();
   else if (mode === "settings") settings.refresh();
+  else if (mode === "lives") renderLives();
   else recorder.refresh(arg); // arg = date (day) or memory object to edit
 }
 
@@ -111,7 +121,7 @@ const graph = initGraphView(graphView, {
   // "Open ›" in the graph's node preview → jump to that node's page in the Journal.
   onOpen: (nav) => {
     modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "browse"));
-    writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true;
+    writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true;
     browseView.hidden = false;
     graph.close();
     calendar.showNode(nav);

@@ -112,6 +112,37 @@ export function seedJournal(dbName, { entries = [], memories = [] }) {
   });
 }
 
+// Load a fully pre-summarized sample bundle into its own database: finished entries + memories
+// (each already carrying its `levels` ladder) plus the rolled-up period summaries. Nothing is left
+// dirty, so the client renders it instantly and never calls the model (the journal is flagged
+// "baked" so the background pass is skipped). Records already carry their id/kind/key.
+export function seedBaked(dbName, { entries = [], memories = [], periods = [] }) {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(dbName, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains("entries")) db.createObjectStore("entries", { keyPath: "date" });
+      if (!db.objectStoreNames.contains("memories")) db.createObjectStore("memories", { keyPath: "id" });
+      if (!db.objectStoreNames.contains("periods")) db.createObjectStore("periods", { keyPath: "key" });
+      if (!db.objectStoreNames.contains(ITEMS)) db.createObjectStore(ITEMS, { keyPath: "id" });
+    };
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error("Storage is blocked — close other tabs of this app and try again."));
+    req.onsuccess = () => {
+      const db = req.result;
+      const t = db.transaction([ITEMS, "periods"], "readwrite");
+      const items = t.objectStore(ITEMS);
+      const periodStore = t.objectStore("periods");
+      for (const e of entries) if (e && e.id) items.put({ ...e, kind: "journal" });
+      for (const m of memories) if (m && m.id) items.put({ ...m, kind: "memory" });
+      for (const p of periods) if (p && p.key) periodStore.put(p);
+      t.oncomplete = () => { db.close(); resolve(); };
+      t.onerror = () => reject(t.error);
+      t.onabort = () => reject(t.error);
+    };
+  });
+}
+
 function tx(store, mode, fn) {
   return openDB().then(
     (db) =>
