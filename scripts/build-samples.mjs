@@ -177,23 +177,40 @@ async function assignImages(name, memories, entries) {
   const used = new Set();
   for (const m of memories) {
     const subj = (m.subject && m.subject.length > 2) ? m.subject : "";
-    let img = null;
-    if (subj) { const u = await wikiPortrait(subj); if (u && !used.has(u)) img = u; }
-    const queries = [
-      m.startYear ? `${name} ${m.startYear}` : null,
-      subj ? `${name} ${subj}` : `${name} ${m.category}`,
-      m.startYear ? `${name} ${Math.floor(m.startYear / 10) * 10}s` : null,
-      name,
-    ].filter(Boolean);
-    for (const q of queries) { if (img) break; img = await commonsImage(q, used); }
-    img = img || portrait || null;
-    if (img) used.add(img);
-    m.imageUrls = img ? [img] : [];
+    const y0 = m.startYear, y1 = m.endYear || m.startYear;
+    const imgs = []; // era-sequence: [{url, year}]
+    // Primary image at the start year: the subject's own article image (a book's cover, a place),
+    // else an era-specific person search, else the portrait.
+    let primary = null;
+    if (subj) { const u = await wikiPortrait(subj); if (u && !used.has(u)) primary = u; }
+    if (!primary) {
+      const qs = [
+        y0 ? `${name} ${subj || m.category} ${y0}` : null,
+        subj ? `${name} ${subj}` : `${name} ${m.category}`,
+        y0 ? `${name} ${Math.floor(y0 / 10) * 10}s` : null,
+        name,
+      ].filter(Boolean);
+      for (const q of qs) { primary = await commonsImage(q, used); if (primary) break; }
+    }
+    primary = primary || portrait;
+    if (primary) { used.add(primary); imgs.push({ url: primary, year: y0 || 2000 }); }
+    // Secondary image later in the span (an adaptation, a later era) — only for multi-year memories.
+    // Note: film posters are usually NOT on Commons (copyright), so this often lands on a still/photo.
+    if (y0 && y1 && y1 > y0 + 1) {
+      let sec = null;
+      const qs = [subj ? `${subj} ${y1}` : null, subj ? `${subj} film` : null, `${name} ${y1}`].filter(Boolean);
+      for (const q of qs) { sec = await commonsImage(q, used); if (sec) break; }
+      if (sec) { used.add(sec); imgs.push({ url: sec, year: y1 }); }
+    }
+    m.images = imgs;
+    m.imageUrls = imgs.map((i) => i.url); // back-compat with readers that want a flat list
     process.stdout.write(".");
   }
+  // A day borrows the image "in effect" at its year from a covering memory (else the portrait).
   const coverImage = (year) => {
-    const m = memories.find((mm) => mm.startYear != null && year >= mm.startYear && year <= (mm.endYear || mm.startYear) && (mm.imageUrls || [])[0]);
-    return (m && m.imageUrls[0]) || portrait || null;
+    const m = memories.find((mm) => mm.startYear != null && year >= mm.startYear && year <= (mm.endYear || mm.startYear) && (mm.images || []).length);
+    if (m) { const asof = [...m.images].filter((i) => i.year <= year).sort((a, b) => a.year - b.year).pop() || m.images[0]; return asof.url; }
+    return portrait || null;
   };
   for (const e of entries) { const u = coverImage(+String(e.date).slice(0, 4)); e.imageUrls = u ? [u] : []; }
 }

@@ -325,7 +325,7 @@ async function renderYear() {
   const yr = await getPeriod("Y" + year);
   const monthRecs = await Promise.all(months.map((mk) => getPeriod("M" + mk)));
   const links = nodeLinksHtml(months.map((mk, i) => ({ label: monthLabel(mk), sentence: levelsOf(monthRecs[i]).sentence, attrs: { month: mk } })));
-  const yImg = galleryOf(Object.keys(journal.days).filter((x) => x.startsWith(year)), memsCovering(+year));
+  const yImg = galleryOf(Object.keys(journal.days).filter((x) => x.startsWith(year)), memsCovering(+year), +year);
   els.root.innerHTML = nodeScaffold({ name: year, levels: levelsOf(yr), images: yImg, elementsHtml: `<p class="nav-hint">Months</p>${links}` });
 }
 
@@ -342,7 +342,7 @@ async function renderMonth() {
   const mo = await getPeriod("M" + monthKey);
   const weekRecs = await Promise.all(weeks.map((w) => getPeriod("W" + w.key)));
   const links = nodeLinksHtml(weeks.map((w, i) => ({ label: `Week of ${formatDate(w.dates[0], "short")}`, sentence: levelsOf(weekRecs[i]).sentence, attrs: { week: w.dates[0] } })));
-  const moImg = galleryOf(Object.keys(journal.days).filter((x) => x.startsWith(monthKey)), memsCovering(+monthKey.slice(0, 4)));
+  const moImg = galleryOf(Object.keys(journal.days).filter((x) => x.startsWith(monthKey)), memsCovering(+monthKey.slice(0, 4)), +monthKey.slice(0, 4));
   els.root.innerHTML = nodeScaffold({ name: monthLabel(monthKey), levels: levelsOf(mo), images: moImg, elementsHtml: `<p class="nav-hint">Weeks</p>${links}` });
 }
 
@@ -354,7 +354,7 @@ async function renderWeek() {
     const day = journal.days[iso];
     return { label: `${day.dayOfWeek} · ${formatDate(iso, "short")}`, sentence: (day.levels && day.levels.sentence) || day.brief, attrs: { day: iso } };
   }));
-  els.root.innerHTML = nodeScaffold({ name: `Week of ${formatDate(entryDays[0], "short")}`, levels: levelsOf(wk), images: galleryOf(entryDays, memsCovering(+state.focusDate.slice(0, 4))), elementsHtml: `<p class="nav-hint">Days</p>${links}` });
+  els.root.innerHTML = nodeScaffold({ name: `Week of ${formatDate(entryDays[0], "short")}`, levels: levelsOf(wk), images: galleryOf(entryDays, memsCovering(+state.focusDate.slice(0, 4)), +state.focusDate.slice(0, 4)), elementsHtml: `<p class="nav-hint">Days</p>${links}` });
 }
 
 // A single day — a leaf page (its transcript is the verbatim).
@@ -564,7 +564,7 @@ async function renderDecade() {
   const yearRecs = await Promise.all(years.map((y) => getPeriod("Y" + y)));
   const yearLinks = nodeLinksHtml(years.map((y, i) => ({ label: String(y), sentence: levelsOf(yearRecs[i]).sentence, attrs: { year: y } })));
   // Parent image first so it claims the shared picture; duplicate memory thumbs are then suppressed.
-  const decImg = galleryOf(Object.keys(journal.days).filter((x) => bucketStart(+x.slice(0, 4)) === d), mems);
+  const decImg = galleryOf(Object.keys(journal.days).filter((x) => bucketStart(+x.slice(0, 4)) === d), mems, bucketEnd(d));
   const memLinks = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
   els.root.innerHTML = nodeScaffold({
     name: label, levels: levelsOf(dec), images: decImg,
@@ -582,8 +582,20 @@ function levelsOf(rec) {
   return { word: rec.word || "", phrase: rec.phrase || "", sentence: rec.sentence || rec.brief || "", paragraph: rec.paragraph || "", summary: rec.full || (rec.prose && rec.prose.full) || "", outline: rec.outlineFull || (rec.outline && rec.outline.full) || "", rewrite: (rec.levels && rec.levels.rewrite) || "" };
 }
 // One-line links to child elements. Each item: { label, sentence, attrs:{decade|year|month|week|day|category|subject|mem} }.
-// Image URLs a memory carries (Wikimedia Commons, on sample lives). Blank on normal journals.
-function memImageUrls(m) { return Array.isArray(m?.imageUrls) ? m.imageUrls.filter(Boolean) : []; }
+// A memory's era-sequence of images: [{url, year}] (Wikimedia Commons, on sample lives). Falls back
+// to a flat imageUrls list tagged at the memory's start year. Blank on normal journals.
+function memImageList(m) {
+  if (Array.isArray(m?.images) && m.images.length) return m.images.filter((i) => i && i.url).map((i) => ({ url: i.url, year: i.year ?? m.startYear ?? 2000 }));
+  return (Array.isArray(m?.imageUrls) ? m.imageUrls.filter(Boolean) : []).map((u) => ({ url: u, year: m?.startYear ?? 2000 }));
+}
+function memImageUrls(m) { return memImageList(m).map((i) => i.url); }
+// The image "in effect" at `year` — the latest one that had appeared by then (else the earliest).
+function memImageAsOf(m, year) {
+  const list = memImageList(m).sort((a, b) => a.year - b.year);
+  if (!list.length) return null;
+  const past = list.filter((i) => i.year <= year);
+  return (past.length ? past[past.length - 1] : list[0]).url;
+}
 function imagesHtmlFrom(urls) {
   const uniq = (urls || []).filter((u) => u && !shownImages.has(u));
   uniq.forEach((u) => shownImages.add(u)); // dedupe within the page
@@ -599,10 +611,13 @@ function memsCovering(year) { return allMemories.filter((m) => m.startYear != nu
 // order, so a parent node shows a montage bubbled up from its children (week→month→year→decade→
 // Life, subject→category) — e.g. The Beatles' Life shows every album cover. Returns ready-to-insert
 // grid HTML (deduped per page by imagesHtmlFrom), or "" when the subtree has no image.
-function galleryOf(dates = [], mems = []) {
+function galleryOf(dates = [], mems = [], asOfYear = null) {
   const items = [];
   for (const iso of dates) { const u = imgFromDay(iso); if (u) items.push([iso, u]); }
-  for (const m of mems) { const u = memImageUrls(m)[0]; if (u) items.push([`${m.startYear || 2000}-06-30`, u]); }
+  for (const m of mems) {
+    if (asOfYear != null) { const u = memImageAsOf(m, asOfYear); if (u) items.push([`${asOfYear}-06-30`, u]); } // a single point in time → the image in effect then
+    else for (const im of memImageList(m)) items.push([`${im.year}-06-30`, im.url]); // Life/category → the whole sequence
+  }
   items.sort((a, b) => (a[0] < b[0] ? -1 : 1));
   return imagesHtmlFrom(items.map(([, u]) => u));
 }
