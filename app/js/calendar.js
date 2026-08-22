@@ -325,7 +325,8 @@ async function renderYear() {
   const yr = await getPeriod("Y" + year);
   const monthRecs = await Promise.all(months.map((mk) => getPeriod("M" + mk)));
   const links = nodeLinksHtml(months.map((mk, i) => ({ label: monthLabel(mk), sentence: levelsOf(monthRecs[i]).sentence, attrs: { month: mk } })));
-  els.root.innerHTML = nodeScaffold({ name: year, levels: levelsOf(yr), elementsHtml: `<p class="nav-hint">Months</p>${links}` });
+  const yImg = lastImageOf(Object.keys(journal.days).filter((x) => x.startsWith(year)), allMemories.filter((m) => String(m.startYear) === year));
+  els.root.innerHTML = nodeScaffold({ name: year, levels: levelsOf(yr), images: yImg, elementsHtml: `<p class="nav-hint">Months</p>${links}` });
 }
 
 async function renderMonth() {
@@ -341,7 +342,8 @@ async function renderMonth() {
   const mo = await getPeriod("M" + monthKey);
   const weekRecs = await Promise.all(weeks.map((w) => getPeriod("W" + w.key)));
   const links = nodeLinksHtml(weeks.map((w, i) => ({ label: `Week of ${formatDate(w.dates[0], "short")}`, sentence: levelsOf(weekRecs[i]).sentence, attrs: { week: w.dates[0] } })));
-  els.root.innerHTML = nodeScaffold({ name: monthLabel(monthKey), levels: levelsOf(mo), elementsHtml: `<p class="nav-hint">Weeks</p>${links}` });
+  const moImg = lastImageOf(Object.keys(journal.days).filter((x) => x.startsWith(monthKey)), []);
+  els.root.innerHTML = nodeScaffold({ name: monthLabel(monthKey), levels: levelsOf(mo), images: moImg, elementsHtml: `<p class="nav-hint">Weeks</p>${links}` });
 }
 
 async function renderWeek() {
@@ -352,7 +354,7 @@ async function renderWeek() {
     const day = journal.days[iso];
     return { label: `${day.dayOfWeek} · ${formatDate(iso, "short")}`, sentence: (day.levels && day.levels.sentence) || day.brief, attrs: { day: iso } };
   }));
-  els.root.innerHTML = nodeScaffold({ name: `Week of ${formatDate(entryDays[0], "short")}`, levels: levelsOf(wk), elementsHtml: `<p class="nav-hint">Days</p>${links}` });
+  els.root.innerHTML = nodeScaffold({ name: `Week of ${formatDate(entryDays[0], "short")}`, levels: levelsOf(wk), images: lastImageOf(entryDays, []), elementsHtml: `<p class="nav-hint">Days</p>${links}` });
 }
 
 // A single day — a leaf page (its transcript is the verbatim).
@@ -559,8 +561,9 @@ async function renderDecade() {
   const yearLinks = nodeLinksHtml(years.map((y, i) => ({ label: String(y), sentence: levelsOf(yearRecs[i]).sentence, attrs: { year: y } })));
   const memLinks = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
 
+  const decImg = lastImageOf(Object.keys(journal.days).filter((x) => bucketStart(+x.slice(0, 4)) === d), mems);
   els.root.innerHTML = nodeScaffold({
-    name: label, levels: levelsOf(dec),
+    name: label, levels: levelsOf(dec), images: decImg,
     elementsHtml: (years.length ? `<p class="nav-hint">Years</p>${yearLinks}` : "")
       + (mems.length ? `<p class="nav-hint">Memories across ${escapeHtml(label)}</p>${memoryTimelineHtml(d, mems)}${memLinks}` : ""),
   });
@@ -581,6 +584,18 @@ function imagesHtmlFrom(urls) {
   return urls && urls.length
     ? `<div class="detail-images">${urls.map((u) => `<figure><img src="${escapeHtml(u)}" alt="" loading="lazy"></figure>`).join("")}</div>`
     : "";
+}
+function imgFromDay(iso) { const im = (journal.days[iso]?.images || []).find((x) => !x.video); return im ? im.url : null; }
+// The most-recent image found among a node's descendant days + memories, so a parent node shows a
+// representative picture bubbled up from its children (week→month→year→decade→Life, subject→
+// category). Returns ready-to-insert HTML, or "" when the whole subtree has no image.
+function lastImageOf(dates = [], mems = []) {
+  const items = [];
+  for (const iso of dates) { const u = imgFromDay(iso); if (u) items.push([iso, u]); }
+  for (const m of mems) { const u = memImageUrls(m)[0]; if (u) items.push([`${m.startYear || 2000}-06-30`, u]); }
+  if (!items.length) return "";
+  items.sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  return imagesHtmlFrom([items[items.length - 1][1]]);
 }
 function nodeLinksHtml(items) {
   if (!items.length) return "";
@@ -642,6 +657,7 @@ async function renderLife() {
   els.root.innerHTML = nodeScaffold({
     name: "Life",
     levels: levelsOf(life),
+    images: lastImageOf(Object.keys(journal.days), allMemories),
     elementsHtml: (decades.length ? `<p class="nav-hint">Your decades</p>${decadeLinks}` : "")
       + (cats.length ? `<p class="nav-hint">Your memories, by category</p>${categoryLinks}` : ""),
   });
@@ -803,7 +819,7 @@ async function renderCategory() {
   const looseLinks = nodeLinksHtml(loose.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
   const timeline = memoryTimelineSpan(mems);
   els.root.innerHTML = `<div class="day-actions">${addMemoryBtn(cat, "")}</div>` + nodeScaffold({
-    name: cat, levels: levelsOf(rec),
+    name: cat, levels: levelsOf(rec), images: lastImageOf([], mems),
     elementsHtml: (timeline ? `<p class="nav-hint">Timeline</p>${timeline}` : "")
       + (subjects.length ? `<p class="nav-hint">By subject</p>${subjectLinks}` : "")
       + (loose.length ? `<p class="nav-hint">${subjects.length ? "Other memories" : "Memories"}</p>${looseLinks}` : ""),
@@ -820,7 +836,7 @@ async function renderSubject() {
   const links = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
   const timeline = memoryTimelineSpan(mems);
   els.root.innerHTML = `<div class="day-actions">${addMemoryBtn(cat, subj)}</div>` + nodeScaffold({
-    name: subj, subtitle: memsYearRange(mems), levels: levelsOf(rec),
+    name: subj, subtitle: memsYearRange(mems), levels: levelsOf(rec), images: lastImageOf([], mems),
     elementsHtml: (timeline ? `<p class="nav-hint">Timeline</p>${timeline}` : "") + `<p class="nav-hint">Memories</p>${links}`,
   });
 }
