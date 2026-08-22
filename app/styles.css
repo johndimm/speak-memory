@@ -1268,3 +1268,13 @@ img.sample-photo { object-fit: cover; }
 .sample-status.working { color: var(--accent); }
 .sample-status.ok { color: var(--accent); }
 .sample-status.error { color: #b3261e; }
+
+/* Sample lives are read-only: hide writing/editing affordances (the journal is a fixed artifact). */
+.sample-journal .mode-btn[data-mode="write"],
+.sample-journal .day-actions,
+.sample-journal .period-delete,
+.sample-journal .period-summarize,
+.sample-journal .correct-fold,
+.sample-journal .add-mem,
+.sample-journal #detail-edit,
+.sample-journal #detail-delete { display: none !important; }

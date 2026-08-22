@@ -3,7 +3,7 @@ import { initCalendar, initGraphView } from "./calendar.js";
 import { initSettings } from "./settings.js";
 import { renderJournalsSection, wireJournalsSection } from "./samples.js";
 import { purgeRaw } from "./db.js";
-import { jkey } from "./journal.js";
+import { jkey, isSampleJournal } from "./journal.js";
 
 // Keep raw text for the most recent entries only; drop older raw (summaries are kept).
 purgeRaw().catch(() => {});
@@ -132,4 +132,11 @@ const settings = initSettings(settingsView, {
   onImported: (date) => setMode("browse", date), // jump to the Journal after an import
 });
 
-setMode("write"); // open on Today
+// A sample life is read-only: open it in the Journal at the whole-life root (never Write), and
+// the body class hides the write/edit/delete affordances (see styles.css).
+if (isSampleJournal()) {
+  document.body.classList.add("sample-journal");
+  setMode("browse", undefined, "life");
+} else {
+  setMode("write"); // your own journal opens on Today
+}
