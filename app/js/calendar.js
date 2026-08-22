@@ -442,7 +442,11 @@ async function deleteCurrent() {
   await reloadAndRender();
 }
 
+// Image URLs already shown on the current page — reset each render so no picture repeats within
+// one page (e.g. several memories that fall back to the same portrait).
+let shownImages = new Set();
 function render() {
+  shownImages = new Set();
   renderBreadcrumb();
   updatePeriodNav();
   renderPeriodHeader();
@@ -559,9 +563,9 @@ async function renderDecade() {
   const dec = await getPeriod(bucketKey(d));
   const yearRecs = await Promise.all(years.map((y) => getPeriod("Y" + y)));
   const yearLinks = nodeLinksHtml(years.map((y, i) => ({ label: String(y), sentence: levelsOf(yearRecs[i]).sentence, attrs: { year: y } })));
-  const memLinks = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
-
+  // Parent image first so it claims the shared picture; duplicate memory thumbs are then suppressed.
   const decImg = lastImageOf(Object.keys(journal.days).filter((x) => bucketStart(+x.slice(0, 4)) === d), mems);
+  const memLinks = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
   els.root.innerHTML = nodeScaffold({
     name: label, levels: levelsOf(dec), images: decImg,
     elementsHtml: (years.length ? `<p class="nav-hint">Years</p>${yearLinks}` : "")
@@ -581,8 +585,10 @@ function levelsOf(rec) {
 // Image URLs a memory carries (Wikimedia Commons, on sample lives). Blank on normal journals.
 function memImageUrls(m) { return Array.isArray(m?.imageUrls) ? m.imageUrls.filter(Boolean) : []; }
 function imagesHtmlFrom(urls) {
-  return urls && urls.length
-    ? `<div class="detail-images">${urls.map((u) => `<figure><img src="${escapeHtml(u)}" alt="" loading="lazy"></figure>`).join("")}</div>`
+  const uniq = (urls || []).filter((u) => u && !shownImages.has(u));
+  uniq.forEach((u) => shownImages.add(u)); // dedupe within the page
+  return uniq.length
+    ? `<div class="detail-images">${uniq.map((u) => `<figure><img src="${escapeHtml(u)}" alt="" loading="lazy"></figure>`).join("")}</div>`
     : "";
 }
 function imgFromDay(iso) { const im = (journal.days[iso]?.images || []).find((x) => !x.video); return im ? im.url : null; }
@@ -601,8 +607,10 @@ function nodeLinksHtml(items) {
   if (!items.length) return "";
   return `<div class="node-links">${items.map((it) => {
     const attrs = Object.entries(it.attrs || {}).map(([k, val]) => `data-${k}="${escapeHtml(String(val))}"`).join(" ");
-    const thumb = it.thumb ? `<img class="node-link-thumb" src="${escapeHtml(it.thumb)}" alt="" loading="lazy">` : "";
-    return `<button type="button" class="node-link${it.thumb ? " has-thumb" : ""}" ${attrs}>${thumb}<span class="node-link-text"><span class="node-link-name">${escapeHtml(it.label)}</span>${it.sentence ? `<span class="node-link-line">${escapeHtml(it.sentence)}</span>` : ""}</span></button>`;
+    const showThumb = it.thumb && !shownImages.has(it.thumb); // no repeats on the page
+    if (showThumb) shownImages.add(it.thumb);
+    const thumb = showThumb ? `<img class="node-link-thumb" src="${escapeHtml(it.thumb)}" alt="" loading="lazy">` : "";
+    return `<button type="button" class="node-link${showThumb ? " has-thumb" : ""}" ${attrs}>${thumb}<span class="node-link-text"><span class="node-link-name">${escapeHtml(it.label)}</span>${it.sentence ? `<span class="node-link-line">${escapeHtml(it.sentence)}</span>` : ""}</span></button>`;
   }).join("")}</div>`;
 }
 function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", elementsLabel = "", images = "", isLeaf = false, verbatim = "", correction = "" }) {
@@ -815,11 +823,12 @@ async function renderCategory() {
 
   const rec = await getPeriod(catKey(cat));
   const subRecs = await Promise.all(subjects.map((s) => getPeriod(subKey(cat, s))));
+  const catImg = lastImageOf([], mems); // claim the parent image before memory thumbs (dedupe)
   const subjectLinks = nodeLinksHtml(subjects.map((s, i) => ({ label: s, sentence: levelsOf(subRecs[i]).sentence, attrs: { subject: s } })));
   const looseLinks = nodeLinksHtml(loose.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
   const timeline = memoryTimelineSpan(mems);
   els.root.innerHTML = `<div class="day-actions">${addMemoryBtn(cat, "")}</div>` + nodeScaffold({
-    name: cat, levels: levelsOf(rec), images: lastImageOf([], mems),
+    name: cat, levels: levelsOf(rec), images: catImg,
     elementsHtml: (timeline ? `<p class="nav-hint">Timeline</p>${timeline}` : "")
       + (subjects.length ? `<p class="nav-hint">By subject</p>${subjectLinks}` : "")
       + (loose.length ? `<p class="nav-hint">${subjects.length ? "Other memories" : "Memories"}</p>${looseLinks}` : ""),
@@ -833,10 +842,11 @@ async function renderSubject() {
   if (!mems.length) { els.root.innerHTML = `<p class="nav-hint">No memories for ${escapeHtml(subj)}.</p>`; return; }
   if (mems.length === 1) { renderSingleMemory(mems[0], subj); return; }
   const rec = await getPeriod(subKey(cat, subj));
+  const subjImg = lastImageOf([], mems); // claim the parent image before memory thumbs (dedupe)
   const links = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
   const timeline = memoryTimelineSpan(mems);
   els.root.innerHTML = `<div class="day-actions">${addMemoryBtn(cat, subj)}</div>` + nodeScaffold({
-    name: subj, subtitle: memsYearRange(mems), levels: levelsOf(rec), images: lastImageOf([], mems),
+    name: subj, subtitle: memsYearRange(mems), levels: levelsOf(rec), images: subjImg,
     elementsHtml: (timeline ? `<p class="nav-hint">Timeline</p>${timeline}` : "") + `<p class="nav-hint">Memories</p>${links}`,
   });
 }
