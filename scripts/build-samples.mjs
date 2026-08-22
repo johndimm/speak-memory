@@ -132,20 +132,27 @@ async function levelsFor(text, opts) {
   return { word: r.word || "", phrase: r.phrase || "", sentence: r.sentence || "", paragraph: r.paragraph || "", summary: r.summary || "", outline: r.outline || "", rewrite: "" };
 }
 const UA = { "User-Agent": "speak-memory-sample-builder/1.0 (https://github.com/johndimm/speak-memory)" };
+// Reject extreme aspect ratios — wide banners / logos (e.g. the SNL logo) look like a black band
+// when cropped into a thumbnail. Keep roughly photo-shaped images only.
+function isBanner(w, h) { if (!w || !h) return false; const ar = w / h; return ar > 2.6 || ar < 0.4; }
 const NON_PHOTO = /\.(pdf|svg|tif|tiff|ogg|oga|ogv|webm|mid|djvu|xcf|wav|flac)$/i;
 // A Wikimedia Commons PHOTO url for a free-text query (namespace 6 = File). Rejects non-image files
-// (PDFs, audio, etc.) that full-text search otherwise returns. Scaled to 640px.
-async function commonsImage(query) {
+// (PDFs, audio) and any url already in `used`, so successive calls return DIFFERENT photos — giving
+// era variety (young vs old) instead of the same lead portrait every time. Scaled to 640px.
+async function commonsImage(query, used = new Set()) {
   try {
-    const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=3&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url|mime&iiurlwidth=640`;
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=15&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=640`;
     const j = await (await fetch(url, { headers: UA })).json();
     const pages = Object.values(j.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
     for (const p of pages) {
       const info = (p.imageinfo || [])[0];
       if (!info) continue;
-      if (NON_PHOTO.test(info.url || "")) continue;
+      const src = info.thumburl || info.url;
+      if (!src || NON_PHOTO.test(info.url || "")) continue;
       if (info.mime && !/^image\//.test(info.mime)) continue;
-      return info.thumburl || info.url;
+      if (isBanner(info.width, info.height)) continue; // skip logos/banners (bad as thumbnails)
+      if (used.has(src)) continue;
+      return src;
     }
     return null;
   } catch { return null; }
@@ -155,9 +162,40 @@ async function wikiPortrait(title) {
   try {
     const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=640&titles=${encodeURIComponent(title)}`;
     const j = await (await fetch(url, { headers: UA })).json();
-    const p = Object.values(j.query?.pages || {})[0] || {};
-    return p.thumbnail?.source || null;
+    const t = (Object.values(j.query?.pages || {})[0] || {}).thumbnail;
+    if (!t || isBanner(t.width, t.height)) return null; // skip logo-shaped lead images
+    return t.source;
   } catch { return null; }
+}
+
+// Assign a photo to each memory and day (mutates them). Each memory gets a DIFFERENT, era-relevant
+// photo: its subject's article image, then person+year / person+decade / person searches — banners
+// filtered, results deduped. A day borrows the image of a memory whose span covers its year, so
+// every time unit that a memory touches shows a picture. No LLM — safe to run on existing bundles.
+async function assignImages(name, memories, entries) {
+  const portrait = (await wikiPortrait(name)) || (await commonsImage(name));
+  const used = new Set();
+  for (const m of memories) {
+    const subj = (m.subject && m.subject.length > 2) ? m.subject : "";
+    let img = null;
+    if (subj) { const u = await wikiPortrait(subj); if (u && !used.has(u)) img = u; }
+    const queries = [
+      m.startYear ? `${name} ${m.startYear}` : null,
+      subj ? `${name} ${subj}` : `${name} ${m.category}`,
+      m.startYear ? `${name} ${Math.floor(m.startYear / 10) * 10}s` : null,
+      name,
+    ].filter(Boolean);
+    for (const q of queries) { if (img) break; img = await commonsImage(q, used); }
+    img = img || portrait || null;
+    if (img) used.add(img);
+    m.imageUrls = img ? [img] : [];
+    process.stdout.write(".");
+  }
+  const coverImage = (year) => {
+    const m = memories.find((mm) => mm.startYear != null && year >= mm.startYear && year <= (mm.endYear || mm.startYear) && (mm.imageUrls || [])[0]);
+    return (m && m.imageUrls[0]) || portrait || null;
+  };
+  for (const e of entries) { const u = coverImage(+String(e.date).slice(0, 4)); e.imageUrls = u ? [u] : []; }
 }
 
 // Build one period from its children: single child copies up (no call); else summarize.
@@ -203,35 +241,14 @@ async function buildSubject({ name, kind, voice = "" }) {
   process.stdout.write("\n  summarizing memories ");
   const memLevels = {};
   await pool(memories, 4, async (m) => { memLevels[m.id] = await levelsFor(m.text, { type: "memory", label: m.label || String(m.startYear || ""), subject: m.subject || "", date: `${m.startYear || 2000}-01-01`, style: voice }); });
-  process.stdout.write("\n  fetching Commons images ");
-  const portrait = (await wikiPortrait(name)) || (await commonsImage(name));
-  const memImages = {};
-  await pool(memories, 4, async (m) => {
-    // Prefer the lead image of the subject's OWN Wikipedia article (relevant, a real photo); then a
-    // person-biased Commons search; finally the subject's portrait. Beats loose full-text search.
-    const subj = (m.subject && m.subject.length > 2) ? m.subject : m.category;
-    memImages[m.id] = (await wikiPortrait(subj))
-      || (await commonsImage(`${name} ${subj}`))
-      || portrait || null;
-  });
-  process.stdout.write("\n");
-  // A day borrows an image from a memory that covers its year (else the subject's portrait), so the
-  // calendar's month/year cards are illustrated too.
-  const dayImage = (date) => {
-    const y = +date.slice(0, 4);
-    const m = memories.find((mm) => mm.startYear != null && y >= mm.startYear && y <= (mm.endYear || mm.startYear) && memImages[mm.id]);
-    return (m && memImages[m.id]) || portrait || null;
-  };
-
   // Finished leaf records + child descriptors (id/date/label/levels) used by roll-ups and hashing.
   const entryRecords = entries.map((e) => {
     const lv = dayLevels[e.date];
-    const img = dayImage(e.date);
     return applyMode({
       category: "journal", subject: "today", date: e.date, dayOfWeek: DOW[parseDate(e.date).getDay()],
       raw: e.text, rawSavedAt: now, createdAt: now, updatedAt: now, id: e.date, kind: "journal",
       levels: lv, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline },
-      imageUrls: img ? [img] : [],
+      imageUrls: [],
     });
   });
   const memoryRecords = memories.map((m) => {
@@ -240,9 +257,12 @@ async function buildSubject({ name, kind, voice = "" }) {
       category: m.category, subject: m.subject, startYear: m.startYear, endYear: m.endYear, label: m.label, text: m.text,
       levels: lv, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline },
       needsSummary: false, createdAt: now, updatedAt: now, id: m.id, kind: "memory",
-      imageUrls: memImages[m.id] ? [memImages[m.id]] : [],
+      imageUrls: [],
     };
   });
+  process.stdout.write("\n  fetching Commons images ");
+  await assignImages(name, memoryRecords, entryRecords);
+  process.stdout.write("\n");
   const dayChild = (iso) => ({ id: "DAY:" + iso, date: iso, brief: dayLevels[iso].sentence, levels: dayLevels[iso] });
   const memChild = (m) => ({ id: "MEM:" + m.id, date: m.label || String(m.startYear || ""), brief: memLevels[m.id].sentence, levels: memLevels[m.id] });
   const perChild = (p) => ({ id: p.key, date: p.label, brief: p.levels.sentence, levels: p.levels });
@@ -333,13 +353,41 @@ function applyMode(entry) {
   return { ...entry, mode: "prose", brief: entry.prose?.brief || deriveBrief(full), full, summarized: true };
 }
 
+// Refresh ONLY the images of an existing bundle — no model calls, so summaries are untouched.
+async function refreshImages(id) {
+  const path = join(OUT_DIR, `${id}.json`);
+  if (!existsSync(path)) { console.error(`  ✗ ${id}: no bundle to refresh`); return null; }
+  const bundle = JSON.parse(await readFile(path, "utf8"));
+  process.stdout.write(`\n▶ ${bundle.meta?.title || id} · images `);
+  await assignImages(bundle.meta?.title || id, bundle.memories || [], bundle.entries || []);
+  await writeFile(path, JSON.stringify(bundle));
+  const withImg = (bundle.memories || []).filter((m) => (m.imageUrls || []).length).length;
+  console.log(`\n  ✓ ${id}: ${withImg}/${(bundle.memories || []).length} memories imaged`);
+  return id;
+}
+
 // ---- Main -------------------------------------------------------------------------------------
 async function main() {
   await loadEnv();
-  if (!process.env.DEEPSEEK_API_KEY) { console.error("⚠  No DEEPSEEK_API_KEY (add it to app/.env.local)."); process.exit(1); }
   const args = process.argv.slice(2);
   const force = args.includes("--force");
+  const imagesOnly = args.includes("--images");
   const named = args.filter((a) => !a.startsWith("--"));
+
+  // Image-only refresh: rewrite each existing bundle's images (banner-filtered, era-varied, deduped)
+  // without regenerating any summaries. Needs no API key.
+  if (imagesOnly) {
+    await mkdir(OUT_DIR, { recursive: true });
+    let ids = named.length ? named.map(slugify)
+      : (existsSync(OUT_DIR) ? await readdir(OUT_DIR) : []).filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, ""));
+    console.log(`Refreshing images for ${ids.length} bundle(s)…`);
+    const done = [];
+    for (const id of ids) { try { if (await refreshImages(id)) done.push(id); } catch (e) { console.error(`  ✗ ${id}: ${e.message}`); } }
+    console.log(`\nDone. Reimaged: ${done.join(", ") || "(none)"}`);
+    return;
+  }
+
+  if (!process.env.DEEPSEEK_API_KEY) { console.error("⚠  No DEEPSEEK_API_KEY (add it to app/.env.local)."); process.exit(1); }
 
   let todo;
   if (named.length) {
