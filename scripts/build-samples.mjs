@@ -24,13 +24,21 @@ const APP = join(ROOT, "app");
 const OUT_DIR = join(APP, "data", "samples");
 
 // ---- Curated subjects (must mirror PICKS in app/js/samples.js) --------------------------------
+// `voice` is applied to BOTH the invented entries/memories and the rolled-up summaries, so each
+// life reads in its own unmistakable register.
 const SUBJECTS = [
-  { name: "Vladimir Nabokov", kind: "person" },
-  { name: "Keanu Reeves", kind: "person" },
-  { name: "Leonardo DiCaprio", kind: "person" },
-  { name: "Jim Carrey", kind: "person" },
-  { name: "Donald Trump", kind: "person" },
-  { name: "Zohran Mamdani", kind: "person" },
+  {
+    name: "Vladimir Nabokov", kind: "person",
+    voice: "Vladimir Nabokov — subtle, wry, and sophisticated, with an immense and exact vocabulary (rare and precise words used deftly, never for show), sensuous specific detail, sly parenthetical asides, mnemonic time-travel, and a lepidopterist's precision; never sentimental or plain",
+  },
+  {
+    name: "Donald Trump", kind: "person",
+    voice: "Donald Trump — his unmistakable spoken cadence: short punchy declarative sentences, sweeping superlatives (tremendous, the best, like nobody's ever seen), repetition for emphasis, asides and digressions, blunt plain words, and relentless self-assurance; keep it plausible and never defamatory",
+  },
+  {
+    name: "Hedy Lamarr", kind: "person",
+    voice: "Hedy Lamarr — elegant and candid, quietly witty, Old-Hollywood glamour over a sharp inventor's intelligence; wry about being underestimated for her beauty, precise when she turns to engineering and ideas",
+  },
   { name: "The Beatles", kind: "entity" },
   { name: "Saturday Night Live", kind: "entity" },
   { name: "The United States", kind: "entity" },
@@ -123,19 +131,48 @@ async function levelsFor(text, opts) {
   const r = await apiRetry({ mode: "levels", text, style: "", distilled: false, ...opts });
   return { word: r.word || "", phrase: r.phrase || "", sentence: r.sentence || "", paragraph: r.paragraph || "", summary: r.summary || "", outline: r.outline || "", rewrite: "" };
 }
+const UA = { "User-Agent": "speak-memory-sample-builder/1.0 (https://github.com/johndimm/speak-memory)" };
+const NON_PHOTO = /\.(pdf|svg|tif|tiff|ogg|oga|ogv|webm|mid|djvu|xcf|wav|flac)$/i;
+// A Wikimedia Commons PHOTO url for a free-text query (namespace 6 = File). Rejects non-image files
+// (PDFs, audio, etc.) that full-text search otherwise returns. Scaled to 640px.
+async function commonsImage(query) {
+  try {
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=3&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url|mime&iiurlwidth=640`;
+    const j = await (await fetch(url, { headers: UA })).json();
+    const pages = Object.values(j.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
+    for (const p of pages) {
+      const info = (p.imageinfo || [])[0];
+      if (!info) continue;
+      if (NON_PHOTO.test(info.url || "")) continue;
+      if (info.mime && !/^image\//.test(info.mime)) continue;
+      return info.thumburl || info.url;
+    }
+    return null;
+  } catch { return null; }
+}
+// The subject's Wikipedia lead portrait (for the person/entity and as a fallback image).
+async function wikiPortrait(title) {
+  try {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=640&titles=${encodeURIComponent(title)}`;
+    const j = await (await fetch(url, { headers: UA })).json();
+    const p = Object.values(j.query?.pages || {})[0] || {};
+    return p.thumbnail?.source || null;
+  } catch { return null; }
+}
+
 // Build one period from its children: single child copies up (no call); else summarize.
-async function storePeriod(key, type, label, children) {
+async function storePeriod(key, type, label, children, style = "") {
   const levels = children.length === 1
     ? { ...children[0].levels, rewrite: "" }
-    : await levelsFor(rollupInput(children), { type, label, isLeaf: false });
+    : await levelsFor(rollupInput(children), { type, label, isLeaf: false, style });
   return { key, type, label, hash: hashBriefs(children), levels, ...legacyFromLevels(levels) };
 }
 
 // ---- Build one subject's bundle ---------------------------------------------------------------
-async function buildSubject({ name, kind }) {
+async function buildSubject({ name, kind, voice = "" }) {
   const id = slugify(name);
-  process.stdout.write(`\n▶ ${name} (${id})\n  generating the life… `);
-  const gen = await apiRetry({ mode: "generate", subject: name, kindHint: kind });
+  process.stdout.write(`\n▶ ${name} (${id})${voice ? " · voiced" : ""}\n  generating the life… `);
+  const gen = await apiRetry({ mode: "generate", subject: name, kindHint: kind, voice });
   const meta = gen.meta || {};
   const grouping = meta.grouping === "calendar" ? "calendar" : (meta.kind === "entity" ? "calendar" : "life");
   const birthYear = meta.kind === "person" ? (meta.birthYear ?? null) : null;
@@ -162,19 +199,39 @@ async function buildSubject({ name, kind }) {
   // ---- Leaves ----
   process.stdout.write("  summarizing days     ");
   const dayLevels = {};
-  await pool(entries, 4, async (e) => { dayLevels[e.date] = await levelsFor(e.text, { type: "day", label: formatDate(e.date, "short"), date: e.date }); });
+  await pool(entries, 4, async (e) => { dayLevels[e.date] = await levelsFor(e.text, { type: "day", label: formatDate(e.date, "short"), date: e.date, style: voice }); });
   process.stdout.write("\n  summarizing memories ");
   const memLevels = {};
-  await pool(memories, 4, async (m) => { memLevels[m.id] = await levelsFor(m.text, { type: "memory", label: m.label || String(m.startYear || ""), subject: m.subject || "", date: `${m.startYear || 2000}-01-01` }); });
+  await pool(memories, 4, async (m) => { memLevels[m.id] = await levelsFor(m.text, { type: "memory", label: m.label || String(m.startYear || ""), subject: m.subject || "", date: `${m.startYear || 2000}-01-01`, style: voice }); });
+  process.stdout.write("\n  fetching Commons images ");
+  const portrait = (await wikiPortrait(name)) || (await commonsImage(name));
+  const memImages = {};
+  await pool(memories, 4, async (m) => {
+    // Prefer the lead image of the subject's OWN Wikipedia article (relevant, a real photo); then a
+    // person-biased Commons search; finally the subject's portrait. Beats loose full-text search.
+    const subj = (m.subject && m.subject.length > 2) ? m.subject : m.category;
+    memImages[m.id] = (await wikiPortrait(subj))
+      || (await commonsImage(`${name} ${subj}`))
+      || portrait || null;
+  });
   process.stdout.write("\n");
+  // A day borrows an image from a memory that covers its year (else the subject's portrait), so the
+  // calendar's month/year cards are illustrated too.
+  const dayImage = (date) => {
+    const y = +date.slice(0, 4);
+    const m = memories.find((mm) => mm.startYear != null && y >= mm.startYear && y <= (mm.endYear || mm.startYear) && memImages[mm.id]);
+    return (m && memImages[m.id]) || portrait || null;
+  };
 
   // Finished leaf records + child descriptors (id/date/label/levels) used by roll-ups and hashing.
   const entryRecords = entries.map((e) => {
     const lv = dayLevels[e.date];
+    const img = dayImage(e.date);
     return applyMode({
       category: "journal", subject: "today", date: e.date, dayOfWeek: DOW[parseDate(e.date).getDay()],
       raw: e.text, rawSavedAt: now, createdAt: now, updatedAt: now, id: e.date, kind: "journal",
       levels: lv, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline },
+      imageUrls: img ? [img] : [],
     });
   });
   const memoryRecords = memories.map((m) => {
@@ -183,6 +240,7 @@ async function buildSubject({ name, kind }) {
       category: m.category, subject: m.subject, startYear: m.startYear, endYear: m.endYear, label: m.label, text: m.text,
       levels: lv, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline },
       needsSummary: false, createdAt: now, updatedAt: now, id: m.id, kind: "memory",
+      imageUrls: memImages[m.id] ? [memImages[m.id]] : [],
     };
   });
   const dayChild = (iso) => ({ id: "DAY:" + iso, date: iso, brief: dayLevels[iso].sentence, levels: dayLevels[iso] });
@@ -190,7 +248,7 @@ async function buildSubject({ name, kind }) {
   const perChild = (p) => ({ id: p.key, date: p.label, brief: p.levels.sentence, levels: p.levels });
 
   const periods = [];
-  const store = async (...args) => { const p = await storePeriod(...args); periods.push(p); return p; };
+  const store = async (key, type, label, children) => { const p = await storePeriod(key, type, label, children, voice); periods.push(p); return p; };
 
   const dates = entries.map((e) => e.date);
   const catOf = (m) => (m.category || "").trim() || "Uncategorized";
@@ -284,8 +342,10 @@ async function main() {
   const named = args.filter((a) => !a.startsWith("--"));
 
   let todo;
-  if (named.length) todo = named.map((n) => ({ name: n, kind: "person" }));
-  else {
+  if (named.length) {
+    // A named subject inherits its configured voice/kind from SUBJECTS when it matches.
+    todo = named.map((n) => SUBJECTS.find((s) => slugify(s.name) === slugify(n)) || { name: n, kind: "person" });
+  } else {
     await mkdir(OUT_DIR, { recursive: true });
     const have = new Set((existsSync(OUT_DIR) ? await readdir(OUT_DIR) : []).map((f) => f.replace(/\.json$/, "")));
     todo = SUBJECTS.filter((s) => force || !have.has(slugify(s.name)));

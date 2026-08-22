@@ -95,6 +95,8 @@ async function load() {
       objectUrls.push(url);
       return { url, video: (b.type || "").startsWith("video/") };
     });
+    // Sample lives carry image URLs (Wikimedia Commons) instead of stored blobs.
+    if (Array.isArray(e.imageUrls)) for (const u of e.imageUrls) if (u) images.push({ url: u, video: false });
     const mode = e.mode || (e.summarized === false ? "verbatim" : (isOutlineText(e.full || "") ? "outline" : "prose"));
     days[e.date] = {
       brief: e.brief, full: e.full, dayOfWeek: e.dayOfWeek, summarized: e.summarized !== false,
@@ -555,7 +557,7 @@ async function renderDecade() {
   const dec = await getPeriod(bucketKey(d));
   const yearRecs = await Promise.all(years.map((y) => getPeriod("Y" + y)));
   const yearLinks = nodeLinksHtml(years.map((y, i) => ({ label: String(y), sentence: levelsOf(yearRecs[i]).sentence, attrs: { year: y } })));
-  const memLinks = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id } })));
+  const memLinks = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
 
   els.root.innerHTML = nodeScaffold({
     name: label, levels: levelsOf(dec),
@@ -573,11 +575,19 @@ function levelsOf(rec) {
   return { word: rec.word || "", phrase: rec.phrase || "", sentence: rec.sentence || rec.brief || "", paragraph: rec.paragraph || "", summary: rec.full || (rec.prose && rec.prose.full) || "", outline: rec.outlineFull || (rec.outline && rec.outline.full) || "", rewrite: (rec.levels && rec.levels.rewrite) || "" };
 }
 // One-line links to child elements. Each item: { label, sentence, attrs:{decade|year|month|week|day|category|subject|mem} }.
+// Image URLs a memory carries (Wikimedia Commons, on sample lives). Blank on normal journals.
+function memImageUrls(m) { return Array.isArray(m?.imageUrls) ? m.imageUrls.filter(Boolean) : []; }
+function imagesHtmlFrom(urls) {
+  return urls && urls.length
+    ? `<div class="detail-images">${urls.map((u) => `<figure><img src="${escapeHtml(u)}" alt="" loading="lazy"></figure>`).join("")}</div>`
+    : "";
+}
 function nodeLinksHtml(items) {
   if (!items.length) return "";
   return `<div class="node-links">${items.map((it) => {
     const attrs = Object.entries(it.attrs || {}).map(([k, val]) => `data-${k}="${escapeHtml(String(val))}"`).join(" ");
-    return `<button type="button" class="node-link" ${attrs}><span class="node-link-name">${escapeHtml(it.label)}</span>${it.sentence ? `<span class="node-link-line">${escapeHtml(it.sentence)}</span>` : ""}</button>`;
+    const thumb = it.thumb ? `<img class="node-link-thumb" src="${escapeHtml(it.thumb)}" alt="" loading="lazy">` : "";
+    return `<button type="button" class="node-link${it.thumb ? " has-thumb" : ""}" ${attrs}>${thumb}<span class="node-link-text"><span class="node-link-name">${escapeHtml(it.label)}</span>${it.sentence ? `<span class="node-link-line">${escapeHtml(it.sentence)}</span>` : ""}</span></button>`;
   }).join("")}</div>`;
 }
 function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", elementsLabel = "", images = "", isLeaf = false, verbatim = "", correction = "" }) {
@@ -774,7 +784,7 @@ function renderSingleMemory(m, name) {
     ${addMemoryBtn(catOf(m), subjOf(m))}
   </div>`;
   setLazyMemory(m);
-  els.root.innerHTML = actions + nodeScaffold({ name: name || m.subject || m.label || "Memory", subtitle: memYearRange(m), levels: levelsOf(m), isLeaf: true, verbatim: m.text, correction: m.correction || "" });
+  els.root.innerHTML = actions + nodeScaffold({ name: name || m.subject || m.label || "Memory", subtitle: memYearRange(m), levels: levelsOf(m), images: imagesHtmlFrom(memImageUrls(m)), isLeaf: true, verbatim: m.text, correction: m.correction || "" });
 }
 
 // A category: a single memory (no subjects) is shown directly; otherwise its summary +
@@ -790,7 +800,7 @@ async function renderCategory() {
   const rec = await getPeriod(catKey(cat));
   const subRecs = await Promise.all(subjects.map((s) => getPeriod(subKey(cat, s))));
   const subjectLinks = nodeLinksHtml(subjects.map((s, i) => ({ label: s, sentence: levelsOf(subRecs[i]).sentence, attrs: { subject: s } })));
-  const looseLinks = nodeLinksHtml(loose.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id } })));
+  const looseLinks = nodeLinksHtml(loose.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
   const timeline = memoryTimelineSpan(mems);
   els.root.innerHTML = `<div class="day-actions">${addMemoryBtn(cat, "")}</div>` + nodeScaffold({
     name: cat, levels: levelsOf(rec),
@@ -807,7 +817,7 @@ async function renderSubject() {
   if (!mems.length) { els.root.innerHTML = `<p class="nav-hint">No memories for ${escapeHtml(subj)}.</p>`; return; }
   if (mems.length === 1) { renderSingleMemory(mems[0], subj); return; }
   const rec = await getPeriod(subKey(cat, subj));
-  const links = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id } })));
+  const links = nodeLinksHtml(mems.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
   const timeline = memoryTimelineSpan(mems);
   els.root.innerHTML = `<div class="day-actions">${addMemoryBtn(cat, subj)}</div>` + nodeScaffold({
     name: subj, subtitle: memsYearRange(mems), levels: levelsOf(rec),

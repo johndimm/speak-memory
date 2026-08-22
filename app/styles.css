@@ -762,6 +762,9 @@ body { position: relative; }
 .node-links { display: flex; flex-direction: column; gap: 0.5rem; max-width: 52rem; margin: 0.4rem 0 1.4rem; }
 .node-link { display: flex; flex-direction: column; gap: 0.15rem; text-align: left; width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 1rem; cursor: pointer; font: inherit; color: var(--ink); transition: border-color 0.2s; }
 .node-link:hover { border-color: var(--accent-soft); }
+.node-link.has-thumb { flex-direction: row; align-items: center; gap: 0.85rem; }
+.node-link-thumb { flex: 0 0 auto; width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: var(--paper-deep); border: 1px solid var(--line); }
+.node-link-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .node-link-name { font-family: var(--font-display); font-style: italic; font-size: 1.05rem; color: var(--accent); }
 .node-link-line { color: var(--ink-soft); font-size: 0.9rem; line-height: 1.4; }
 .day-delete { color: #b23c17; border-color: rgba(178, 60, 23, 0.35); }

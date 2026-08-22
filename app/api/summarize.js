@@ -376,7 +376,11 @@ export default async function handler(req, res) {
       const subject = String(body.subject || "").trim();
       if (!subject) { res.status(400).json({ error: "No subject given" }); return; }
       const hint = body.kindHint ? `\n\nThe user suggests this is a ${body.kindHint}.` : "";
-      const r = await callJsonObject(GENERATE_SYSTEM, `Subject: ${subject}${hint}\n\nInvent the journal now.`, 0.85, { ...cfg, maxTokens: 8192 });
+      const voice = String(body.voice || "").trim();
+      const voiceNote = voice
+        ? `\n\nVOICE — Write every diary entry and every memory recollection in the unmistakable first-person prose voice of ${voice}: their diction, cadence, wit, imagery, and sensibility, fully committed — never a flat paraphrase. Keep every real fact accurate.`
+        : "";
+      const r = await callJsonObject(GENERATE_SYSTEM + voiceNote, `Subject: ${subject}${hint}\n\nInvent the journal now.`, voice ? 0.95 : 0.85, { ...cfg, maxTokens: 8192 });
       const int = (v) => (Number.isFinite(v) ? Math.round(v) : (Number.isFinite(+v) ? Math.round(+v) : null));
       const str = (v, d = "") => (typeof v === "string" ? v.trim() : d);
       const m = r.meta || {};

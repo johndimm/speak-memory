@@ -11,16 +11,13 @@ import { dbNameFor, jkey, switchJournal, listJournals, registerJournal, journalE
 // emoji shown on the card (offline-safe — the app can't load external images); custom subjects get
 // a tinted monogram instead.
 const PICKS = [
-  { name: "Vladimir Nabokov", kind: "person", note: "the namesake", thumb: "🦋" },
-  { name: "Keanu Reeves", kind: "person", thumb: "🕶️" },
-  { name: "Leonardo DiCaprio", kind: "person", thumb: "🎬" },
-  { name: "Jim Carrey", kind: "person", thumb: "🎭" },
-  { name: "Donald Trump", kind: "person", thumb: "🏛️" },
-  { name: "Zohran Mamdani", kind: "person", thumb: "🗳️" },
-  { name: "The Beatles", kind: "entity", thumb: "🎸" },
-  { name: "Saturday Night Live", kind: "entity", thumb: "📺" },
-  { name: "The United States", kind: "entity", thumb: "🗽" },
-  { name: "Marvel Comics", kind: "entity", thumb: "💥" },
+  { name: "Vladimir Nabokov", kind: "person", note: "the namesake" },
+  { name: "Donald Trump", kind: "person" },
+  { name: "Hedy Lamarr", kind: "person" },
+  { name: "The Beatles", kind: "entity" },
+  { name: "Saturday Night Live", kind: "entity" },
+  { name: "The United States", kind: "entity" },
+  { name: "Marvel Comics", kind: "entity" },
 ];
 
 // A stable, subtle tint from a name (for monogram tiles) and its initials (1–2 letters).
