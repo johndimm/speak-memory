@@ -142,9 +142,10 @@ export function wireJournalsSection(root) {
   const setStatus = (msg, kind = "") => { status.textContent = msg; status.className = `sample-status${kind ? " " + kind : ""}`; };
 
   // A subject's pre-baked bundle, if one was shipped (curated picks). Fully summarized → instant.
+  // Revalidate against the server so an updated bundle (e.g. new images) isn't masked by HTTP cache.
   async function fetchBundle(id) {
     try {
-      const r = await fetch(`./data/samples/${id}.json`, { cache: "force-cache" });
+      const r = await fetch(`./data/samples/${id}.json`, { cache: "no-cache" });
       if (!r.ok) return null;
       const b = await r.json();
       return (b && b.sample) ? b : null;
@@ -157,9 +158,28 @@ export function wireJournalsSection(root) {
     if (meta.birthYear) localStorage.setItem(jkey("birth-year", id), String(meta.birthYear));
   }
 
+  async function seedFromBundle(id, name, bundle) {
+    await seedBaked(dbNameFor(id), bundle);
+    applyMeta(id, bundle.meta || {}, name);
+    localStorage.setItem(jkey("baked", id), "1"); // prebuilt: skip the background pass
+    localStorage.setItem(jkey("built", id), bundle.builtAt || ""); // track shipped version for re-seeding
+    registerJournal({ id, title: bundle.meta?.title || name, kind: bundle.meta?.kind || "person", subtitle: "" });
+  }
+
   async function openJournal(id, name, kindHint) {
     if (!id) return;
-    if (journalExists(id)) { switchJournal(id); return; } // already loaded → just switch (reloads)
+    if (journalExists(id)) {
+      // Already loaded. For a curated pick, re-seed first if the shipped bundle is newer (e.g. images
+      // were added since it was last opened) so a stale local copy doesn't mask the update.
+      try {
+        const fresh = await fetchBundle(id);
+        if (fresh && (fresh.builtAt || "") !== (localStorage.getItem(jkey("built", id)) || "")) {
+          await seedFromBundle(id, name, fresh);
+        }
+      } catch { /* offline or no bundle → keep what's stored */ }
+      switchJournal(id);
+      return;
+    }
     if (busy) return;
     busy = true;
     root.querySelectorAll("button").forEach((b) => (b.disabled = true));
@@ -168,10 +188,7 @@ export function wireJournalsSection(root) {
       const bundle = await fetchBundle(id);
       if (bundle) {
         setStatus(`Opening ${bundle.meta?.title || name}…`, "working");
-        await seedBaked(dbNameFor(id), bundle);
-        applyMeta(id, bundle.meta || {}, name);
-        localStorage.setItem(jkey("baked", id), "1"); // prebuilt: skip the background pass
-        registerJournal({ id, title: bundle.meta?.title || name, kind: bundle.meta?.kind || "person", subtitle: "" });
+        await seedFromBundle(id, name, bundle);
         switchJournal(id);
         return;
       }

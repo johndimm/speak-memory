@@ -46,7 +46,7 @@ export function deleteJournal(id) {
   try { indexedDB.deleteDatabase(dbNameFor(id)); } catch { /* ignore */ }
   const all = listJournals().filter((j) => j.id !== id);
   localStorage.setItem(REGISTRY_KEY, JSON.stringify(all));
-  for (const base of ["journal-title", "birth-year", "year-grouping", "baked"]) localStorage.removeItem(jkey(base, id));
+  for (const base of ["journal-title", "birth-year", "year-grouping", "baked", "built"]) localStorage.removeItem(jkey(base, id));
 }
 
 // Slugify a subject name into a stable journal id ("The Beatles" → "the-beatles").

@@ -133,6 +133,7 @@ export function seedBaked(dbName, { entries = [], memories = [], periods = [] })
       const t = db.transaction([ITEMS, "periods"], "readwrite");
       const items = t.objectStore(ITEMS);
       const periodStore = t.objectStore("periods");
+      items.clear(); periodStore.clear(); // re-seed cleanly (an updated bundle replaces the old one)
       for (const e of entries) if (e && e.id) items.put({ ...e, kind: "journal" });
       for (const m of memories) if (m && m.id) items.put({ ...m, kind: "memory" });
       for (const p of periods) if (p && p.key) periodStore.put(p);
