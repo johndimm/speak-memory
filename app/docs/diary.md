@@ -6,6 +6,36 @@
 
 A running log of what we changed and when — the moves forward, and the sideways ones.
 
+## 2026-08-21 — life decades, sample lives, and a wall of covers
+
+A marathon: the app grew a whole new mode (fictional lives of famous people), got its own public
+repo and domain, and learned to illustrate itself from Wikimedia.
+
+**Forward**
+- **Life decades.** The decade level can group by *life* (Childhood 0–12, Teenage years 13–19, then My 20s, My 30s…) instead of calendar decades, driven by a birth year. All keyed through `bucketStart/End/Label/Key` in `calendar.js`; a Settings toggle picks the mode. People default to life decades, entities to calendar.
+- **Sample lives.** Model-invented first-person journals for famous subjects, each in its **own isolated IndexedDB** (`journal.js` namespaces db name + settings; switching reloads). Nothing a sample does touches your real journal.
+- **Pre-baked & instant.** `scripts/build-samples.mjs` generates a life and rolls the whole summary ladder up *in-process* through the real `/api/summarize` handler, writing a fully-summarized bundle to `app/data/samples/<slug>.json`. `seedBaked()` loads one and a `baked` flag skips the background pass — zero runtime model calls.
+- **Per-subject voices**, applied to entries *and* summaries: Nabokov (subtle, wry, huge vocabulary), Trump (his cadence), Hedy Lamarr (glamour over an inventor's mind). Entities use a collective voice.
+- **Roster**: 3 people (Nabokov, Trump, Hedy Lamarr) + 4 entities (The Beatles, SNL, USA, Marvel). ~$0.03/life on DeepSeek.
+- **Lives tab** (out of Settings), with "your journal" as the first card. Samples open **read-only** in the Journal at the **Life root** (write/edit/delete hidden).
+- **Wikimedia images everywhere.** Gallery cards fetch Wikipedia portraits at runtime; bundles carry a Commons image per memory — banner-filtered (no logo "black bands"), era-varied (person+year searches), build-time deduped. Parent nodes show a **gallery** of all descendant images (Beatles' Life = a wall of album covers). Images are an **era-sequence** `[{url,year}]` and render *as of* a page's point in time.
+- **`--images` refresh mode**: reimage bundles with no LLM calls, preserving summaries.
+- **Repo & deploy**: made `speak-memory` its own git repo (the parent `~/projects/.git` was empty — deleted it), a `.gitignore` protecting personal journal data + secrets, deleted two key-bearing dev scripts, renamed the project `summerizing-journal` → `speak-memory` (dir + Vercel), wired Vercel Git integration (push → deploy), and turned off SSO deployment protection so the site is public.
+- Graph legend wording **dirty/clean → changed/processed**; a dismissible intro card on Write.
+
+**Sideways**
+- Claimed the app had a strict CSP blocking runtime images — **wrong**, I'd conflated it with the artifact sandbox. There's no CSP; runtime Wikipedia/Commons `<img>` works, which simplified the whole photo approach.
+- Commons *full-text* search is junky: it returned a random PDF for "Vyra", the wide SNL logo (the "black band"), and the same portrait four times on Trump's childhood. Fixed with subject-article-first lookup, an aspect-ratio banner filter, era-specific queries, and dedup (build-time + a per-page set).
+- Rebuilt Trump fully once *before* the "don't regenerate summaries" note landed — which is what prompted the `--images`-only mode.
+- Headless IndexedDB checks via `--dump-dom` captured the DOM before async resolved; leaned on screenshots and data inspection instead.
+
+**Open threads**
+- **Domains dashboard step**: register `speak-memory.vercel.app` as a Production domain so a plain `git push` fully auto-deploys — right now it's a pinned alias I re-point by hand after every deploy (done ~8×). The CLI can't add a `*.vercel.app`; only the dashboard can.
+- Film posters are rarely on Commons (copyright), so a work's "later" era image usually lands on a still/photo, not a poster.
+- A few loose Commons hits remain (a wrestling photo under SNL, a mugshot under "Trump 2024") — the ceiling of fuzzy search.
+- Migrate the real journal to the new origin via Settings → Export/Import (URL changed with the rename).
+- Matthew Guay (Wirecutter) outreach drafts sit in `outreach/`, unsent.
+
 ## 2026-08-14 — looked bad at the start, pulled it out
 
 Began the night with things visibly broken and low confidence: saving hung, edits didn't take,
