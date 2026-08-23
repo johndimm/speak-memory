@@ -32,17 +32,10 @@ const SUBJECTS = [
     voice: "Vladimir Nabokov — subtle, wry, and sophisticated, with an immense and exact vocabulary (rare and precise words used deftly, never for show), sensuous specific detail, sly parenthetical asides, mnemonic time-travel, and a lepidopterist's precision; never sentimental or plain",
   },
   {
-    name: "Donald Trump", kind: "person",
-    voice: "Donald Trump — his unmistakable spoken cadence: short punchy declarative sentences, sweeping superlatives (tremendous, the best, like nobody's ever seen), repetition for emphasis, asides and digressions, blunt plain words, and relentless self-assurance; keep it plausible and never defamatory",
-  },
-  {
     name: "Hedy Lamarr", kind: "person",
     voice: "Hedy Lamarr — elegant and candid, quietly witty, Old-Hollywood glamour over a sharp inventor's intelligence; wry about being underestimated for her beauty, precise when she turns to engineering and ideas",
   },
-  { name: "The Beatles", kind: "entity" },
   { name: "Saturday Night Live", kind: "entity" },
-  { name: "The United States", kind: "entity" },
-  { name: "Marvel Comics", kind: "entity" },
 ];
 const slugify = (name) => String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
 

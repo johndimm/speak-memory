@@ -12,12 +12,8 @@ import { dbNameFor, jkey, switchJournal, listJournals, registerJournal, journalE
 // a tinted monogram instead.
 const PICKS = [
   { name: "Vladimir Nabokov", kind: "person", note: "the namesake" },
-  { name: "Donald Trump", kind: "person" },
   { name: "Hedy Lamarr", kind: "person" },
-  { name: "The Beatles", kind: "entity" },
   { name: "Saturday Night Live", kind: "entity" },
-  { name: "The United States", kind: "entity" },
-  { name: "Marvel Comics", kind: "entity" },
 ];
 
 // A stable, subtle tint from a name (for monogram tiles) and its initials (1–2 letters).
