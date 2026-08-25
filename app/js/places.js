@@ -97,7 +97,7 @@ function markerIcon(L, place, active) {
 }
 
 export function initPlaces(root) {
-  let map = null, markers = [], trail = null, places = [], destroyed = false;
+  let map = null, markers = [], trail = null, places = [], destroyed = false, fsCleanup = null;
 
   function escapeHtml(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
@@ -107,7 +107,11 @@ export function initPlaces(root) {
 
   async function render() {
     destroyed = false;
-    shell(`<p class="places-status" id="places-status">Loading the map…</p><div id="places-map" class="places-map" hidden></div>
+    shell(`<p class="places-status" id="places-status">Loading the map…</p>
+      <div class="places-mapwrap" id="places-mapwrap" hidden>
+        <div id="places-map" class="places-map"></div>
+        <button type="button" class="places-full" id="places-full" title="Full screen" aria-label="Full screen">⤢</button>
+      </div>
       <div class="places-slider" id="places-slider" hidden>
         <label class="places-year" id="places-year"></label>
         <input type="range" id="places-range" step="1">
@@ -127,8 +131,39 @@ export function initPlaces(root) {
     }
 
     statusEl.hidden = true;
-    const mapEl = root.querySelector("#places-map"); mapEl.hidden = false;
+    const mapWrap = root.querySelector("#places-mapwrap"); mapWrap.hidden = false;
+    const mapEl = root.querySelector("#places-map");
     const sliderWrap = root.querySelector("#places-slider"); sliderWrap.hidden = false;
+
+    // Full-screen the whole Places view (map + slider) so it works in landscape on a phone. Falls
+    // back to a CSS-only "faux fullscreen" class where the Fullscreen API is unavailable (iOS Safari).
+    const wrap = root.querySelector(".places-wrap");
+    const fullBtn = root.querySelector("#places-full");
+    const onFsChange = () => setTimeout(() => map && map.invalidateSize(), 60);
+    fullBtn.addEventListener("click", () => {
+      if (document.fullscreenElement) { document.exitFullscreen?.(); return; }
+      if (wrap.requestFullscreen) wrap.requestFullscreen().catch(() => wrap.classList.toggle("faux-full"));
+      else { wrap.classList.toggle("faux-full"); onFsChange(); }
+    });
+    document.addEventListener("fullscreenchange", onFsChange);
+
+    // Size the view to the real available height (viewport minus the wrap's top offset), so the
+    // slider is always on-screen — CSS can't measure the app bar, and a magic offset breaks in
+    // landscape. Recompute on resize/orientation change. Skipped in fullscreen (CSS handles it).
+    const fitHeight = () => {
+      if (destroyed || document.fullscreenElement || wrap.classList.contains("faux-full")) return;
+      const top = wrap.getBoundingClientRect().top;
+      wrap.style.height = Math.max(200, window.innerHeight - top - 10) + "px"; // fit; low floor for landscape
+      if (map) map.invalidateSize();
+    };
+    window.addEventListener("resize", fitHeight);
+    window.addEventListener("orientationchange", fitHeight);
+    fitHeight();
+    fsCleanup = () => {
+      document.removeEventListener("fullscreenchange", onFsChange);
+      window.removeEventListener("resize", fitHeight);
+      window.removeEventListener("orientationchange", fitHeight);
+    };
 
     map = L.map(mapEl, { scrollWheelZoom: true, attributionControl: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -166,6 +201,11 @@ export function initPlaces(root) {
 
   return {
     open: () => { render(); },
-    close: () => { destroyed = true; if (map) { map.remove(); map = null; } markers = []; trail = null; },
+    close: () => {
+      destroyed = true;
+      if (document.fullscreenElement) document.exitFullscreen?.();
+      if (fsCleanup) { fsCleanup(); fsCleanup = null; }
+      if (map) { map.remove(); map = null; } markers = []; trail = null;
+    },
   };
 }

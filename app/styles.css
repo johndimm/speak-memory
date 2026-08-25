@@ -1280,11 +1280,27 @@ img.sample-photo { object-fit: cover; }
 .sample-journal #detail-delete { display: none !important; }
 
 /* ---- Places tab: map of a life, with a year slider ------------------------------------ */
-.places-wrap { display: flex; flex-direction: column; gap: 0.9rem; }
-.places-status { color: var(--ink-soft); text-align: center; padding: 2rem 1rem; line-height: 1.6; }
-.places-map { width: 100%; height: 62vh; min-height: 340px; border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; z-index: 1; }
-.places-slider { display: flex; flex-direction: column; gap: 0.4rem; padding: 0 0.2rem; }
-.places-year { font-family: var(--font-display); font-size: 1.6rem; color: var(--accent); text-align: center; }
+/* The view fills the space below the app bar and lays out as [map flexes] + [slider fixed], so the
+   slider is ALWAYS visible — including short landscape phone viewports (the old fixed-vh map pushed
+   it off-screen). */
+/* height is set precisely in JS (fitHeight); this is just a pre-map fallback. */
+.places-wrap { display: flex; flex-direction: column; gap: 0.75rem; height: calc(100dvh - 150px); min-height: 200px; }
+.places-status { color: var(--ink-soft); text-align: center; padding: 2rem 1rem; line-height: 1.6; margin: auto; }
+.places-mapwrap { position: relative; flex: 1 1 auto; min-height: 120px; border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; }
+.places-map { width: 100%; height: 100%; z-index: 1; }
+.places-full {
+  position: absolute; top: 10px; right: 10px; z-index: 500;
+  width: 38px; height: 38px; border-radius: 9px; border: 1px solid var(--line);
+  background: rgba(255,253,249,0.92); color: var(--ink); font-size: 1.2rem; line-height: 1; cursor: pointer;
+  box-shadow: 0 2px 8px rgba(26,22,18,0.18); backdrop-filter: blur(3px);
+}
+.places-full:hover { background: var(--accent); color: var(--paper); border-color: var(--accent); }
+.places-slider { flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.3rem; padding: 0 0.2rem; }
+/* Real Fullscreen API: the wrap becomes the whole screen. */
+.places-wrap:fullscreen { height: 100dvh; background: var(--paper); padding: 0.75rem; gap: 0.6rem; }
+/* Faux fullscreen (iOS Safari, which lacks element Fullscreen): fixed overlay. */
+.places-wrap.faux-full { position: fixed; inset: 0; z-index: 9998; height: 100dvh; background: var(--paper); padding: 0.75rem; margin: 0; }
+.places-year { font-family: var(--font-display); font-size: 1.4rem; color: var(--accent); text-align: center; }
 .places-slider input[type="range"] { width: 100%; accent-color: var(--accent); height: 1.6rem; }
 
 /* Photo markers on the map */
