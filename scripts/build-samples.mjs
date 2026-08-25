@@ -29,7 +29,7 @@ const OUT_DIR = join(APP, "data", "samples");
 const SUBJECTS = [
   {
     name: "Vladimir Nabokov", kind: "person",
-    voice: "Vladimir Nabokov — subtle, wry, and sophisticated, with an immense and exact vocabulary (rare and precise words used deftly, never for show), sensuous specific detail, sly parenthetical asides, mnemonic time-travel, and a lepidopterist's precision; never sentimental or plain",
+    voice: "Vladimir Nabokov, writing quietly and naturally — clear, easy, flowing sentences, warm and a little wry. Precise, concrete detail (a color, a texture, a remembered light) and, now and then, one exact or unusual word — used sparingly, only when it is the right word, never for display. Restraint over ornament: most sentences are plain and graceful; the effect is gentle, observant, and unforced. Avoid piled-up rare vocabulary, elaborate parentheticals, and anything that reads as a parody or pastiche of 'Nabokovian' style",
   },
   {
     name: "Hedy Lamarr", kind: "person",
