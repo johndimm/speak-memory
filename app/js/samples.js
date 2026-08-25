@@ -13,6 +13,7 @@ import { dbNameFor, jkey, switchJournal, listJournals, registerJournal, journalE
 const PICKS = [
   { name: "Vladimir Nabokov", kind: "person", note: "the namesake" },
   { name: "Hedy Lamarr", kind: "person" },
+  { name: "Samuel Pepys", kind: "person", note: "his real 1660s diary" },
   { name: "Saturday Night Live", kind: "entity" },
 ];
 

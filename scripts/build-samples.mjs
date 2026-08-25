@@ -351,6 +351,78 @@ async function buildSubject({ name, kind, voice = "" }) {
   return id;
 }
 
+// ---- Build a REAL diary (public-domain text) into a baked bundle ------------------------------
+// The leaf days carry the diarist's ACTUAL words (kept verbatim); the LLM builds only the summary
+// ladder on top (day → week → month → year → decade → life). No content is invented. This is the
+// app's core value shown on a real historical diary.
+async function buildDiary({ name, title, entries, style = "", grouping = "calendar", birthYear = null }) {
+  const id = slugify(name);
+  entries = entries.filter((e) => e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && (e.text || "").trim())
+    .sort((a, b) => a.date.localeCompare(b.date));
+  process.stdout.write(`\n▶ ${title} (${id})\n  summarizing ${entries.length} real diary days `);
+  const B = makeBuckets(grouping, birthYear);
+  const now = Date.now();
+
+  const pool = (items, n, fn) => new Promise((resolve, reject) => {
+    let i = 0, active = 0, done = 0; const out = new Array(items.length);
+    const next = () => { if (done === items.length) return resolve(out);
+      while (active < n && i < items.length) { const idx = i++; active++;
+        Promise.resolve(fn(items[idx], idx)).then((v) => { out[idx] = v; active--; done++; process.stdout.write("."); next(); }).catch(reject); } };
+    next();
+  });
+
+  const dayLevels = {};
+  await pool(entries, 4, async (e) => { dayLevels[e.date] = await levelsFor(e.text, { type: "day", label: formatDate(e.date, "short"), date: e.date, style }); });
+  process.stdout.write("\n  fetching a portrait ");
+  const portrait = await wikiPortrait(name);
+  process.stdout.write("\n");
+
+  const entryRecords = entries.map((e) => {
+    const lv = dayLevels[e.date];
+    return applyMode({
+      category: "journal", subject: "today", date: e.date, dayOfWeek: e.dayOfWeek || DOW[parseDate(e.date).getDay()],
+      raw: e.text, rawSavedAt: now, createdAt: now, updatedAt: now, id: e.date, kind: "journal",
+      levels: lv, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline },
+      imageUrls: portrait ? [portrait] : [],
+    });
+  });
+  const dayChild = (iso) => ({ id: "DAY:" + iso, date: iso, brief: dayLevels[iso].sentence, levels: dayLevels[iso] });
+  const perChild = (p) => ({ id: p.key, date: p.label, brief: p.levels.sentence, levels: p.levels });
+  const periods = [];
+  const store = async (key, type, label, children) => { const p = await storePeriod(key, type, label, children, style); periods.push(p); return p; };
+
+  const dates = entries.map((e) => e.date);
+  const weekMap = new Map();
+  for (const iso of dates) { const w = sundayWeekStart(iso); (weekMap.get(w) || weekMap.set(w, []).get(w)).push(iso); }
+  const weekRecs = {};
+  for (const [w, isos] of weekMap) weekRecs[w] = await store("W" + w, "week", `Week of ${formatDate(w, "short")}`, isos.sort().map(dayChild));
+  const monthKeys = [...new Set(dates.map((d) => d.slice(0, 7)))].sort();
+  const monthRecs = {};
+  for (const mk of monthKeys) {
+    const wk = [...new Set(dates.filter((d) => d.startsWith(mk)).map(sundayWeekStart))].sort();
+    monthRecs[mk] = await store("M" + mk, "month", monthLabel(mk), wk.map((w) => perChild(weekRecs[w])));
+  }
+  const years = [...new Set(dates.map((d) => d.slice(0, 4)))].sort();
+  const yearRecs = {};
+  for (const y of years) yearRecs[y] = await store("Y" + y, "year", y, monthKeys.filter((mk) => mk.startsWith(y)).sort().map((mk) => perChild(monthRecs[mk])));
+  const decMap = new Map();
+  for (const y of years) { const dd = B.start(+y); (decMap.get(dd) || decMap.set(dd, []).get(dd)).push(y); }
+  const decRecs = {};
+  for (const [dd, ys] of [...decMap].sort((a, b) => a[0] - b[0])) decRecs[dd] = await store(B.key(dd), "decade", B.label(dd), ys.sort().map((y) => perChild(yearRecs[y])));
+  const lifeKids = Object.keys(decRecs).map((dd) => perChild(decRecs[dd]));
+  if (lifeKids.length) await store("LIFE", "life", "A life", lifeKids);
+
+  const bundle = {
+    version: 1, sample: true, builtAt: new Date().toISOString(),
+    meta: { title, kind: "person", grouping, birthYear, startYear: +years[0] },
+    entries: entryRecords, memories: [], periods,
+  };
+  await mkdir(OUT_DIR, { recursive: true });
+  await writeFile(join(OUT_DIR, `${id}.json`), JSON.stringify(bundle));
+  console.log(`  ✓ wrote app/data/samples/${id}.json  (${entryRecords.length} days, ${periods.length} periods)`);
+  return id;
+}
+
 // ---- entry.js withMode, ported (mode/brief/full mirrored onto the record) ---------------------
 function deriveBrief(text) {
   const clean = String(text).replace(/\s+/g, " ").trim();
@@ -401,7 +473,22 @@ async function main() {
   const force = args.includes("--force");
   const imagesOnly = args.includes("--images");
   const placesOnly = args.includes("--places");
-  const named = args.filter((a) => !a.startsWith("--"));
+  const flagVal = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
+  const named = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && ["--diary", "--title", "--name", "--style"].includes(args[i - 1])));
+
+  // Real-diary build: take public-domain dated text (his actual words) and build only the summary
+  // ladder. e.g. --diary docs/pepys-candid.json --name "Samuel Pepys" --title "The Private Life of Samuel Pepys"
+  const diaryFile = flagVal("--diary");
+  if (diaryFile) {
+    if (!process.env.DEEPSEEK_API_KEY) { console.error("⚠  No DEEPSEEK_API_KEY (add it to app/.env.local)."); process.exit(1); }
+    const src = JSON.parse(await readFile(join(ROOT, diaryFile), "utf8"));
+    const name = flagVal("--name") || "Diary";
+    const title = flagVal("--title") || name;
+    const style = flagVal("--style") || "";
+    await buildDiary({ name, title, entries: src.entries || [], style });
+    console.log("\nDone.");
+    return;
+  }
 
   // Place-only enrichment: tag memories with clean geocodable place names (one LLM call each bundle).
   if (placesOnly) {
