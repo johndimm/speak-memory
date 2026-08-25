@@ -6,6 +6,26 @@
 
 A running log of what we changed and when — the moves forward, and the sideways ones.
 
+## 2026-08-25 — Places: a map of a life
+
+Built the **Places** tab from `docs/places-feature.md` — a Leaflet/OSM map of where a life was
+lived, with a year slider that walks through time and traces the trail of moves.
+
+**Forward**
+- **Places tab** (`app/js/places.js`): Leaflet + OSM tiles from a CDN, lazy-loaded on first open; photo markers (reusing memories' era images); a year slider that highlights the place(s) active in the selected year and draws a dashed trail of moves up to that year. Scoped to the active journal (works per sample life and for your own).
+- **Finding places without tagging.** Raw-subject geocoding was unusable (Lolita→Texas, Ada→Idaho, Pale Fire→a fire zone in the Philippines; Vyra/Berlin/Cornell all *missed*). Fix: a new `geoplaces` API mode has the LLM map each memory to a clean geocodable place name (or null for books/people/themes) in one cheap call. `scripts/build-samples.mjs --places` writes a `place` field onto each memory; the app geocodes that via OSM Nominatim (cached in localStorage, ~1 req/s). Nabokov's arc now resolves: St. Petersburg → Cambridge → Berlin → Paris → Ithaca → Montreux, 8/15 placed; the rest correctly drop.
+- Nabokov/Hedy Lamarr look great; SNL is sparse by nature (mostly Studio 8H).
+
+**Sideways**
+- The spec said `category === "places"` filters places — but real categories are thematic (Butterflies, Exile, Writing), so that would map almost nothing. Geocoding *everything* and letting resolution be the filter is what works.
+- Field names: memories use `startYear`/`endYear` (spec said `start`/`end`).
+
+**Open threads (John's ideas for the personal side — the sample lives are solid, your own journal needs work)**
+- **User-validated place fields.** Surface the geocoded guess in the UI and let people confirm / correct / pin-drop — turns fuzzy auto-detection into ground truth and rescues vague subjects ("the Elm St. house") that Nominatim can't resolve. Needs its own UX design pass.
+- **Borrowed place images.** When a user has no photo of their own for a place, offer a Wikimedia/Commons image *of the location* — the same move that makes the sample lives shine, applied to real journals.
+- Run the `geoplaces` enrichment client-side over a user's own memories (a "map my places" action) so their thematic subjects drop out and vague ones get cleaned, like the samples.
+- Possibly distinguish **Places** (homes → the trail) from **Travel** (trips → standalone pins) once those categories are in use.
+
 ## 2026-08-21 — life decades, sample lives, and a wall of covers
 
 A marathon: the app grew a whole new mode (fictional lives of famous people), got its own public
