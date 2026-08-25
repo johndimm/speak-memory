@@ -2,6 +2,7 @@ import { initRecord } from "./record.js";
 import { initCalendar, initGraphView } from "./calendar.js";
 import { initSettings } from "./settings.js";
 import { renderJournalsSection, wireJournalsSection } from "./samples.js";
+import { initPlaces } from "./places.js";
 import { purgeRaw } from "./db.js";
 import { jkey, isSampleJournal } from "./journal.js";
 
@@ -48,6 +49,7 @@ const browseView = document.getElementById("browse-view");
 const settingsView = document.getElementById("settings-view");
 const graphView = document.getElementById("graph-view");
 const livesView = document.getElementById("lives-view");
+const placesView = document.getElementById("places-view");
 const modeBtns = [...document.querySelectorAll(".mode-btn")];
 
 // The "Lives" tab: your own journal + the sample-lives gallery (switching journals reloads).
@@ -55,11 +57,12 @@ function renderLives() {
   livesView.innerHTML = renderJournalsSection();
   wireJournalsSection(livesView);
 }
+const places = initPlaces(placesView); // map of a life; opened lazily (loads Leaflet on first open)
 
 // Open a memory's page in the Journal (after saving/editing it in Write).
 function openMemoryInJournal(mem) {
   modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "browse"));
-  writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true;
+  writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true; placesView.hidden = true;
   browseView.hidden = false;
   graph.close();
   calendar.showMemory(mem);
@@ -103,11 +106,14 @@ function setMode(mode, arg, zoom) {
   settingsView.hidden = mode !== "settings";
   graphView.hidden = mode !== "graph";
   livesView.hidden = mode !== "lives";
+  placesView.hidden = mode !== "places";
   if (mode !== "graph") graph.close(); // stop live graph updates when leaving the tab
+  if (mode !== "places") places.close(); // tear down the map when leaving
   if (mode === "browse") calendar.reload(arg, zoom);
   else if (mode === "graph") graph.open();
   else if (mode === "settings") settings.refresh();
   else if (mode === "lives") renderLives();
+  else if (mode === "places") places.open();
   else recorder.refresh(arg); // arg = date (day) or memory object to edit
 }
 
@@ -121,7 +127,7 @@ const graph = initGraphView(graphView, {
   // "Open ›" in the graph's node preview → jump to that node's page in the Journal.
   onOpen: (nav) => {
     modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "browse"));
-    writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true;
+    writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true; placesView.hidden = true;
     browseView.hidden = false;
     graph.close();
     calendar.showNode(nav);

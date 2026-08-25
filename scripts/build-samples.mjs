@@ -363,6 +363,24 @@ function applyMode(entry) {
   return { ...entry, mode: "prose", brief: entry.prose?.brief || deriveBrief(full), full, summarized: true };
 }
 
+// Tag each memory in an existing bundle with a clean, geocodable `place` name (or null) via one LLM
+// call — so the Places map pins real locations, not noisy raw subjects. Summaries untouched.
+async function refreshPlaces(id) {
+  const path = join(OUT_DIR, `${id}.json`);
+  if (!existsSync(path)) { console.error(`  ✗ ${id}: no bundle`); return null; }
+  const bundle = JSON.parse(await readFile(path, "utf8"));
+  const mems = bundle.memories || [];
+  process.stdout.write(`\n▶ ${bundle.meta?.title || id} · places `);
+  const payload = mems.map((m) => ({ id: m.id, subject: m.subject || "", category: m.category || "", hint: (m.levels && m.levels.sentence) || "" }));
+  const r = await apiRetry({ mode: "geoplaces", memories: payload });
+  const places = (r && r.places) || {};
+  let n = 0;
+  for (const m of mems) { const p = places[m.id]; m.place = (typeof p === "string" && p.trim()) ? p.trim() : null; if (m.place) n++; }
+  await writeFile(path, JSON.stringify(bundle));
+  console.log(`\n  ✓ ${id}: ${n}/${mems.length} memories placed`);
+  return id;
+}
+
 // Refresh ONLY the images of an existing bundle — no model calls, so summaries are untouched.
 async function refreshImages(id) {
   const path = join(OUT_DIR, `${id}.json`);
@@ -382,7 +400,21 @@ async function main() {
   const args = process.argv.slice(2);
   const force = args.includes("--force");
   const imagesOnly = args.includes("--images");
+  const placesOnly = args.includes("--places");
   const named = args.filter((a) => !a.startsWith("--"));
+
+  // Place-only enrichment: tag memories with clean geocodable place names (one LLM call each bundle).
+  if (placesOnly) {
+    if (!process.env.DEEPSEEK_API_KEY) { console.error("⚠  No DEEPSEEK_API_KEY (add it to app/.env.local)."); process.exit(1); }
+    await mkdir(OUT_DIR, { recursive: true });
+    let ids = named.length ? named.map(slugify)
+      : (existsSync(OUT_DIR) ? await readdir(OUT_DIR) : []).filter((f) => f.endsWith(".json")).map((f) => f.replace(/\.json$/, ""));
+    console.log(`Placing ${ids.length} bundle(s)…`);
+    const done = [];
+    for (const id of ids) { try { if (await refreshPlaces(id)) done.push(id); } catch (e) { console.error(`  ✗ ${id}: ${e.message}`); } }
+    console.log(`\nDone. Placed: ${done.join(", ") || "(none)"}`);
+    return;
+  }
 
   // Image-only refresh: rewrite each existing bundle's images (banner-filtered, era-varied, deduped)
   // without regenerating any summaries. Needs no API key.

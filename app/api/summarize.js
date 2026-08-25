@@ -118,6 +118,14 @@ RULES:
 - Stay recognizably true to the real public record. Be warm and specific; avoid cliché. For living people keep it dignified and plausible — nothing defamatory or salacious.
 - Escape any double quotes inside strings with a backslash.`;
 
+const GEOPLACES_SYSTEM = `You map each memory to the real-world place it happened, if any, so it can be pinned on a map.
+You are given a JSON list of memories: [{"id","subject","category","hint"}].
+Return ONLY valid JSON: {"places":{"<id>":"<place>"|null, ...}} with an entry for EVERY id.
+- "<place>" is a clean, geocodable real-world location — a city, town, landmark, or institution with its country, e.g. "Berlin, Germany", "Ithaca, New York, USA", "Trinity College, Cambridge, UK", "Montreux, Switzerland". Prefer the most specific place that actually geocodes.
+- Use null when the memory is NOT tied to a physical place — a book or work ("Lolita", "Pale Fire"), a person, an abstract theme (butterflies, fame), etc.
+- Resolve vague or descriptive subjects to their real location: "Vyra estate" → "Rozhdestveno, Russia"; "Berlin emigre years" → "Berlin, Germany"; "Wellesley and Cornell" → "Ithaca, New York, USA"; "the American West" → a representative real place if one is clearly implied, else null.
+- Draw on the subject, category, and hint together. Escape any double quotes inside strings with a backslash.`;
+
 const PERIOD_SYSTEM = `You summarize journal entries spanning multiple days.
 Return ONLY valid JSON with no markdown: {"brief":"...","full":"..."}
 - brief: one sentence overview
@@ -402,6 +410,20 @@ export default async function handler(req, res) {
         .map((x) => ({ date: str(x.date), text: str(x.text) }));
       if (!memories.length && !entries.length) { res.status(502).json({ error: "The model returned nothing usable — try again." }); return; }
       res.status(200).json({ meta, memories, entries });
+      return;
+    }
+
+    // Map memories → clean geocodable place names (or null). Used to pin a life on the map without
+    // geocoding noisy raw subjects (book titles, people). One cheap call for a whole life.
+    if (mode === "geoplaces") {
+      const list = Array.isArray(body.memories) ? body.memories : [];
+      if (!list.length) { res.status(200).json({ places: {} }); return; }
+      const compact = list.map((m) => ({ id: String(m.id), subject: String(m.subject || "").slice(0, 120), category: String(m.category || "").slice(0, 60), hint: String(m.hint || "").slice(0, 200) }));
+      const r = await callJsonObject(GEOPLACES_SYSTEM, `Memories:\n${JSON.stringify(compact).slice(0, 12000)}`, 0.1, cfg);
+      const out = {};
+      const src = (r && typeof r.places === "object" && r.places) || {};
+      for (const m of compact) { const v = src[m.id]; out[m.id] = (typeof v === "string" && v.trim()) ? v.trim() : null; }
+      res.status(200).json({ places: out });
       return;
     }
 
