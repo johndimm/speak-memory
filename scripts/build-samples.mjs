@@ -125,6 +125,13 @@ async function levelsFor(text, opts) {
   return { word: r.word || "", phrase: r.phrase || "", sentence: r.sentence || "", paragraph: r.paragraph || "", summary: r.summary || "", outline: r.outline || "", rewrite: "" };
 }
 const UA = { "User-Agent": "speak-memory-sample-builder/1.0 (https://github.com/johndimm/speak-memory)" };
+// fetch with a hard timeout — a stalled Wikimedia/Nominatim call must never hang the whole build.
+async function fetchT(url, opts = {}, ms = 15000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+  finally { clearTimeout(t); }
+}
 // Reject extreme aspect ratios — wide banners / logos (e.g. the SNL logo) look like a black band
 // when cropped into a thumbnail. Keep roughly photo-shaped images only.
 function isBanner(w, h) { if (!w || !h) return false; const ar = w / h; return ar > 2.6 || ar < 0.4; }
@@ -135,7 +142,7 @@ const NON_PHOTO = /\.(pdf|svg|tif|tiff|ogg|oga|ogv|webm|mid|djvu|xcf|wav|flac)$/
 async function commonsImage(query, used = new Set()) {
   try {
     const url = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=15&gsrsearch=${encodeURIComponent(query)}&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=640`;
-    const j = await (await fetch(url, { headers: UA })).json();
+    const j = await (await fetchT(url, { headers: UA })).json();
     const pages = Object.values(j.query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
     for (const p of pages) {
       const info = (p.imageinfo || [])[0];
@@ -154,7 +161,7 @@ async function commonsImage(query, used = new Set()) {
 async function wikiPortrait(title) {
   try {
     const url = `https://en.wikipedia.org/w/api.php?action=query&format=json&origin=*&redirects=1&prop=pageimages&piprop=thumbnail&pithumbsize=640&titles=${encodeURIComponent(title)}`;
-    const j = await (await fetch(url, { headers: UA })).json();
+    const j = await (await fetchT(url, { headers: UA })).json();
     const t = (Object.values(j.query?.pages || {})[0] || {}).thumbnail;
     if (!t || isBanner(t.width, t.height)) return null; // skip logo-shaped lead images
     return t.source;
@@ -372,7 +379,9 @@ async function buildDiary({ name, title, entries, style = "", grouping = "calend
   });
 
   const dayLevels = {};
-  await pool(entries, 4, async (e) => { dayLevels[e.date] = await levelsFor(e.text, { type: "day", label: formatDate(e.date, "short"), date: e.date, style }); });
+  // thorough: a real diary day's complete summary scales with the entry's length (long days get full,
+  // many-paragraph summaries) so long entries aren't shortchanged.
+  await pool(entries, 4, async (e) => { dayLevels[e.date] = await levelsFor(e.text, { type: "day", label: formatDate(e.date, "short"), date: e.date, style, thorough: true }); });
   process.stdout.write("\n  fetching a portrait ");
   const portrait = await wikiPortrait(name);
   process.stdout.write("\n");
@@ -389,7 +398,10 @@ async function buildDiary({ name, title, entries, style = "", grouping = "calend
   const dayChild = (iso) => ({ id: "DAY:" + iso, date: iso, brief: dayLevels[iso].sentence, levels: dayLevels[iso] });
   const perChild = (p) => ({ id: p.key, date: p.label, brief: p.levels.sentence, levels: p.levels });
   const periods = [];
-  const store = async (key, type, label, children) => { const p = await storePeriod(key, type, label, children, style); periods.push(p); return p; };
+  // Print a marker per rolled-up period so the log keeps advancing during the (otherwise silent)
+  // rollup — an idle log then genuinely means "hung", which is what a watchdog should catch.
+  process.stdout.write("  rolling up ");
+  const store = async (key, type, label, children) => { const p = await storePeriod(key, type, label, children, style); periods.push(p); process.stdout.write(children.length > 1 ? "+" : "."); return p; };
 
   const dates = entries.map((e) => e.date);
   const weekMap = new Map();

@@ -5,7 +5,7 @@
 
 import { escapeHtml } from "./render.js";
 import { seedJournal, seedBaked } from "./db.js";
-import { dbNameFor, jkey, switchJournal, listJournals, registerJournal, journalExists, deleteJournal, slugify, activeJournalId } from "./journal.js";
+import { dbNameFor, jkey, switchJournal, listJournals, registerJournal, journalExists, deleteJournal, slugify, activeJournalId, resetSamples } from "./journal.js";
 
 // Curated picks. kind is a hint to the model; it decides the final person/entity. `thumb` is an
 // emoji shown on the card (offline-safe — the app can't load external images); custom subjects get
@@ -129,7 +129,11 @@ export function renderJournalsSection() {
         <button type="button" class="sample-gen-btn" id="sample-gen">Generate</button>
       </div>
     </label>
-    <p class="sample-status" id="sample-status" role="status"></p>`;
+    <p class="sample-status" id="sample-status" role="status"></p>
+    <p class="field-hint" style="margin-top:1.4rem">
+      <button type="button" class="reset-samples" id="reset-samples">Reset sample lives</button>
+      <span> — remove every sample life from this device and start fresh. Your own journal is untouched.</span>
+    </p>`;
 }
 
 export function wireJournalsSection(root) {
@@ -216,6 +220,11 @@ export function wireJournalsSection(root) {
   root.addEventListener("click", (e) => {
     const own = e.target.closest("[data-own]");
     if (own) { switchJournal(""); return; } // back to your own journal
+    const reset = e.target.closest("#reset-samples");
+    if (reset) {
+      if (confirm("Remove all sample lives from this device? Your own journal is untouched; samples can be reopened anytime.")) resetSamples();
+      return;
+    }
     const del = e.target.closest("[data-del]");
     if (del) {
       const id = del.dataset.del;

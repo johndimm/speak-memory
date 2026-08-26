@@ -49,6 +49,25 @@ export function deleteJournal(id) {
   for (const base of ["journal-title", "birth-year", "year-grouping", "baked", "built"]) localStorage.removeItem(jkey(base, id));
 }
 
+// Wipe ALL sample lives from this device — every sample database (summarizing-journal~*), the
+// registry, the active-journal pointer, and every namespaced sample key — so the app looks the way
+// a new visitor sees it. The user's OWN journal (the bare "summarizing-journal" DB and its bare
+// settings keys) is never touched. Reloads when done.
+export async function resetSamples() {
+  for (const j of listJournals()) { try { indexedDB.deleteDatabase(dbNameFor(j.id)); } catch { /* ignore */ } }
+  // Also catch any orphan sample DBs not in the registry (e.g. from an earlier "dream up anyone").
+  try {
+    const dbs = (indexedDB.databases ? await indexedDB.databases() : []) || [];
+    for (const { name } of dbs) if (name && name.startsWith(`${BASE_DB}~`)) indexedDB.deleteDatabase(name);
+  } catch { /* databases() unsupported — registry pass above still covers the known ones */ }
+  // Sample localStorage: the registry, the active pointer, and every namespaced ("::") sample key.
+  // The user's own journal keys are bare (no "::"), so they survive.
+  for (const k of Object.keys(localStorage)) {
+    if (k === REGISTRY_KEY || k === "active-journal" || k.includes("::")) localStorage.removeItem(k);
+  }
+  location.reload();
+}
+
 // Slugify a subject name into a stable journal id ("The Beatles" → "the-beatles").
 export function slugify(name) {
   return String(name).toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);

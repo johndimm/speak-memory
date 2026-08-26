@@ -250,12 +250,21 @@ function llmConfig(body) {
 // One completion → the model's raw text. Anthropic uses its Messages API (system as a top-level
 // param, x-api-key header, and a "{" prefill to force a JSON reply); every other provider is
 // OpenAI-compatible (chat/completions with response_format json_object).
+// A completion request must never hang forever — abort a stalled connection so callLLM's retry can
+// kick in (a hung fetch, unlike an error, would otherwise block indefinitely).
+const LLM_TIMEOUT_MS = 90000;
+async function fetchLLM(url, opts) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), LLM_TIMEOUT_MS);
+  try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+  finally { clearTimeout(t); }
+}
 async function rawComplete(cfg, system, user, temperature) {
   const apiKey = cfg.apiKey || process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("No API key — add your own in Settings, or set DEEPSEEK_API_KEY on the server.");
   const model = cfg.model || process.env.DEEPSEEK_MODEL || DEFAULT_MODEL;
   if (cfg.provider === "anthropic") {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetchLLM("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({ model, max_tokens: cfg.maxTokens || 4096, temperature: Math.min(1, temperature), system, messages: [{ role: "user", content: user }, { role: "assistant", content: "{" }] }),
@@ -264,7 +273,7 @@ async function rawComplete(cfg, system, user, temperature) {
     const data = await res.json();
     return "{" + (data.content?.[0]?.text ?? ""); // prepend the prefilled "{"
   }
-  const res = await fetch(cfg.url || API_URL, {
+  const res = await fetchLLM(cfg.url || API_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model, temperature, response_format: { type: "json_object" }, messages: [{ role: "system", content: system }, { role: "user", content: user }] }),
@@ -502,7 +511,7 @@ export default async function handler(req, res) {
     // Multi-level summary: one call returns word→phrase→sentence→paragraph→complete summary
     // + outline (+ a no-condense rewrite for leaf nodes). Used by every node in the Journal.
     if (mode === "levels") {
-      const { text = "", type = "node", label = "", style = "", subject = "", date = "", localTime = "", distilled = false, correction = "" } = body;
+      const { text = "", type = "node", label = "", style = "", subject = "", date = "", localTime = "", distilled = false, correction = "", thorough = false } = body;
       if (!text.trim()) { res.status(400).json({ error: "No text provided" }); return; }
       const subjectNote = subject
         ? `\n\nSUBJECT — This is about "${subject}". Use exactly that name and spelling for it throughout, correcting any mis-transcription. It may be a person, place, or thing.`
@@ -510,8 +519,13 @@ export default async function handler(req, res) {
       const correctionNote = correction
         ? `\n\nCORRECTION — The reader flagged a previous summary as wrong. Apply and honor this correction: ${String(correction).slice(0, 1000)}`
         : "";
+      // Thorough: the complete summary should scale with the source — a long entry deserves a long,
+      // full summary that covers every event, person, and turn of the day, not 2–4 short paragraphs.
+      const thoroughNote = thorough
+        ? `\n\nLENGTH — For the "summary" field, be THOROUGH and proportional to the source: cover every event, person, errand, conversation, and feeling of substance, in order. A long entry deserves many paragraphs; do not compress a rich day into a few lines. This overrides any "2–4 short paragraphs" guidance. (The other rungs — word/phrase/sentence/paragraph — stay short.)`
+        : "";
       const ctx = `Context: ${type}${label ? ` — ${label}` : ""}${date ? `, ${date}` : ""}${localTime ? ` (written ${localTime})` : ""}.`;
-      const user = `${ctx}\n\nText:\n\n${String(text).slice(0, 16000)}`;
+      const user = `${ctx}\n\nText:\n\n${String(text).slice(0, thorough ? 40000 : 16000)}`;
       const s = (v) => (typeof v === "string" ? v.trim() : "");
       // Fast path: just the distilled rungs (leaves use this; summary/outline come later, lazily).
       if (distilled) {
@@ -521,7 +535,7 @@ export default async function handler(req, res) {
         return;
       }
       // Full ladder (roll-ups): distilled rungs + complete summary + outline.
-      const sys = LEVELS_SYSTEM + FIRST_PERSON_NOTE + subjectNote + correctionNote + styleDirective(style);
+      const sys = LEVELS_SYSTEM + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + styleDirective(style);
       const r = await callLLM(sys, user, style ? 0.8 : 0.4, ["word", "phrase", "sentence", "paragraph", "summary"], cfg);
       res.status(200).json({
         word: s(r.word), phrase: s(r.phrase), sentence: s(r.sentence),
