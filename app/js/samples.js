@@ -163,7 +163,7 @@ export function wireJournalsSection(root) {
     registerJournal({ id, title: bundle.meta?.title || name, kind: bundle.meta?.kind || "person", subtitle: "" });
   }
 
-  async function openJournal(id, name, kindHint) {
+  async function openJournal(id, name, kindHint, curated = false) {
     if (!id) return;
     if (journalExists(id)) {
       // Already loaded. For a curated pick, re-seed first if the shipped bundle is newer (e.g. images
@@ -189,7 +189,15 @@ export function wireJournalsSection(root) {
         switchJournal(id);
         return;
       }
-      // Slow path (custom subjects): generate raw content; the client summarizes on open.
+      // A curated pick always ships a prebuilt bundle. If it's missing, that's a deploy issue — never
+      // invent one (an invented "Samuel Pepys" would be a fabricated life, not his real diary).
+      if (curated) {
+        setStatus(`${name} isn't available yet — its bundle is still deploying. Try again in a minute.`, "error");
+        root.querySelectorAll("button").forEach((b) => (b.disabled = false));
+        busy = false;
+        return;
+      }
+      // Slow path (custom "dream up anyone" subjects only): generate raw content; summarize on open.
       setStatus(`Dreaming up ${name}'s whole life — this usually takes up to a minute. Hang tight…`, "working");
       const data = await postGenerate(name, kindHint || "");
       const meta = data.meta || {};
@@ -216,7 +224,11 @@ export function wireJournalsSection(root) {
       return;
     }
     const open = e.target.closest("[data-open]");
-    if (open) { openJournal(open.dataset.open, open.dataset.name, open.dataset.kind); return; }
+    if (open) {
+      const isCurated = PICKS.some((p) => slugify(p.name) === open.dataset.open);
+      openJournal(open.dataset.open, open.dataset.name, open.dataset.kind, isCurated);
+      return;
+    }
     const gen = e.target.closest("#sample-gen");
     if (gen) {
       const input = root.querySelector("#sample-input");
