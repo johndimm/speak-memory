@@ -14,6 +14,7 @@ const PICKS = [
   { name: "Vladimir Nabokov", kind: "person", note: "the namesake" },
   { name: "Hedy Lamarr", kind: "person" },
   { name: "Samuel Pepys", kind: "person", note: "his real 1660s diary" },
+  { name: "Samuel Johnson", kind: "person", note: "his real table talk (via Boswell)" },
   { name: "Saturday Night Live", kind: "entity" },
 ];
 

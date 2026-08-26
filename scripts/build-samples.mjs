@@ -435,6 +435,79 @@ async function buildDiary({ name, title, entries, style = "", grouping = "calend
   return id;
 }
 
+// ---- Build a COMMONPLACE BOOK from real public-domain quotations -------------------------------
+// No journal days: each quote becomes a MEMORY (the person's exact words as the leaf), themed into
+// categories and dated to a year by one LLM pass; the ladder rolls up subjects→categories and
+// years→decades→life. Grouping is calendar (the quotes' loose years). Used for Samuel Johnson
+// (Boswell), where the value is his real recorded talk, organized.
+async function buildCommonplace({ name, title, quotes, birthYear, minYear, maxYear }) {
+  const id = slugify(name);
+  quotes = quotes.filter((q) => (q.text || "").trim());
+  process.stdout.write(`\n▶ ${title} (${id})\n  theming ${quotes.length} quotes… `);
+  const items = quotes.map((q, i) => ({ id: "q" + i, text: q.text }));
+  const cls = (await apiRetry({ mode: "classify-quotes", items, person: name, minYear, maxYear })).items || {};
+  const now = Date.now();
+  const midYear = Math.round((minYear + maxYear) / 2);
+  const memories = quotes.map((q, i) => {
+    const c = cls["q" + i] || {};
+    const year = c.year || midYear;
+    const quote = q.text.trim();
+    // Keep his exact words at every rung so nothing paraphrases Johnson; the leaf is the quote.
+    const levels = { word: "", phrase: "", sentence: quote, paragraph: quote, summary: quote, outline: "", rewrite: "" };
+    return {
+      id: `mem-${id}-${i}`, kind: "memory",
+      category: c.category || "Table Talk", subject: c.subject || "",
+      startYear: year, endYear: year, label: String(year),
+      text: quote, levels, prose: { brief: quote, full: quote }, outline: { brief: "", full: "" },
+      needsSummary: false, createdAt: now, updatedAt: now, imageUrls: [],
+    };
+  });
+  process.stdout.write(`done (${new Set(memories.map((m) => m.category)).size} themes)\n  portrait… `);
+  const portrait = await wikiPortrait(name);
+  if (portrait) for (const m of memories) m.imageUrls = [portrait];
+  process.stdout.write("\n  rolling up ");
+
+  const B = makeBuckets("calendar", birthYear);
+  const catOf = (m) => (m.category || "").trim() || "Table Talk";
+  const subjOf = (m) => (m.subject || "").trim();
+  const memChild = (m) => ({ id: "MEM:" + m.id, date: m.label, brief: m.levels.sentence, levels: m.levels });
+  const perChild = (p) => ({ id: p.key, date: p.label, brief: p.levels.sentence, levels: p.levels });
+  const periods = [];
+  const store = async (key, type, label, children) => { const p = await storePeriod(key, type, label, children, ""); periods.push(p); process.stdout.write("."); return p; };
+
+  const cats = [...new Set(memories.map(catOf))];
+  const subRecs = {};
+  for (const cat of cats) for (const subj of [...new Set(memories.filter((m) => catOf(m) === cat).map(subjOf).filter(Boolean))]) {
+    const kids = memories.filter((m) => catOf(m) === cat && subjOf(m) === subj);
+    subRecs["SUB:" + cat + " " + subj] = await store("SUB:" + cat + " " + subj, "subject", subj, kids.map(memChild));
+  }
+  const catRecs = {};
+  for (const cat of cats) {
+    const subs = [...new Set(memories.filter((m) => catOf(m) === cat).map(subjOf).filter(Boolean))];
+    const direct = memories.filter((m) => catOf(m) === cat && !subjOf(m));
+    catRecs["CAT:" + cat] = await store("CAT:" + cat, "category", cat, [...subs.map((s) => perChild(subRecs["SUB:" + cat + " " + s])), ...direct.map(memChild)]);
+  }
+  const years = [...new Set(memories.map((m) => String(m.startYear)))].sort();
+  const yearRecs = {};
+  for (const y of years) yearRecs[y] = await store("Y" + y, "year", y, memories.filter((m) => String(m.startYear) === y).map(memChild));
+  const decMap = new Map();
+  for (const y of years) { const dd = B.start(+y); (decMap.get(dd) || decMap.set(dd, []).get(dd)).push(y); }
+  const decRecs = {};
+  for (const [dd, ys] of [...decMap].sort((a, b) => a[0] - b[0])) decRecs[dd] = await store(B.key(dd), "decade", B.label(dd), ys.sort().map((y) => perChild(yearRecs[y])));
+  const lifeKids = [...Object.keys(decRecs).map((dd) => perChild(decRecs[dd])), ...cats.map((c) => perChild(catRecs["CAT:" + c]))];
+  if (lifeKids.length) await store("LIFE", "life", "A life", lifeKids);
+
+  const bundle = {
+    version: 1, sample: true, builtAt: new Date().toISOString(),
+    meta: { title, kind: "person", grouping: "calendar", birthYear, startYear: +years[0] },
+    entries: [], memories, periods,
+  };
+  await mkdir(OUT_DIR, { recursive: true });
+  await writeFile(join(OUT_DIR, `${id}.json`), JSON.stringify(bundle));
+  console.log(`\n  ✓ wrote app/data/samples/${id}.json  (${memories.length} quotes, ${cats.length} themes, ${periods.length} periods)`);
+  return id;
+}
+
 // ---- entry.js withMode, ported (mode/brief/full mirrored onto the record) ---------------------
 function deriveBrief(text) {
   const clean = String(text).replace(/\s+/g, " ").trim();
@@ -486,7 +559,20 @@ async function main() {
   const imagesOnly = args.includes("--images");
   const placesOnly = args.includes("--places");
   const flagVal = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
-  const named = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && ["--diary", "--title", "--name", "--style"].includes(args[i - 1])));
+  const named = args.filter((a, i) => !a.startsWith("--") && !(i > 0 && ["--diary", "--commonplace", "--title", "--name", "--style"].includes(args[i - 1])));
+
+  // Commonplace-book build: real public-domain quotations → themed, dated memories.
+  // e.g. --commonplace docs/johnson-quotes.json --name "Samuel Johnson" --title "The Table Talk of Samuel Johnson"
+  const cpFile = flagVal("--commonplace");
+  if (cpFile) {
+    if (!process.env.DEEPSEEK_API_KEY) { console.error("⚠  No DEEPSEEK_API_KEY (add it to app/.env.local)."); process.exit(1); }
+    const src = JSON.parse(await readFile(join(ROOT, cpFile), "utf8"));
+    const name = flagVal("--name") || "Quotes";
+    const title = flagVal("--title") || name;
+    await buildCommonplace({ name, title, quotes: src.quotes || [], birthYear: 1709, minYear: 1728, maxYear: 1784 });
+    console.log("\nDone.");
+    return;
+  }
 
   // Real-diary build: take public-domain dated text (his actual words) and build only the summary
   // ladder. e.g. --diary docs/pepys-candid.json --name "Samuel Pepys" --title "The Private Life of Samuel Pepys"

@@ -422,6 +422,33 @@ export default async function handler(req, res) {
       return;
     }
 
+    // Organize quotations into a commonplace book: assign each a recurring THEME (category), an
+    // optional finer subject, and a plausible year. One batched call for a whole set.
+    if (mode === "classify-quotes") {
+      const items = Array.isArray(body.items) ? body.items : [];
+      const person = String(body.person || "the speaker");
+      const minY = Number(body.minYear) || 1700, maxY = Number(body.maxYear) || 1800;
+      if (!items.length) { res.status(200).json({ items: {} }); return; }
+      const sys = `You are organizing recorded sayings of ${person} into a commonplace book.
+For EACH quote return: "category" — a broad recurring THEME as "On X" (e.g. "On London", "On Marriage", "On Writing", "On Death", "On Human Nature", "On Books & Reading", "On Money", "On Drink", "On Melancholy", "On Friendship", "On Religion"); "subject" — an optional 2–4 word finer topic, or ""; "year" — a plausible integer year between ${minY} and ${maxY} when it might have been said (use any date the quote implies, else estimate).
+REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12 distinct categories total). Return ONLY valid JSON: {"items":{"<id>":{"category":"...","subject":"...","year":<int>}, ...}} with an entry for EVERY id.`;
+      const compact = items.map((q) => ({ id: String(q.id), text: String(q.text || "").slice(0, 400) }));
+      const r = await callJsonObject(sys, `Quotes:\n${JSON.stringify(compact).slice(0, 14000)}`, 0.2, cfg);
+      const src = (r && typeof r.items === "object" && r.items) || {};
+      const out = {};
+      for (const q of compact) {
+        const v = src[q.id] || {};
+        const year = Number(v.year);
+        out[q.id] = {
+          category: (typeof v.category === "string" && v.category.trim()) ? v.category.trim() : "Table Talk",
+          subject: (typeof v.subject === "string") ? v.subject.trim() : "",
+          year: Number.isFinite(year) && year >= minY && year <= maxY ? Math.round(year) : null,
+        };
+      }
+      res.status(200).json({ items: out });
+      return;
+    }
+
     // Map memories → clean geocodable place names (or null). Used to pin a life on the map without
     // geocoding noisy raw subjects (book titles, people). One cheap call for a whole life.
     if (mode === "geoplaces") {
