@@ -1332,3 +1332,4 @@ img.sample-photo { object-fit: cover; }
 .loc-item:last-child { border-bottom: none; }
 .loc-item:hover { background: var(--paper-deep); }
 .field-hint.loc-ok { color: var(--accent); }
+.place-pop-sv { display: block; width: 240px; max-width: 60vw; height: auto; border-radius: 8px; margin-bottom: 0.4rem; border: 1px solid var(--line); }

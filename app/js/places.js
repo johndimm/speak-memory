@@ -100,10 +100,25 @@ async function collectPlaces(onProgress) {
   return places;
 }
 
-// A round marker showing the place's photo (or a dot). Highlighted when active in the slider year.
+// Street View: a marker/popup photo of the actual spot, via our server-side proxy (keeps the key
+// secret). We check the free metadata endpoint first, so places with no coverage keep a plain dot
+// rather than a broken image.
+const svThumb = (p) => `./api/streetview?lat=${p.lat}&lng=${p.lng}&size=96x96`;
+const svLarge = (p) => `./api/streetview?lat=${p.lat}&lng=${p.lng}&size=480x300`;
+async function enrichStreetView(places) {
+  await Promise.all(places.map(async (p) => {
+    try {
+      const r = await fetch(`./api/streetview?meta=1&lat=${p.lat}&lng=${p.lng}`);
+      if (r.ok) { const j = await r.json(); if (j.ok) p.streetview = true; }
+    } catch { /* no street view → keep the dot / era image */ }
+  }));
+}
+
+// A round marker showing the place's Street View (or era photo, or a dot). Bright when active.
 function markerIcon(L, place, active) {
-  const img = place.image
-    ? `<span class="pm-photo" style="background-image:url('${place.image.replace(/'/g, "%27")}')"></span>`
+  const photo = place.streetview ? svThumb(place) : place.image;
+  const img = photo
+    ? `<span class="pm-photo" style="background-image:url('${String(photo).replace(/'/g, "%27")}')"></span>`
     : `<span class="pm-dot"></span>`;
   return L.divIcon({ className: "", html: `<span class="place-marker${active ? " active" : ""}">${img}</span>`, iconSize: [40, 40], iconAnchor: [20, 20] });
 }
@@ -135,6 +150,8 @@ export function initPlaces(root) {
 
     statusEl.textContent = "Finding the places in this life…";
     places = await collectPlaces((d, n) => { if (!destroyed) statusEl.textContent = `Locating places… ${d}/${n}`; });
+    if (destroyed) return;
+    await enrichStreetView(places); // flag which places have Street View coverage (falls back to dots)
     if (destroyed) return;
 
     if (!places.length) {
@@ -184,7 +201,7 @@ export function initPlaces(root) {
     map.fitBounds(places.map((p) => [p.lat, p.lng]), { padding: [40, 40], maxZoom: 6 });
 
     markers = places.map((p) => L.marker([p.lat, p.lng], { icon: markerIcon(L, p, false) })
-      .bindPopup(`<div class="place-pop"><strong>${escapeHtml(p.subject)}</strong><div class="place-pop-years">${p.startYear}${p.endYear !== p.startYear ? "–" + p.endYear : ""}</div>${p.sentence ? `<div class="place-pop-line">${escapeHtml(p.sentence)}</div>` : ""}</div>`)
+      .bindPopup(`<div class="place-pop">${p.streetview ? `<img class="place-pop-sv" src="${svLarge(p)}" alt="Street view of ${escapeHtml(p.subject)}" loading="lazy">` : ""}<strong>${escapeHtml(p.subject)}</strong><div class="place-pop-years">${p.startYear}${p.endYear !== p.startYear ? "–" + p.endYear : ""}</div>${p.sentence ? `<div class="place-pop-line">${escapeHtml(p.sentence)}</div>` : ""}</div>`)
       .addTo(map));
 
     // Year slider spanning the lived years.
