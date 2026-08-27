@@ -7,7 +7,7 @@
 // The key is read from GOOGLE_PLACES_API_KEY (or GOOGLE_MAPS_API_KEY). It must be a Google Maps
 // Platform key with the **Street View Static API** enabled and not restricted away from it.
 
-const KEY = () => process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY || "";
+const KEY = () => process.env.GOOGLE_STREET_VIEW_STATIC_API_KEY || process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MAPS_API_KEY || "";
 
 function num(v) { const n = Number(v); return Number.isFinite(n) ? n : null; }
 
