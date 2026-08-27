@@ -279,7 +279,13 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
   const setLocHint = (msg, ok) => { locHint.textContent = msg; locHint.className = `field-hint${ok ? " loc-ok" : ""}`; };
   const labelOf = (p) => {
     const P = p.properties || {};
-    const bits = [P.name, P.city && P.city !== P.name ? P.city : null, P.state, P.country].filter(Boolean);
+    // Build a real street address when Photon returns one: "1600 Pennsylvania Avenue NW" — house
+    // number + street (or the POI name), then city/district, state, country. (My earlier version
+    // dropped the number and street, collapsing an address to just its city.)
+    const streetLine = (P.housenumber && P.street) ? `${P.housenumber} ${P.street}`
+      : (P.name || P.street || "");
+    const place = P.city || P.town || P.village || P.district || "";
+    const bits = [streetLine, place && place !== streetLine ? place : null, P.state, P.country].filter(Boolean);
     return [...new Set(bits)].join(", ");
   };
   async function queryLocations(q) {
