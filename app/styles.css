@@ -1333,3 +1333,7 @@ img.sample-photo { object-fit: cover; }
 .loc-item:hover { background: var(--paper-deep); }
 .field-hint.loc-ok { color: var(--accent); }
 .place-pop-sv { display: block; width: 240px; max-width: 60vw; height: auto; border-radius: 8px; margin-bottom: 0.4rem; border: 1px solid var(--line); }
+
+/* On the Places tab, hide the floating corner links so they don't sit on top of the year slider. */
+body.on-places #corner-links { display: none; }
+.places-slider { position: relative; z-index: 600; }

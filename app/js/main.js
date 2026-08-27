@@ -107,6 +107,7 @@ function setMode(mode, arg, zoom) {
   graphView.hidden = mode !== "graph";
   livesView.hidden = mode !== "lives";
   placesView.hidden = mode !== "places";
+  document.body.classList.toggle("on-places", mode === "places"); // hide corner links so they don't block the slider
   if (mode !== "graph") graph.close(); // stop live graph updates when leaving the tab
   if (mode !== "places") places.close(); // tear down the map when leaving
   if (mode === "browse") calendar.reload(arg, zoom);

@@ -579,11 +579,20 @@ function levelsOf(rec) {
   return { word: rec.word || "", phrase: rec.phrase || "", sentence: rec.sentence || rec.brief || "", paragraph: rec.paragraph || "", summary: rec.full || (rec.prose && rec.prose.full) || "", outline: rec.outlineFull || (rec.outline && rec.outline.full) || "", rewrite: (rec.levels && rec.levels.rewrite) || "" };
 }
 // One-line links to child elements. Each item: { label, sentence, attrs:{decade|year|month|week|day|category|subject|mem} }.
+// A memory with picked coordinates gets a Street View photo of that spot (via our proxy), used in
+// the Journal wherever memory images appear. The <img> carries onerror to drop itself if there's
+// no coverage (the proxy 404s), so no broken-image icon.
+function memStreetView(m) {
+  return (m && Number.isFinite(m.lat) && Number.isFinite(m.lng)) ? `./api/streetview?lat=${m.lat}&lng=${m.lng}&size=480x360` : null;
+}
 // A memory's era-sequence of images: [{url, year}] (Wikimedia Commons, on sample lives). Falls back
-// to a flat imageUrls list tagged at the memory's start year. Blank on normal journals.
+// to a flat imageUrls list, then to the location's Street View. Blank on a memory with no photo/place.
 function memImageList(m) {
   if (Array.isArray(m?.images) && m.images.length) return m.images.filter((i) => i && i.url).map((i) => ({ url: i.url, year: i.year ?? m.startYear ?? 2000 }));
-  return (Array.isArray(m?.imageUrls) ? m.imageUrls.filter(Boolean) : []).map((u) => ({ url: u, year: m?.startYear ?? 2000 }));
+  const urls = (Array.isArray(m?.imageUrls) ? m.imageUrls.filter(Boolean) : []);
+  if (urls.length) return urls.map((u) => ({ url: u, year: m?.startYear ?? 2000 }));
+  const sv = memStreetView(m);
+  return sv ? [{ url: sv, year: m?.startYear ?? 2000 }] : [];
 }
 function memImageUrls(m) { return memImageList(m).map((i) => i.url); }
 // The image "in effect" at `year` — the latest one that had appeared by then (else the earliest).
@@ -597,7 +606,7 @@ function imagesHtmlFrom(urls) {
   const uniq = (urls || []).filter((u) => u && !shownImages.has(u));
   uniq.forEach((u) => shownImages.add(u)); // dedupe within the page
   return uniq.length
-    ? `<div class="detail-images">${uniq.map((u) => `<figure><img src="${escapeHtml(u)}" alt="" loading="lazy"></figure>`).join("")}</div>`
+    ? `<div class="detail-images">${uniq.map((u) => `<figure><img src="${escapeHtml(u)}" alt="" loading="lazy" onerror="this.closest('figure').remove()"></figure>`).join("")}</div>`
     : "";
 }
 function imgFromDay(iso) { const im = (journal.days[iso]?.images || []).find((x) => !x.video); return im ? im.url : null; }
@@ -625,7 +634,7 @@ function nodeLinksHtml(items) {
     const attrs = Object.entries(it.attrs || {}).map(([k, val]) => `data-${k}="${escapeHtml(String(val))}"`).join(" ");
     const showThumb = it.thumb && !shownImages.has(it.thumb); // no repeats on the page
     if (showThumb) shownImages.add(it.thumb);
-    const thumb = showThumb ? `<img class="node-link-thumb" src="${escapeHtml(it.thumb)}" alt="" loading="lazy">` : "";
+    const thumb = showThumb ? `<img class="node-link-thumb" src="${escapeHtml(it.thumb)}" alt="" loading="lazy" onerror="this.remove()">` : "";
     return `<button type="button" class="node-link${showThumb ? " has-thumb" : ""}" ${attrs}>${thumb}<span class="node-link-text"><span class="node-link-name">${escapeHtml(it.label)}</span>${it.sentence ? `<span class="node-link-line">${escapeHtml(it.sentence)}</span>` : ""}</span></button>`;
   }).join("")}</div>`;
 }

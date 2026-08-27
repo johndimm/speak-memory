@@ -204,21 +204,27 @@ export function initPlaces(root) {
       .bindPopup(`<div class="place-pop">${p.streetview ? `<img class="place-pop-sv" src="${svLarge(p)}" alt="Street view of ${escapeHtml(p.subject)}" loading="lazy">` : ""}<strong>${escapeHtml(p.subject)}</strong><div class="place-pop-years">${p.startYear}${p.endYear !== p.startYear ? "–" + p.endYear : ""}</div>${p.sentence ? `<div class="place-pop-line">${escapeHtml(p.sentence)}</div>` : ""}</div>`)
       .addTo(map));
 
-    // Year slider spanning the lived years.
+    // Year slider from the first lived year through the present, so the timeline reaches "now" even
+    // if your last recorded place was years ago. The most-recent place is treated as where you still
+    // are — it stays highlighted for every year after it begins, up to today.
+    const nowY = new Date().getFullYear();
     const minY = Math.min(...places.map((p) => p.startYear));
-    const maxY = Math.max(...places.map((p) => p.endYear));
+    const lastStart = Math.max(...places.map((p) => p.startYear));
+    const maxY = Math.max(Math.max(...places.map((p) => p.endYear)), nowY);
     const range = root.querySelector("#places-range");
     const yearLabel = root.querySelector("#places-year");
     range.min = String(minY); range.max = String(maxY);
     const saved = +localStorage.getItem("places-year::" + activeJournalId());
     range.value = String(saved >= minY && saved <= maxY ? saved : maxY);
 
+    const activeAt = (p, y) => (p.startYear <= y && y <= p.endYear) || (p.startYear === lastStart && y >= p.startYear);
     const update = () => {
       const y = +range.value;
       yearLabel.textContent = y;
       localStorage.setItem("places-year::" + activeJournalId(), String(y));
-      // Highlight places whose span contains the year; draw the trail of places begun by then.
-      places.forEach((p, i) => markers[i].setIcon(markerIcon(L, p, y >= p.startYear && y <= p.endYear)));
+      // Highlight places whose span contains the year (the latest place stays current to today);
+      // draw the trail of places begun by then.
+      places.forEach((p, i) => markers[i].setIcon(markerIcon(L, p, activeAt(p, y))));
       const upTo = places.filter((p) => p.startYear <= y);
       if (trail) { map.removeLayer(trail); trail = null; }
       if (upTo.length > 1) trail = L.polyline(upTo.map((p) => [p.lat, p.lng]), { color: "#c45c26", weight: 2, opacity: 0.7, dashArray: "4 6" }).addTo(map);
