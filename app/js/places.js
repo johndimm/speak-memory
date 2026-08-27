@@ -80,14 +80,21 @@ async function collectPlaces(onProgress) {
       byQuery.set(query.toLowerCase(), { query, subject: label, startYear: m.startYear, endYear: m.endYear || m.startYear, image: memImage(m), sentence: memSentence(m) });
     }
   }
-  const candidates = [...byQuery.values()];
-  const places = [...exact];
-  let done = 0;
-  for (const c of candidates) {
-    const g = await geocode(c.query);
-    done++;
-    onProgress?.(done, candidates.length);
-    if (g) places.push({ ...c, lat: g.lat, lng: g.lng, display: g.display });
+  // If you've provided real locations (picked coordinates), the map shows ONLY those — accurate and
+  // clean, no fuzzy free-text guessing. Fall back to geocoding subjects only when nothing was picked
+  // (e.g. the sample lives, which carry place names but no chosen coordinates).
+  let places;
+  if (exact.length) {
+    places = exact;
+  } else {
+    places = [];
+    let done = 0;
+    for (const c of [...byQuery.values()]) {
+      const g = await geocode(c.query);
+      done++;
+      onProgress?.(done, byQuery.size);
+      if (g) places.push({ ...c, lat: g.lat, lng: g.lng, display: g.display });
+    }
   }
   places.sort((a, b) => a.startYear - b.startYear || a.endYear - b.endYear);
   return places;
