@@ -440,7 +440,7 @@ async function buildDiary({ name, title, entries, style = "", grouping = "calend
 // categories and dated to a year by one LLM pass; the ladder rolls up subjects→categories and
 // years→decades→life. Grouping is calendar (the quotes' loose years). Used for Samuel Johnson
 // (Boswell), where the value is his real recorded talk, organized.
-async function buildCommonplace({ name, title, quotes, birthYear, minYear, maxYear }) {
+async function buildCommonplace({ name, title, quotes, birthYear, minYear, maxYear, style = "" }) {
   const id = slugify(name);
   quotes = quotes.filter((q) => (q.text || "").trim());
   process.stdout.write(`\n▶ ${title} (${id})\n  theming ${quotes.length} quotes… `);
@@ -473,7 +473,7 @@ async function buildCommonplace({ name, title, quotes, birthYear, minYear, maxYe
   const memChild = (m) => ({ id: "MEM:" + m.id, date: m.label, brief: m.levels.sentence, levels: m.levels });
   const perChild = (p) => ({ id: p.key, date: p.label, brief: p.levels.sentence, levels: p.levels });
   const periods = [];
-  const store = async (key, type, label, children) => { const p = await storePeriod(key, type, label, children, ""); periods.push(p); process.stdout.write("."); return p; };
+  const store = async (key, type, label, children) => { const p = await storePeriod(key, type, label, children, style); periods.push(p); process.stdout.write("."); return p; };
 
   const cats = [...new Set(memories.map(catOf))];
   const subRecs = {};
@@ -569,7 +569,8 @@ async function main() {
     const src = JSON.parse(await readFile(join(ROOT, cpFile), "utf8"));
     const name = flagVal("--name") || "Quotes";
     const title = flagVal("--title") || name;
-    await buildCommonplace({ name, title, quotes: src.quotes || [], birthYear: 1709, minYear: 1728, maxYear: 1784 });
+    const style = flagVal("--style") || "";
+    await buildCommonplace({ name, title, quotes: src.quotes || [], birthYear: 1709, minYear: 1728, maxYear: 1784, style });
     console.log("\nDone.");
     return;
   }

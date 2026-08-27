@@ -1320,3 +1320,15 @@ img.sample-photo { object-fit: cover; }
 .reset-samples { border: 1px solid var(--line); background: var(--card); color: var(--ink-soft);
   border-radius: 999px; padding: 0.35rem 0.9rem; font: inherit; font-size: 0.85rem; cursor: pointer; }
 .reset-samples:hover { border-color: #b3261e; color: #b3261e; }
+
+/* Location autocomplete on the memory form */
+.loc-field { position: relative; }
+#entry-location { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.85rem 1rem; }
+#entry-location:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+.loc-suggest { position: absolute; left: 0; right: 0; top: calc(100% - 0.2rem); z-index: 30;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.loc-item { display: block; width: 100%; text-align: left; padding: 0.6rem 0.9rem; background: none; border: none;
+  border-bottom: 1px solid var(--line); font: inherit; color: var(--ink); cursor: pointer; }
+.loc-item:last-child { border-bottom: none; }
+.loc-item:hover { background: var(--paper-deep); }
+.field-hint.loc-ok { color: var(--accent); }

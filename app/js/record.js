@@ -117,6 +117,12 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
           <input type="text" id="entry-subject" autocomplete="off" placeholder="a name — Deena, the Elm St. house">
           <div class="chip-row" id="entry-subject-chips"></div>
         </div>
+        <div class="field loc-field">
+          <span class="field-label">Location <em>(optional — for the map)</em></span>
+          <input type="text" id="entry-location" autocomplete="off" placeholder="type a city or address, then pick a match">
+          <div class="loc-suggest" id="entry-location-suggest" hidden></div>
+          <span class="field-hint" id="entry-location-hint"></span>
+        </div>
         <fieldset class="mem-years">
           <label class="field mem-year-field">
             <span class="field-label">Year</span>
@@ -263,6 +269,59 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
   const ongoingEl = root.querySelector("#entry-ongoing");
   let allMems = [];
   let editingMemId = null, editingMemOrig = null;
+
+  // ---- Location autocomplete (Photon/OSM) — you type, pick a real place, we store its coords ----
+  const locationEl = root.querySelector("#entry-location");
+  const locSuggest = root.querySelector("#entry-location-suggest");
+  const locHint = root.querySelector("#entry-location-hint");
+  let chosenLocation = null; // { place, lat, lng } once a suggestion is picked
+  let locTimer = null, locCtrl = null;
+  const setLocHint = (msg, ok) => { locHint.textContent = msg; locHint.className = `field-hint${ok ? " loc-ok" : ""}`; };
+  const labelOf = (p) => {
+    const P = p.properties || {};
+    const bits = [P.name, P.city && P.city !== P.name ? P.city : null, P.state, P.country].filter(Boolean);
+    return [...new Set(bits)].join(", ");
+  };
+  async function queryLocations(q) {
+    if (locCtrl) locCtrl.abort();
+    locCtrl = new AbortController();
+    try {
+      const url = `https://photon.komoot.io/api/?limit=6&q=${encodeURIComponent(q)}`;
+      const r = await fetch(url, { signal: locCtrl.signal });
+      if (!r.ok) return [];
+      return ((await r.json()).features || []).filter((f) => f.geometry && f.geometry.coordinates);
+    } catch { return []; }
+  }
+  function renderSuggest(feats) {
+    if (!feats.length) { locSuggest.hidden = true; locSuggest.innerHTML = ""; return; }
+    locSuggest.innerHTML = feats.map((f, i) => {
+      const [lng, lat] = f.geometry.coordinates;
+      return `<button type="button" class="loc-item" data-i="${i}" data-lat="${lat}" data-lng="${lng}" data-label="${escapeAttr(labelOf(f))}">${escapeHtml(labelOf(f))}</button>`;
+    }).join("");
+    locSuggest.hidden = false;
+  }
+  const escapeAttr = (s) => String(s).replace(/"/g, "&quot;");
+  const escapeHtml = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  locationEl.addEventListener("input", () => {
+    chosenLocation = null; // typing invalidates a prior pick
+    const q = locationEl.value.trim();
+    clearTimeout(locTimer);
+    if (q.length < 3) { locSuggest.hidden = true; setLocHint("", false); return; }
+    setLocHint("Searching…", false);
+    locTimer = setTimeout(async () => {
+      const feats = await queryLocations(q);
+      renderSuggest(feats);
+      setLocHint(feats.length ? "Pick the right match to pin it on the map." : "No match — try a city, or add the country.", false);
+    }, 320); // debounce so we don't hammer the geocoder per keystroke
+  });
+  locSuggest.addEventListener("click", (e) => {
+    const b = e.target.closest(".loc-item"); if (!b) return;
+    chosenLocation = { place: b.dataset.label, lat: +b.dataset.lat, lng: +b.dataset.lng };
+    locationEl.value = b.dataset.label;
+    locSuggest.hidden = true;
+    setLocHint("✓ Location set — it'll appear on the Places map.", true);
+  });
+  document.addEventListener("click", (e) => { if (!locSuggest.contains(e.target) && e.target !== locationEl) locSuggest.hidden = true; });
   const uniq = (vals) => [...new Set(vals.filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const chipsHtml = (vals, current) => vals.map((v) =>
     `<button type="button" class="chip${v.toLowerCase() === current.toLowerCase() ? " chip-on" : ""}" data-val="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join("");
@@ -553,6 +612,12 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
         needsSummary: true, createdAt: editingMemOrig?.createdAt || Date.now(), updatedAt: Date.now(),
       };
       if (ongoing) mem.ongoing = true;
+      // Location: a freshly-picked place, or keep the one already on the memory (if the field wasn't
+      // changed). Clearing the field removes the location.
+      if (chosenLocation) { mem.place = chosenLocation.place; mem.lat = chosenLocation.lat; mem.lng = chosenLocation.lng; }
+      else if (locationEl.value.trim() && editingMemOrig && editingMemOrig.place && locationEl.value.trim() === editingMemOrig.place) {
+        mem.place = editingMemOrig.place; mem.lat = editingMemOrig.lat; mem.lng = editingMemOrig.lng;
+      }
       if (editingMemOrig?.prose) mem.prose = editingMemOrig.prose;
       if (editingMemOrig?.outline) mem.outline = editingMemOrig.outline;
       if (editingMemOrig?.levels) mem.levels = editingMemOrig.levels;
@@ -569,6 +634,7 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
     editingMemId = null; editingMemOrig = null;
     moreEl.open = false;
     catEl.value = ""; subjectEl.value = ""; startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false;
+    locationEl.value = ""; chosenLocation = null; locSuggest.hidden = true; setLocHint("", false);
     renderCategoryChips(); renderSubjectChips();
   }
 
@@ -585,6 +651,8 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
     moreEl.open = true;
     catEl.value = mem.category || ""; subjectEl.value = mem.subject || "";
     startYearEl.value = mem.startYear ?? ""; endYearEl.value = mem.endYear ?? ""; ongoingEl.checked = !!mem.ongoing;
+    locationEl.value = mem.place || ""; chosenLocation = null; locSuggest.hidden = true;
+    setLocHint(mem.place ? "✓ Location set." : "", !!mem.place);
     textEl.value = mem.text || "";
     renderCategoryChips(); renderSubjectChips();
     applyEntryLayout(); // inEditMode is false now → shows the text box

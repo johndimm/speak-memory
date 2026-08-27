@@ -58,15 +58,20 @@ async function geocode(query) {
 const memImage = (m) => (m.images && m.images[0] && m.images[0].url) || (m.imageUrls && m.imageUrls[0]) || null;
 const memSentence = (m) => (m.levels && m.levels.sentence) || (m.prose && m.prose.brief) || m.label || "";
 
-// Candidate places from the active journal's memories: one per subject (earliest), needing a year.
+// Candidate places from the active journal's memories.
+// Priority: (1) exact coordinates the user picked via the Location field (memory.lat/lng) — no
+// geocoding needed, always right; (2) an LLM-assigned clean place name (sample lives); (3) the raw
+// subject. `place === null` explicitly means "not a physical place" → skip.
 async function collectPlaces(onProgress) {
   const mems = await getAllMemories();
-  // Prefer the LLM-assigned clean place name (sample lives); fall back to the raw subject (your own
-  // journal, where a Places/Travel memory's subject is already a real location). `place === null`
-  // explicitly means "not a physical place" (a book, a person) → skip it.
-  const byQuery = new Map();
+  const exact = [];   // user-picked coords, plotted directly
+  const byQuery = new Map(); // needs geocoding, deduped by query
   for (const m of mems) {
     if (m.startYear == null) continue;
+    if (Number.isFinite(m.lat) && Number.isFinite(m.lng)) {
+      exact.push({ subject: (m.place || m.subject || "").trim(), startYear: m.startYear, endYear: m.endYear || m.startYear, image: memImage(m), sentence: memSentence(m), lat: m.lat, lng: m.lng, display: m.place || "" });
+      continue;
+    }
     const query = "place" in m ? (m.place || "").trim() : (m.subject || "").trim();
     if (!query) continue;
     const prev = byQuery.get(query.toLowerCase());
@@ -76,7 +81,7 @@ async function collectPlaces(onProgress) {
     }
   }
   const candidates = [...byQuery.values()];
-  const places = [];
+  const places = [...exact];
   let done = 0;
   for (const c of candidates) {
     const g = await geocode(c.query);
