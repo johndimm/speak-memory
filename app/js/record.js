@@ -6,7 +6,7 @@
 import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, deleteEntry, deleteMemory, photoToStored, storedToBlob } from "./db.js";
 import { renderReps, wireReps, isOutlineText, escapeHtml } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
-import { setupDictation } from "./dictation.js";
+import { setupDictation, IS_MOBILE } from "./dictation.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -147,7 +147,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <label class="field">
         <span class="field-label" id="entry-label">What happened?</span>
         <textarea id="entry-text" rows="10"
-          placeholder="Just talk — tap 🎤 Dictate below (or your keyboard mic) — or type…"></textarea>
+          placeholder="${IS_MOBILE ? "Just talk — tap your keyboard’s mic — or type…" : "Just talk — tap 🎤 Dictate below — or type…"}"></textarea>
       </label>
       <button type="button" class="photo-add mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button>
 

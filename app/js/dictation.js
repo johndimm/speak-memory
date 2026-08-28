@@ -1,37 +1,27 @@
 // In-app dictation via the Web Speech API — wired to the 🎤 Dictate buttons in Write and
-// in the memory form. Desktop Chrome/Edge support it well; Safari partially. Android's engine
-// is quirky, so this file is written around its failure modes:
+// in the memory form. It's for DESKTOP only: phones have a reliable keyboard mic, and the
+// mobile speech engines are too unreliable to be worth it (Android's plays a bell on every
+// pause, and some builds never respond at all). On mobile we hide the button entirely — see
+// IS_MOBILE, which the Write placeholder also uses to point people at the keyboard mic.
 //
-//   • The system plays a "start listening" earcon (a bell) on every start(). So we keep ONE
-//     long session (`continuous = true`) instead of restarting per pause — one bell, not one
-//     per pause. Auto-restart is kept only as a mobile fallback for engines that still end a
-//     session on each pause despite `continuous`.
-//   • It re-fires results, which naive appending turns into repeated words. We rebuild the
-//     whole transcript from `results[0..]` on every event instead of appending deltas, so a
-//     re-fired result can't double up.
-//   • Some builds (seen on Android 10) never fire onstart/onresult/onend at all — the engine
-//     is simply unresponsive. A watchdog surfaces that instead of leaving the button stuck on
-//     "Stop", and Stop resets the UI immediately rather than waiting for an onend that may
-//     never come.
-//
-// A session's finalized text is captured as `base` when it starts; the live transcript is
-// appended after it. On auto-restart the just-finalized text becomes the new base.
+// Desktop notes:
+//   • Keep ONE long session (`continuous = true`) so the start-listening earcon rings once.
+//   • Chrome can re-fire results; rebuild the transcript from `results[0..]` every event
+//     instead of appending deltas, so a re-fired result can't duplicate words.
+//   • `base` (the text finalized before a session) is captured at start; live speech appends
+//     after it.
 
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-const MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-// Errors that mean "don't bother retrying" — retrying would only spin. `no-speech` (a pause)
-// and `aborted` (the user pressed Stop) are normal and allow the session to restart/end quietly.
-const FATAL = new Set(["not-allowed", "service-not-allowed", "audio-capture", "language-not-supported", "bad-grammar"]);
+// Phones/tablets: rely on the keyboard mic, not this button.
+export const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent)); // iPadOS poses as Mac
 
 export function setupDictation(micBtn, textEl, status, refreshSave) {
-  if (!SpeechRec || !micBtn) return;
+  if (!SpeechRec || !micBtn || IS_MOBILE) return; // mobile keeps the button hidden (keyboard mic)
   micBtn.hidden = false;
 
-  let recog = null;      // the active recognition instance, or null when idle
-  let stopping = false;  // the user pressed Stop → end for good instead of auto-restarting
-  let fatal = false;     // a fatal error occurred → don't auto-restart
+  let recog = null; // the active recognition instance, or null when idle
 
   const setIdle = () => { micBtn.classList.remove("listening"); micBtn.querySelector("span").textContent = "🎤 Dictate"; };
   const setLive = () => { micBtn.classList.add("listening"); micBtn.querySelector("span").textContent = "⏹ Stop"; };
@@ -41,16 +31,15 @@ export function setupDictation(micBtn, textEl, status, refreshSave) {
     const r = new SpeechRec();
     r.lang = navigator.language || "en-US";
     r.interimResults = true;
-    r.continuous = true; // one long session → the engine's bell rings once at start, not per pause
+    r.continuous = true; // one long session → the engine's start earcon rings once, not per pause
     const base = textEl.value; // text finalized before THIS session; live speech appends to it
-    let activity = false;      // did the engine ever respond? (guards the unresponsive-device watchdog)
+    let activity = false;      // did the engine ever respond? (guards the unresponsive watchdog)
 
-    // If nothing at all happens within a few seconds, the engine is unresponsive (Android 10).
-    // Surface it and reset, rather than sitting on a stuck "Stop" button.
+    // If nothing at all happens within a few seconds, the engine is unresponsive (a browser
+    // without speech services). Surface it and reset, rather than sitting on a stuck "Stop".
     const watchdog = setTimeout(() => {
       if (recog !== r || activity) return;
-      showError("Dictation isn't responding on this device — try updating Chrome, or type instead.");
-      stopping = true;
+      showError("Dictation isn't responding in this browser — type instead.");
       try { r.abort(); } catch { /* ignore */ }
       recog = null;
       setIdle();
@@ -60,8 +49,8 @@ export function setupDictation(micBtn, textEl, status, refreshSave) {
 
     r.onresult = (e) => {
       activity = true;
-      // Rebuild from the top every time — never append deltas — so a re-fired result (Android)
-      // can't duplicate words.
+      // Rebuild from the top every time — never append deltas — so a re-fired result can't
+      // duplicate words.
       let finalText = "", interim = "";
       for (let i = 0; i < e.results.length; i++) {
         const chunk = e.results[i][0].transcript;
@@ -75,7 +64,6 @@ export function setupDictation(micBtn, textEl, status, refreshSave) {
     r.onerror = (e) => {
       activity = true;
       if (e.error === "aborted" || e.error === "no-speech") return; // normal; handled in onend
-      if (FATAL.has(e.error)) fatal = true;
       showError(e.error === "not-allowed"
         ? "Microphone blocked — allow mic access for this site."
         : `Dictation error: ${e.error}`);
@@ -85,9 +73,6 @@ export function setupDictation(micBtn, textEl, status, refreshSave) {
       clearTimeout(watchdog);
       textEl.value = textEl.value.trimEnd();
       refreshSave();
-      // Some Android builds end the session on each pause despite continuous=true; on mobile,
-      // restart to keep listening until Stop. Desktop honors continuous, so it just ends here.
-      if (!stopping && !fatal && MOBILE && activity) { beginSession(); return; }
       recog = null;
       setIdle();
       textEl.focus();
@@ -100,17 +85,13 @@ export function setupDictation(micBtn, textEl, status, refreshSave) {
 
   micBtn.addEventListener("click", () => {
     if (recog) {
-      // Stop decisively and reset the UI now — don't wait for onend, which some Android builds
-      // never fire (the button would otherwise stay stuck on "Stop").
-      stopping = true;
+      // Stop and reset the UI now, without waiting for onend.
       const r = recog;
       recog = null;
       setIdle();
       try { r.stop(); } catch { try { r.abort(); } catch { /* ignore */ } }
       return;
     }
-    stopping = false;
-    fatal = false;
     if (status && status.classList.contains("error")) { status.textContent = ""; status.className = "write-status"; }
     setLive();
     beginSession();
