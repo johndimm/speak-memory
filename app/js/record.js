@@ -6,6 +6,7 @@
 import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, deleteEntry, deleteMemory, photoToStored, storedToBlob } from "./db.js";
 import { renderReps, wireReps, isOutlineText, escapeHtml } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
+import { setupDictation } from "./dictation.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -534,46 +535,9 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   });
   editTextToggle.addEventListener("click", toggleEditText);
 
-  // In-app dictation for desktop (no keyboard mic). Uses the Web Speech API where
-  // available (Chrome/Edge; partial in Safari). Final results are appended to the box.
-  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (SpeechRec && micBtn) {
-    micBtn.hidden = false;
-    let recog = null;
-    const setIdle = () => { micBtn.classList.remove("listening"); micBtn.querySelector("span").textContent = "🎤 Dictate"; };
-    const setLive = () => { micBtn.classList.add("listening"); micBtn.querySelector("span").textContent = "⏹ Stop"; };
-    micBtn.addEventListener("click", () => {
-      if (recog) { recog.stop(); return; }
-      recog = new SpeechRec();
-      recog.lang = navigator.language || "en-US";
-      recog.interimResults = true;
-      recog.continuous = true;
-      // Text already in the box before we start; dictation is appended after it.
-      let base = textEl.value;
-      let settled = "";
-      recog.onresult = (e) => {
-        let interim = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const chunk = e.results[i][0].transcript;
-          if (e.results[i].isFinal) settled += chunk; else interim += chunk;
-        }
-        const sep = base && !/\s$/.test(base) ? " " : "";
-        textEl.value = base + sep + (settled + interim).replace(/^\s+/, "");
-        refreshSaveState();
-      };
-      recog.onerror = (e) => {
-        if (statusEl && e.error !== "aborted" && e.error !== "no-speech") {
-          statusEl.textContent = e.error === "not-allowed"
-            ? "Microphone blocked — allow mic access for this site."
-            : `Dictation error: ${e.error}`;
-          statusEl.className = "write-status error";
-        }
-      };
-      recog.onend = () => { recog = null; setIdle(); textEl.value = textEl.value.trimEnd(); refreshSaveState(); textEl.focus(); };
-      setLive();
-      try { recog.start(); } catch { recog = null; setIdle(); }
-    });
-  }
+  // In-app dictation (for devices whose keyboard has no mic). See dictation.js for the
+  // Android-robust handling of auto-restart and de-duplication.
+  setupDictation(micBtn, textEl, statusEl, refreshSaveState);
 
   // Generate BOTH a prose and an outline summary of the same text (voice applies to prose only).
   async function summarizeBoth(date, text) {

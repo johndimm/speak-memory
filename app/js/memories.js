@@ -8,6 +8,7 @@
 
 import { putMemory, getAllMemories } from "./db.js";
 import { escapeHtml } from "./render.js";
+import { setupDictation } from "./dictation.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 function currentStyle() { return localStorage.getItem("summary-style") || ""; }
@@ -171,40 +172,3 @@ export function initMemories(root, { onChanged, onOpenMemory } = {}) {
   return { refresh: () => loadLists(), editMemory };
 }
 
-// In-app dictation (desktop has no keyboard mic). Appends final speech to the text box.
-function setupDictation(micBtn, textEl, status, refreshSave) {
-  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRec || !micBtn) return;
-  micBtn.hidden = false;
-  let recog = null;
-  const setIdle = () => { micBtn.classList.remove("listening"); micBtn.querySelector("span").textContent = "🎤 Dictate"; };
-  const setLive = () => { micBtn.classList.add("listening"); micBtn.querySelector("span").textContent = "⏹ Stop"; };
-  micBtn.addEventListener("click", () => {
-    if (recog) { recog.stop(); return; }
-    recog = new SpeechRec();
-    recog.lang = navigator.language || "en-US";
-    recog.interimResults = true;
-    recog.continuous = true;
-    let base = textEl.value;
-    let settled = "";
-    recog.onresult = (e) => {
-      let interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const chunk = e.results[i][0].transcript;
-        if (e.results[i].isFinal) settled += chunk; else interim += chunk;
-      }
-      const sep = base && !/\s$/.test(base) ? " " : "";
-      textEl.value = base + sep + (settled + interim).replace(/^\s+/, "");
-      refreshSave();
-    };
-    recog.onerror = (e) => {
-      if (status && e.error !== "aborted" && e.error !== "no-speech") {
-        status.textContent = e.error === "not-allowed" ? "Microphone blocked — allow mic access for this site." : `Dictation error: ${e.error}`;
-        status.className = "write-status error";
-      }
-    };
-    recog.onend = () => { recog = null; setIdle(); textEl.value = textEl.value.trimEnd(); refreshSave(); textEl.focus(); };
-    setLive();
-    try { recog.start(); } catch { recog = null; setIdle(); }
-  });
-}
