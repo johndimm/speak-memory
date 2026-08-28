@@ -209,6 +209,8 @@ export function initSettings(root, { onImported } = {}) {
           <button type="button" class="import-link doc-open" data-doc="design-history">A history of the design</button>
           <button type="button" class="import-link doc-open" data-doc="replicate-prompt">Build prompt (replicate this app)</button>
           <button type="button" class="import-link doc-open" data-doc="linkedin-post">LinkedIn post</button>
+          <a class="import-link" href="/about.html">About page ↗</a>
+          <a class="import-link" href="https://johndimm.vercel.app" target="_blank" rel="noopener">All my apps ↗</a>
         </div>
         <p class="field-hint">Reference material — tap to read; use Copy to share the posts and the build prompt.</p>
       </section>

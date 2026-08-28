@@ -3,7 +3,7 @@
 // On save we summarize via /api/summarize, store the result + photos in IndexedDB,
 // and throw the raw text away.
 
-import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, photoToStored, storedToBlob } from "./db.js";
+import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, deleteEntry, deleteMemory, photoToStored, storedToBlob } from "./db.js";
 import { renderReps, wireReps, isOutlineText, escapeHtml } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
 
@@ -88,7 +88,7 @@ function nowContext() {
   };
 }
 
-export function initRecord(root, { onSaved, onSavedMemory } = {}) {
+export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory } = {}) {
   root.innerHTML = `
     <aside class="app-intro" id="app-intro" hidden>
       <button type="button" class="app-intro-dismiss" id="app-intro-dismiss" aria-label="Dismiss">×</button>
@@ -168,6 +168,7 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
       </div>
 
       <button type="submit" class="save-btn" id="save-btn" disabled>Save entry</button>
+      <button type="button" class="delete-entry-btn" id="delete-entry-btn" hidden>Delete entry</button>
       <p class="write-status" id="write-status"></p>
     </form>
 
@@ -199,6 +200,7 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
   const cameraBtn = root.querySelector("#entry-camera-btn");
   const thumbsEl = root.querySelector("#photo-thumbs");
   const saveBtn = root.querySelector("#save-btn");
+  const deleteBtn = root.querySelector("#delete-entry-btn");
   const statusEl = root.querySelector("#write-status");
   const briefEl = root.querySelector("#entry-brief");
   const headlineField = root.querySelector("#headline-field");
@@ -221,6 +223,15 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
     editTextToggle.hidden = !inEditMode;
     editTextToggle.textContent = editingText ? "Done editing" : "✎ Edit text";
     if (showView) entryView.innerHTML = renderReps(loadedEntry ? repsOf(loadedEntry) : {});
+    syncDeleteBtn();
+  }
+  // Delete lives only here, in the editor: shown when editing an existing day (inEditMode) or an
+  // existing memory (editingMemId). Composing something new has nothing to delete.
+  function syncDeleteBtn() {
+    if (!deleteBtn) return;
+    const editingDay = inEditMode && loadedEntry;
+    deleteBtn.hidden = !(editingDay || editingMemId);
+    deleteBtn.textContent = editingMemId ? "Delete memory" : "Delete entry";
   }
   function toggleEditText() {
     editingText = !editingText;
@@ -500,6 +511,27 @@ export function initRecord(root, { onSaved, onSavedMemory } = {}) {
 
   textEl.addEventListener("input", refreshSaveState);
   dateEl.addEventListener("change", () => loadDraft({ focus: true }));
+
+  // Delete the thing being edited (a day entry or a memory), then hand navigation back to the caller.
+  deleteBtn.addEventListener("click", async () => {
+    if (editingMemId) {
+      const mem = editingMemOrig;
+      const label = mem?.subject || mem?.category || mem?.label || "this memory";
+      if (!confirm(`Delete “${label}”? This can't be undone.`)) return;
+      await deleteMemory(editingMemId);
+      editingMemId = null; editingMemOrig = null;
+      if (onDeletedMemory) onDeletedMemory(mem);
+      return;
+    }
+    if (!inEditMode || !loadedEntry) return;
+    const date = dateEl.value || todayISO();
+    const pretty = new Date(date + "T12:00:00").toLocaleDateString("en-US",
+      { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+    if (!confirm(`Delete the entry for ${pretty}? This can't be undone.`)) return;
+    await deleteEntry(date);
+    loadedEntry = null; inEditMode = false;
+    if (onDeleted) onDeleted(date);
+  });
   editTextToggle.addEventListener("click", toggleEditText);
 
   // In-app dictation for desktop (no keyboard mic). Uses the Web Speech API where

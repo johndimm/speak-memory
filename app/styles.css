@@ -401,6 +401,20 @@ body { position: relative; }
 .save-btn:disabled { opacity: 0.4; cursor: default; }
 .save-btn:not(:disabled):active { transform: translateY(1px); }
 
+/* Delete lives only in the editor now — a quiet, destructive secondary action under Save. */
+.delete-entry-btn {
+  align-self: flex-start;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: #b23c17;
+  font: inherit; font-size: 0.85rem; font-weight: 500;
+  padding: 0.5rem 1.1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.delete-entry-btn:hover { border-color: #d08b74; background: rgba(178, 60, 23, 0.05); }
+
 /* Summarize toggle */
 .toggle-field {
   display: flex;
@@ -626,7 +640,15 @@ body { position: relative; }
 }
 .crumb:hover { text-decoration: underline; text-underline-offset: 3px; }
 .crumb-current { color: var(--ink-soft); font-weight: 500; cursor: default; }
-.crumb-sep { color: var(--line); }
+.crumb-sep { color: var(--ink-soft); opacity: 0.55; }
+/* The "Life" root reads as a home anchor: a bordered pill with a house glyph, so it's
+   obvious you can click it to get back to everything. */
+.crumb-root {
+  border: 1px solid var(--accent-soft); border-radius: 999px;
+  padding: 0.15rem 0.7rem;
+}
+.crumb-root::before { content: "⌂ "; }
+button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); text-decoration: none; }
 .period-nav { display: flex; gap: 0.5rem; margin-top: 0.9rem; }
 .period-nav-btn {
   border: 1px solid var(--line);
@@ -1334,6 +1356,4 @@ img.sample-photo { object-fit: cover; }
 .field-hint.loc-ok { color: var(--accent); }
 .place-pop-sv { display: block; width: 240px; max-width: 60vw; height: auto; border-radius: 8px; margin-bottom: 0.4rem; border: 1px solid var(--line); }
 
-/* On the Places tab, hide the floating corner links so they don't sit on top of the year slider. */
-body.on-places #corner-links { display: none; }
 .places-slider { position: relative; z-index: 600; }

@@ -91,7 +91,6 @@ const calendar = initCalendar({
   detailActions: document.getElementById("detail-actions"),
   detailNav: document.getElementById("detail-nav"),
   detailEdit: document.getElementById("detail-edit"),
-  detailDelete: document.getElementById("detail-delete"),
   closeDetail: document.getElementById("close-detail"),
 }, {
   onEdit: (date) => setMode("write", date), // Journal "Edit" opens the day in the Write editor
@@ -107,7 +106,6 @@ function setMode(mode, arg, zoom) {
   graphView.hidden = mode !== "graph";
   livesView.hidden = mode !== "lives";
   placesView.hidden = mode !== "places";
-  document.body.classList.toggle("on-places", mode === "places"); // hide corner links so they don't block the slider
   if (mode !== "graph") graph.close(); // stop live graph updates when leaving the tab
   if (mode !== "places") places.close(); // tear down the map when leaving
   if (mode === "browse") calendar.reload(arg, zoom);
@@ -123,6 +121,8 @@ modeBtns.forEach((btn) => btn.addEventListener("click", () => setMode(btn.datase
 const recorder = initRecord(writeView, {
   onSaved: (date) => setMode("browse", date, "day"), // a dated entry → its own day page
   onSavedMemory: (mem) => openMemoryInJournal(mem),   // a memory → its category/subject page
+  onDeleted: (date) => setMode("browse", date, "week"), // day is gone → land on its week
+  onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
 });
 const graph = initGraphView(graphView, {
   // "Open ›" in the graph's node preview → jump to that node's page in the Journal.

@@ -4,7 +4,7 @@
 // it ends (a week when the next week starts, etc.), and higher levels update as their
 // children change. No manual button — see autoSummarize().
 
-import { getAllEntries, getEntry, putEntry, deleteEntry, getPeriod, getAllPeriods, putPeriod, deletePeriod, getAllMemories, putMemory, deleteMemory, storedToBlob } from "./db.js";
+import { getAllEntries, getEntry, putEntry, deleteEntry, getPeriod, getAllPeriods, putPeriod, deletePeriod, getAllMemories, putMemory, storedToBlob } from "./db.js";
 import { escapeHtml, renderFull, renderReps, wireReps, isOutlineText } from "./render.js";
 import { withMode, availableModes, repsOf } from "./entry.js";
 import { renderGraphSvg } from "./graph.js";
@@ -368,27 +368,18 @@ function renderDay() {
     : "";
   const actions = `<div class="day-actions">
     <button type="button" class="detail-nav-btn" id="day-edit">✎ Edit</button>
-    <button type="button" class="detail-nav-btn day-delete" id="day-delete">Delete…</button>
   </div>`;
   const verbatim = (day.reps && day.reps.verbatim) || "";
   setLazyDay(day, iso);
-  els.root.innerHTML = actions + nodeScaffold({ name: `${day.dayOfWeek} · ${formatDate(iso)}`, levels: levelsOf(day), images: imagesHtml, isLeaf: true, verbatim, correction: day.correction || "" });
+  els.root.innerHTML = actions + nodeScaffold({ name: formatDate(iso), levels: levelsOf(day), images: imagesHtml, isLeaf: true, verbatim, correction: day.correction || "" });
   els.root.querySelector("#day-edit").addEventListener("click", () => onEditRequested?.(iso));
-  els.root.querySelector("#day-delete").addEventListener("click", () => deleteDay(iso));
-}
-
-async function deleteDay(iso) {
-  if (!confirm(`Delete the entry for ${formatDate(iso)}? This can't be undone.`)) return;
-  await deleteEntry(iso);
-  state.zoom = "week"; // back to the week it lived in
-  await reloadAndRender();
 }
 
 function openDetail(iso) {
   const day = journal.days[iso];
   if (!day) return;
   detailIso = iso;
-  els.detailDate.textContent = `${day.dayOfWeek} · ${formatDate(iso)}`;
+  els.detailDate.textContent = formatDate(iso);
 
   els.detailModes.hidden = true;
   els.detailBadge.hidden = true;
@@ -431,14 +422,6 @@ function closeDetail() {
   detailIso = null;
   els.detailPanel.hidden = true;
   els.detailBackdrop.hidden = true;
-}
-
-async function deleteCurrent() {
-  if (!detailIso) return;
-  if (!confirm(`Delete the entry for ${formatDate(detailIso)}? This can't be undone.`)) return;
-  await deleteEntry(detailIso);
-  closeDetail();
-  await reloadAndRender();
 }
 
 // Image URLs already shown on the current page — reset each render so no picture repeats within
@@ -491,10 +474,13 @@ function renderBreadcrumb() {
   if (!els.breadcrumb) return;
   const crumbs = breadcrumbCrumbs();
   if (crumbs.length <= 1) { els.breadcrumb.innerHTML = ""; return; } // no breadcrumb at the root (Life)
-  els.breadcrumb.innerHTML = crumbs.map((c, i) => (i === crumbs.length - 1)
-    ? `<span class="crumb crumb-current">${escapeHtml(c.label)}</span>`
-    : `<button type="button" class="crumb" data-zoom="${c.zoom}">${escapeHtml(c.label)}</button>`
-  ).join(`<span class="crumb-sep" aria-hidden="true">›</span>`);
+  els.breadcrumb.innerHTML = crumbs.map((c, i) => {
+    // The "Life" root gets a home-anchor style so it reads as the way back to everything.
+    const root = c.zoom === "life" ? " crumb-root" : "";
+    return (i === crumbs.length - 1)
+      ? `<span class="crumb crumb-current${root}">${escapeHtml(c.label)}</span>`
+      : `<button type="button" class="crumb${root}" data-zoom="${c.zoom}">${escapeHtml(c.label)}</button>`;
+  }).join(`<span class="crumb-sep" aria-hidden="true">›</span>`);
 }
 
 // One timeline row: a colored bar over the years the memory covers, with its label placed BESIDE
@@ -828,7 +814,6 @@ function addMemoryBtn(category, subject) {
 function renderSingleMemory(m, name) {
   const actions = `<div class="day-actions">
     <button type="button" class="detail-nav-btn mem-edit" data-mem-id="${m.id}">✎ Edit</button>
-    <button type="button" class="detail-nav-btn day-delete mem-del" data-mem-id="${m.id}">Delete…</button>
     ${addMemoryBtn(catOf(m), subjOf(m))}
   </div>`;
   setLazyMemory(m);
@@ -1434,12 +1419,6 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
       if (mem) onEditMemoryRequested?.(mem);
       return;
     }
-    const del = e.target.closest(".mem-del[data-mem-id]");
-    if (!del) return;
-    if (!confirm("Delete this memory?")) return;
-    await deleteMemory(del.dataset.memId);
-    if (state.zoom === "memory") state.zoom = state.subject ? "subject" : "category"; // don't strand on a deleted memory
-    await reloadAndRender();
   });
   if (els.breadcrumb) els.breadcrumb.addEventListener("click", (e) => {
     const crumb = e.target.closest(".crumb[data-zoom]");
@@ -1463,7 +1442,6 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
     closeDetail();
     onEditRequested?.(iso);
   });
-  els.detailDelete.addEventListener("click", deleteCurrent);
   els.closeDetail.addEventListener("click", closeDetail);
   els.detailBackdrop.addEventListener("click", closeDetail);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDetail(); });
