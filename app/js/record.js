@@ -346,7 +346,10 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   const renderCategoryChips = () => { catChips.innerHTML = chipsHtml(uniq(allMems.map((m) => m.category)), catEl.value.trim()); };
   const renderSubjectChips = () => {
     const cat = catEl.value.trim().toLowerCase();
-    subChips.innerHTML = chipsHtml(uniq(allMems.filter((m) => !cat || (m.category || "").toLowerCase() === cat).map((m) => m.subject)), subjectEl.value.trim());
+    // No category yet → no subject suggestions (subjects belong to a category); once one is
+    // chosen, show only that category's subjects.
+    const subs = cat ? uniq(allMems.filter((m) => (m.category || "").toLowerCase() === cat).map((m) => m.subject)) : [];
+    subChips.innerHTML = chipsHtml(subs, subjectEl.value.trim());
   };
   async function loadMemLists() { allMems = await getAllMemories(); renderCategoryChips(); renderSubjectChips(); }
   loadMemLists();
