@@ -383,16 +383,26 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
     // trackpad pinch, which arrives as ctrl+wheel) zooms; a horizontal swipe is left to pan the
     // track natively. Requiring vertical to dominate by a margin keeps the diagonal jitter of a
     // left/right trackpad swipe from twitching the zoom as you scroll.
+    // Coalesce wheel events into ONE capped zoom step per animation frame. macOS inflates trackpad
+    // deltas (scroll acceleration) and adds a long momentum tail, so reacting per-event — even
+    // proportionally — lets a slight flick rocket the zoom. Capping the step per frame bounds the
+    // zoom SPEED instead, so no burst of events can zoom more than ~2% per frame. Up = in, down = out.
+    let wheelAcc = 0, wheelX = 0, wheelRaf = 0;
     scroll.addEventListener("wheel", (e) => {
       const zoom = e.ctrlKey || Math.abs(e.deltaY) > Math.abs(e.deltaX) * 1.5;
       if (!zoom) return; // horizontal (pan) intent — let the overflow container scroll
       e.preventDefault();
-      const yUnder = (e.clientX - plotEl.getBoundingClientRect().left - G) / pxy + Y0;
-      // Zoom in proportion to how far the wheel actually moved (normalized across mouse "line" and
-      // trackpad "pixel" delta modes), so a trackpad flick — which fires many small events — eases
-      // the zoom instead of rocketing it. Up = in, down = out.
-      const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? scroll.clientHeight : 1);
-      zoomTo(pxy * Math.exp(-px * 0.002), yUnder, e.clientX);
+      wheelAcc += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? scroll.clientHeight : 1);
+      wheelX = e.clientX;
+      if (wheelRaf) return;
+      wheelRaf = requestAnimationFrame(() => {
+        wheelRaf = 0;
+        const yUnder = (wheelX - plotEl.getBoundingClientRect().left - G) / pxy + Y0;
+        const CAP = 0.008; // ≈0.8%/frame → ~4 s of steady scroll to cross the whole zoom range
+        const step = Math.max(-CAP, Math.min(CAP, -wheelAcc * 0.0016));
+        wheelAcc = 0;
+        zoomTo(pxy * Math.exp(step), yUnder, wheelX);
+      });
     }, { passive: false });
     // bars & events
     plotEl.querySelectorAll(".tl-bar").forEach((b) => {
