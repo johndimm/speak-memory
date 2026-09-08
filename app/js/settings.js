@@ -384,9 +384,19 @@ export function initSettings(root, { onImported } = {}) {
           photos: await Promise.all((photos ?? []).map((ph) => blobToDataURL(storedToBlob(ph)))),
         });
       }
+      // Memories can carry photos too (a place, a person…), stored as bytes. Convert them to data
+      // URLs like entry photos — otherwise JSON.stringify turns the ArrayBuffers into {} and the
+      // images vanish on re-import.
+      const memOut = [];
+      for (const m of memories) {
+        if (Array.isArray(m.photos) && m.photos.length) {
+          const { photos, ...rest } = m;
+          memOut.push({ ...rest, photos: await Promise.all(photos.map((ph) => blobToDataURL(storedToBlob(ph)))) });
+        } else memOut.push(m);
+      }
       // Include the rolled-up summaries (week/month/year/decade/life + category/subject) so a
       // restore doesn't have to re-summarize everything from scratch.
-      const bundle = { version: 1, exportedAt: new Date().toISOString(), entries: out, memories, periods };
+      const bundle = { version: 1, exportedAt: new Date().toISOString(), entries: out, memories: memOut, periods };
       const blob = new Blob([JSON.stringify(bundle)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -421,11 +431,20 @@ export function initSettings(root, { onImported } = {}) {
       if (!entries.length && !memories.length) throw new Error("Not a valid export file");
 
       const overwrite = root.querySelector("#import-overwrite")?.checked;
-      let added = 0, updated = 0, skipped = 0;
+      let added = 0, updated = 0, skipped = 0, photosAdded = 0;
       for (const item of entries) {
         if (!item.date) continue;
         const exists = await getEntry(item.date);
-        if (exists && !overwrite) { skipped++; continue; } // default: never clobber existing
+        if (exists && !overwrite) {
+          // Never clobber an existing day — but if the incoming copy has photos this day is missing,
+          // add just those (purely additive). This is the common case of re-importing a phone backup
+          // onto a desktop that already has the text but not the pictures.
+          if (Array.isArray(item.photos) && item.photos.length && !(exists.photos && exists.photos.length)) {
+            const photos = await Promise.all(item.photos.filter((d) => typeof d === "string").map((d) => photoToStored(dataURLtoBlob(d))));
+            if (photos.length) { await putEntry({ ...exists, photos, updatedAt: Date.now() }); photosAdded += photos.length; }
+          }
+          skipped++; continue;
+        }
         const { photos: photoData, createdAt, updatedAt, ...rest } = item;
         const entry = {
           ...rest, // carry raw, prose, outline, levels, reps, mode… straight through
@@ -454,7 +473,11 @@ export function initSettings(root, { onImported } = {}) {
         for (const m of memories) {
           if (!m || !m.id) continue;
           if (existingIds.has(m.id) && !overwrite) { memSkipped++; continue; }
-          await putMemory(m);
+          // Rebuild memory photos from their data URLs back into stored bytes (mirrors the entry path).
+          const mem = Array.isArray(m.photos)
+            ? { ...m, photos: await Promise.all(m.photos.filter((d) => typeof d === "string").map((d) => photoToStored(dataURLtoBlob(d)))) }
+            : m;
+          await putMemory(mem);
           if (!existingIds.has(m.id)) memAdded++;
         }
       }
@@ -463,12 +486,13 @@ export function initSettings(root, { onImported } = {}) {
       // summarized without re-running the model. Anything stale is recomputed on the next pass.
       for (const p of periods) { if (p && p.key) await putPeriod(p); }
 
-      const nothingNew = !added && !updated && !memAdded;
+      const nothingNew = !added && !updated && !memAdded && !photosAdded;
       importStatus.textContent = nothingNew
         ? `Everything in this file is already here (${skipped} ${skipped === 1 ? "day" : "days"}${memSkipped ? `, ${memSkipped} ${memSkipped === 1 ? "memory" : "memories"}` : ""}). Turn on “Overwrite” to replace them.`
         : `Imported ${added} new` +
           (updated ? `, overwrote ${updated}` : "") +
           (skipped ? `, skipped ${skipped} already here` : "") +
+          (photosAdded ? `, added ${photosAdded} photo${photosAdded === 1 ? "" : "s"} to existing days` : "") +
           (memAdded || memSkipped ? ` · ${memAdded} ${memAdded === 1 ? "memory" : "memories"}${memSkipped ? `, skipped ${memSkipped}` : ""}` : "") +
           ". Summaries fill in as the Journal loads.";
       importStatus.className = "import-status ok";
