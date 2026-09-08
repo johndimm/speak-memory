@@ -197,7 +197,7 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
             <h3>State in</h3>
             <span class="tl-year-pill" id="tlYear">${cursor}</span>
             <span class="tl-age" id="tlAge"></span>
-            <span class="tl-now-hint">drag ↓ · ← → keys · scroll to zoom</span>
+            <span class="tl-now-hint">drag ↓ · ← → keys · − / + to zoom</span>
           </div>
           <div class="tl-now-grid" id="tlNowGrid"></div>
         </section>
@@ -360,50 +360,39 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
   function wirePlot() {
     const scroll = root.querySelector("#tlScroll");
     const yearAt = (clientX) => { const r = plotEl.getBoundingClientRect(); return (clientX - r.left - G) / pxy + Y0; };
-    let dragging = false, moved = false, downX = 0;
-    plotEl.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".tl-bar") || e.target.closest(".tl-ev")) return; // let those handle click
-      dragging = true; moved = false; downX = e.clientX;
-      try { plotEl.setPointerCapture(e.pointerId); } catch (_) {}
-      setCursor(yearAt(e.clientX));
-    });
-    plotEl.addEventListener("pointermove", (e) => { if (dragging) { if (Math.abs(e.clientX - downX) > 3) moved = true; setCursor(yearAt(e.clientX)); hideTip(); } });
-    plotEl.addEventListener("pointerup", (e) => {
-      if (dragging && !moved && !readOnly) { const t = e.target.closest(".tl-laneadd"); if (t) openEditor(null, t.dataset.cat, Math.round(yearAt(e.clientX)), e.clientX, e.clientY); }
-      dragging = false;
-    });
-    plotEl.addEventListener("pointercancel", () => { dragging = false; });
-    plotEl.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowLeft") { setCursor(cursor - 1); e.preventDefault(); }
-      else if (e.key === "ArrowRight") { setCursor(cursor + 1); e.preventDefault(); }
-      else if (e.key === "Home") { setCursor(Y0); e.preventDefault(); }
-      else if (e.key === "End") { setCursor(Y1); e.preventDefault(); }
-    });
-    // wheel = zoom, keeping the year under the pointer fixed. Only a clearly VERTICAL wheel (or a
-    // trackpad pinch, which arrives as ctrl+wheel) zooms; a horizontal swipe is left to pan the
-    // track natively. Requiring vertical to dominate by a margin keeps the diagonal jitter of a
-    // left/right trackpad swipe from twitching the zoom as you scroll.
-    // Coalesce wheel events into ONE capped zoom step per animation frame. macOS inflates trackpad
-    // deltas (scroll acceleration) and adds a long momentum tail, so reacting per-event — even
-    // proportionally — lets a slight flick rocket the zoom. Capping the step per frame bounds the
-    // zoom SPEED instead, so no burst of events can zoom more than ~2% per frame. Up = in, down = out.
-    let wheelAcc = 0, wheelX = 0, wheelRaf = 0;
-    scroll.addEventListener("wheel", (e) => {
-      const zoom = e.ctrlKey || Math.abs(e.deltaY) > Math.abs(e.deltaX) * 1.5;
-      if (!zoom) return; // horizontal (pan) intent — let the overflow container scroll
-      e.preventDefault();
-      wheelAcc += e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? scroll.clientHeight : 1);
-      wheelX = e.clientX;
-      if (wheelRaf) return;
-      wheelRaf = requestAnimationFrame(() => {
-        wheelRaf = 0;
-        const yUnder = (wheelX - plotEl.getBoundingClientRect().left - G) / pxy + Y0;
-        const CAP = 0.008; // ≈0.8%/frame → ~4 s of steady scroll to cross the whole zoom range
-        const step = Math.max(-CAP, Math.min(CAP, -wheelAcc * 0.0016));
-        wheelAcc = 0;
-        zoomTo(pxy * Math.exp(step), yUnder, wheelX);
+    // Container-level listeners live on the persistent #tlPlot / #tlScroll nodes. draw() reruns
+    // wirePlot on every zoom step, so bind these ONCE per render (guarded) — otherwise they stack,
+    // and each duplicate re-fires, making the cursor drag jankier the more you zoom. (Zoom itself is
+    // driven only by the − / Fit / + buttons; there is deliberately no scroll-wheel zoom — it proved
+    // impossible to control with trackpad scroll acceleration and momentum.) The per-bar/-event
+    // listeners below sit on fresh nodes each draw, so they re-bind normally.
+    if (!plotEl._tlWired) {
+      plotEl._tlWired = true;
+      let dragging = false, moved = false, downX = 0;
+      plotEl.addEventListener("pointerdown", (e) => {
+        if (e.target.closest(".tl-bar") || e.target.closest(".tl-ev")) return; // let those handle click
+        dragging = true; moved = false; downX = e.clientX;
+        try { plotEl.setPointerCapture(e.pointerId); } catch (_) {}
+        setCursor(yearAt(e.clientX));
       });
-    }, { passive: false });
+      plotEl.addEventListener("pointermove", (e) => { if (dragging) { if (Math.abs(e.clientX - downX) > 3) moved = true; setCursor(yearAt(e.clientX)); hideTip(); } });
+      plotEl.addEventListener("pointerup", (e) => {
+        if (dragging && !moved && !readOnly) { const t = e.target.closest(".tl-laneadd"); if (t) openEditor(null, t.dataset.cat, Math.round(yearAt(e.clientX)), e.clientX, e.clientY); }
+        dragging = false;
+      });
+      plotEl.addEventListener("pointercancel", () => { dragging = false; });
+      plotEl.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowLeft") { setCursor(cursor - 1); e.preventDefault(); }
+        else if (e.key === "ArrowRight") { setCursor(cursor + 1); e.preventDefault(); }
+        else if (e.key === "Home") { setCursor(Y0); e.preventDefault(); }
+        else if (e.key === "End") { setCursor(Y1); e.preventDefault(); }
+      });
+    }
+    if (!scroll._tlWired) {
+      scroll._tlWired = true;
+      // Keep lane labels pinned to the visible left edge as the plot scrolls horizontally.
+      scroll.addEventListener("scroll", pinLabels);
+    }
     // bars & events
     plotEl.querySelectorAll(".tl-bar").forEach((b) => {
       const it = findState(b.dataset.id);
@@ -416,10 +405,8 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
       v.addEventListener("pointerenter", (e) => showTip(`<div class="s">${escapeHtml(titleCase(v.dataset.ev))}</div><div>${escapeHtml(v.dataset.kind)} · ${v.dataset.year}</div>`, e.clientX, e.clientY));
       v.addEventListener("pointerleave", hideTip);
     });
-    // Keep lane labels pinned to the visible left edge as the plot scrolls horizontally.
-    const pinLabels = () => { const sl = scroll.scrollLeft; plotEl.querySelectorAll(".tl-lane-label").forEach((l) => { l.style.transform = `translateX(${sl}px)`; }); };
-    scroll.addEventListener("scroll", pinLabels);
-    pinLabels();
+    pinLabels(); // re-pin after this draw's fresh labels (declaration hoisted for the guard above)
+    function pinLabels() { const sl = scroll.scrollLeft; plotEl.querySelectorAll(".tl-lane-label").forEach((l) => { l.style.transform = `translateX(${sl}px)`; }); }
   }
   const findState = (id) => { for (const l of lanes) { const s = l.items.find((x) => x.id === id); if (s) return s; } return null; };
 
