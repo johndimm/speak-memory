@@ -65,6 +65,14 @@ function injectCss() {
   .tl-zoom button:hover,.tl-add:hover{background:var(--paper-deep);}
   .tl-zoom button:focus-visible,.tl-add:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
   .tl-add{margin-left:8px;font-weight:600;}
+  .tl-full{margin-left:8px;font:inherit;font-size:1rem;line-height:1;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:3px 9px;cursor:pointer;}
+  .tl-full:hover{background:var(--paper-deep);}
+  .tl-full:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  /* Full screen (native or the iOS faux fallback): the tracks card fills the display, its scroller
+     takes all the extra width so more years fit. */
+  .tl-card:fullscreen, .tl-card:-webkit-full-screen, .tl-card.tl-faux-full{width:100vw;height:100dvh;border-radius:0;margin:0;background:var(--card);display:flex;flex-direction:column;}
+  .tl-card.tl-faux-full{position:fixed;inset:0;z-index:80;}
+  .tl-card:fullscreen .tl-scroll, .tl-card:-webkit-full-screen .tl-scroll, .tl-card.tl-faux-full .tl-scroll{flex:1 1 auto;}
   .tl-scroll{overflow-x:auto;overflow-y:hidden;padding:6px 16px 16px;}
   .tl-plot{position:relative;cursor:ew-resize;user-select:none;-webkit-user-select:none;}
   .tl-plot:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:8px;}
@@ -217,6 +225,7 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
               <button type="button" id="tlIn" aria-label="Zoom in">+</button>
             </div>
             ${readOnly ? "" : `<button type="button" class="tl-add" id="tlAdd">＋ Add state</button>`}
+            <button type="button" class="tl-full" id="tlFull" aria-label="Full screen" title="Full screen">⤢</button>
           </div>
           <div class="tl-scroll" id="tlScroll"><div class="tl-plot" id="tlPlot" tabindex="0" role="slider" aria-label="Year cursor"></div></div>
         </section>
@@ -435,13 +444,28 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
   }
   const findState = (id) => { for (const l of lanes) { const s = l.items.find((x) => x.id === id); if (s) return s; } return null; };
 
+  // Re-fit the whole life to the current panel width (used by the Fit button and after a
+  // fullscreen change, where the panel suddenly gets much wider).
+  function fitToPanel() {
+    const sc = root.querySelector("#tlScroll"); if (!sc) return;
+    const w = sc.clientWidth - 4;
+    if (w > 0) zoomTo((w - G - RPAD) / (SPAN() + 1), (Y0 + Y1) / 2);
+  }
+  const inFull = () => document.fullscreenElement || root.querySelector(".tl-card")?.classList.contains("tl-faux-full");
+  function toggleFull() {
+    const card = root.querySelector(".tl-card"); if (!card) return;
+    if (inFull()) {
+      if (document.fullscreenElement) document.exitFullscreen?.(); else card.classList.remove("tl-faux-full");
+    } else if (card.requestFullscreen) {
+      card.requestFullscreen().catch(() => card.classList.add("tl-faux-full")); // iOS Safari lacks element fullscreen
+    } else card.classList.add("tl-faux-full");
+    if (!document.fullscreenElement) requestAnimationFrame(fitToPanel); // faux path: refit now (native path refits on the event)
+  }
   function wireControls() {
     root.querySelector("#tlIn").addEventListener("click", () => zoomTo(pxy * 1.4, cursor));
     root.querySelector("#tlOut").addEventListener("click", () => zoomTo(pxy / 1.4, cursor));
-    root.querySelector("#tlFit").addEventListener("click", () => {
-      const w = root.querySelector("#tlScroll").clientWidth - 4;
-      zoomTo((w - G - RPAD) / (SPAN() + 1), (Y0 + Y1) / 2);
-    });
+    root.querySelector("#tlFit").addEventListener("click", fitToPanel);
+    root.querySelector("#tlFull").addEventListener("click", toggleFull);
     const addBtn = root.querySelector("#tlAdd");
     if (addBtn) addBtn.addEventListener("click", () => openEditor(null, lanes[0] ? lanes[0].cat : "Jobs", cursor, addBtn.getBoundingClientRect().left, addBtn.getBoundingClientRect().bottom + 6));
   }
@@ -523,8 +547,16 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
 
   async function reload() { mems = await getAllMemories(); const savedCursor = cursor; render(); cursor = Math.max(Y0, Math.min(Y1, savedCursor)); setCursor(cursor); }
 
+  // Entering/leaving native fullscreen changes the panel width — refit the whole life to it once the
+  // browser has laid out the new size. Added once (initTimeline runs a single time).
+  document.addEventListener("fullscreenchange", () => { if (!root.hidden) setTimeout(fitToPanel, 120); });
+
   return {
     open: async () => { mems = await getAllMemories(); cursor = Math.min(NOW_Y, new Date().getFullYear()); fitPending = true; render(); },
-    close: () => { closePop(); hideTip(); if (tip) { tip.remove(); tip = null; } if (render._ro) render._ro.disconnect(); },
+    close: () => {
+      closePop(); hideTip(); if (tip) { tip.remove(); tip = null; } if (render._ro) render._ro.disconnect();
+      if (document.fullscreenElement) document.exitFullscreen?.();
+      root.querySelector(".tl-card")?.classList.remove("tl-faux-full");
+    },
   };
 }
