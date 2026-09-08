@@ -77,6 +77,7 @@ function injectCss() {
   .tl-bar.pt{padding:0;}
   .tl-bar.ong{-webkit-mask:linear-gradient(90deg,#000 82%,transparent);mask:linear-gradient(90deg,#000 82%,transparent);}
   .tl-bar .arw{margin-left:auto;padding-left:4px;opacity:.85;}
+  .tl-bar-lab{position:absolute;height:20px;display:flex;align-items:center;font-size:.72rem;font-weight:600;white-space:nowrap;pointer-events:none;z-index:3;}
   .tl-ev{position:absolute;width:11px;height:11px;background:var(--ink-soft);border:1.5px solid var(--card);transform:translateX(-50%) rotate(45deg);border-radius:2px;cursor:pointer;}
   .tl-ev:hover{background:var(--accent);}
   .tl-play{position:absolute;top:0;width:2px;background:var(--accent);z-index:7;pointer-events:none;}
@@ -269,13 +270,23 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
       html += `<div class="tl-lane-label" style="top:6px"><span class="tl-dot" style="background:${g.lane.hue}"></span>${escapeHtml(g.lane.title)}</div>`;
       // add-target sits BEHIND the bars so clicking a bar edits it and clicking empty space adds one
       if (!readOnly) html += `<div class="tl-laneadd" data-cat="${escapeHtml(g.lane.cat)}" style="position:absolute;left:${G}px;top:${LABEL_H}px;right:0;height:${g.rows * ROW_H}px"></div>`;
-      for (const it of g.lane.items) {
+      // Where each row's NEXT bar starts, so an outside label only prints when it has clear room —
+      // keeps the packed short spans clean at "fit" and lets zooming in spread them out to reveal each.
+      const items = g.lane.items, nextStartX = new Array(items.length).fill(Infinity), seenRow = new Map();
+      for (let i = items.length - 1; i >= 0; i--) { const r = items[i]._row; if (seenRow.has(r)) nextStartX[i] = xOf(items[seenRow.get(r)].start); seenRow.set(r, i); }
+      items.forEach((it, i) => {
         const left = xOf(it.start), w = Math.max(pxy - 1, (it.end - it.start + 1) * pxy - 2);
         const y = LABEL_H + it._row * ROW_H;
-        const showTxt = w > 42 && !it.point;
+        const text = titleCase(it.subject), label = escapeHtml(text);
+        const inside = w > 42 && !it.point; // wide enough to hold the name within the bar
         html += `<div class="tl-bar${it.point ? " pt" : ""}${it.ongoing ? " ong" : ""}" data-id="${escapeHtml(it.id)}"
-          style="left:${left}px;width:${w}px;top:${y}px;background:${g.lane.hue}">${showTxt ? escapeHtml(titleCase(it.subject)) : ""}${it.ongoing ? '<span class="arw">›</span>' : ""}</div>`;
-      }
+          style="left:${left}px;width:${w}px;top:${y}px;background:${g.lane.hue}">${inside ? label : ""}${it.ongoing ? '<span class="arw">›</span>' : ""}</div>`;
+        // A short span (e.g. a one-year relationship) can't fit its name inside the bar at any zoom —
+        // print it just to the right, in the lane's colour, but only when it won't run into the next
+        // bar on this row (so the fit view stays legible and you zoom in to read a crowded stretch).
+        const room = nextStartX[i] - (left + w) - 6;
+        if (!inside && room >= text.length * 6.6 + 6) html += `<div class="tl-bar-lab" style="left:${left + w + 5}px;top:${y}px;color:${g.lane.hue}">${label}</div>`;
+      });
       html += `</div>`;
     }
     // events
@@ -340,7 +351,15 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
     el.innerHTML = lanes.slice(0, 4).map((l) => {
       let maxg = 0, at = "";
       const its = [...l.items].sort((a, b) => a.start - b.start);
-      for (let i = 1; i < its.length; i++) { const gp = its[i].start - its[i - 1].end - 1; if (gp > maxg) { maxg = gp; at = `${its[i - 1].end}–${its[i].start}`; } }
+      // Gap = years with NOTHING active. Track the running max end ("cover"), not just the previous
+      // item's end, or a short span nested inside a longer one (e.g. Patty Shaw inside LuAnne Alward)
+      // would invent a phantom gap the longer span actually covers.
+      let cover = its.length ? its[0].end : 0;
+      for (let i = 1; i < its.length; i++) {
+        const gp = its[i].start - cover - 1;
+        if (gp > maxg) { maxg = gp; at = `${cover}–${its[i].start}`; }
+        cover = Math.max(cover, its[i].end);
+      }
       return `<div class="tl-stat"><div class="k"><span class="tl-dot" style="background:${l.hue}"></span>${escapeHtml(l.title)}</div>
         <div class="v">${l.items.length}</div><div class="d">${maxg ? `longest gap ${maxg} yr${maxg !== 1 ? "s" : ""} (${at})` : "no gaps"}</div></div>`;
     }).join("");
