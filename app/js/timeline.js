@@ -77,7 +77,7 @@ function injectCss() {
   .tl-bar.pt{padding:0;}
   .tl-bar.ong{-webkit-mask:linear-gradient(90deg,#000 82%,transparent);mask:linear-gradient(90deg,#000 82%,transparent);}
   .tl-bar .arw{margin-left:auto;padding-left:4px;opacity:.85;}
-  .tl-bar-lab{position:absolute;height:20px;display:flex;align-items:center;font-size:.72rem;font-weight:600;white-space:nowrap;pointer-events:none;z-index:3;}
+  .tl-bar-lab{position:absolute;height:13px;line-height:1;display:flex;align-items:flex-end;font-size:.68rem;font-weight:600;white-space:nowrap;pointer-events:none;z-index:3;}
   .tl-ev{position:absolute;width:11px;height:11px;background:var(--ink-soft);border:1.5px solid var(--card);transform:translateX(-50%) rotate(45deg);border-radius:2px;cursor:pointer;}
   .tl-ev:hover{background:var(--accent);}
   .tl-play{position:absolute;top:0;width:2px;background:var(--accent);z-index:7;pointer-events:none;}
@@ -118,7 +118,13 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
   let Y0 = 1950, Y1 = NOW_Y;
   let pxy = 12;         // px per year (zoom)
   let cursor = NOW_Y;
-  const G = 104, RPAD = 46, ROW_H = 24, LABEL_H = 22, LANE_PAD = 8, EV_H = 40, AXIS_H = 30;
+  // Each row reserves LBL_H of headroom above its 20px bar for an outside name label (used when the
+  // bar itself is too narrow to hold the name), so short/adjacent bars stay labelable at any zoom.
+  const G = 104, RPAD = 46, LBL_H = 13, BAR_H = 20, ROW_H = LBL_H + BAR_H + 1, LABEL_H = 22, LANE_PAD = 8, EV_H = 40, AXIS_H = 30;
+  // Max zoom (px/year). High enough that a ONE-year gap between consecutive starts still exceeds a
+  // name's width, so tightly-packed single-year states (e.g. a run of one-year relationships) can be
+  // spread far enough apart to label each one.
+  const MAX_PXY = 200;
   const zoomKey = "timeline-zoom::" + activeJournalId();
 
   let tip, pop = null, backdrop = null, fitPending = true;
@@ -222,7 +228,7 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
     // On open, fit the whole life to the panel — then the reader zooms IN to reveal more labels.
     if (fitPending) {
       const sw = root.querySelector("#tlScroll").clientWidth;
-      pxy = Math.max(4, Math.min(80, (sw - 4 - G - RPAD) / (SPAN() + 1)));
+      pxy = Math.max(4, Math.min(MAX_PXY, (sw - 4 - G - RPAD) / (SPAN() + 1)));
       fitPending = false;
     }
     buildNowGrid();
@@ -270,22 +276,22 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
       html += `<div class="tl-lane-label" style="top:6px"><span class="tl-dot" style="background:${g.lane.hue}"></span>${escapeHtml(g.lane.title)}</div>`;
       // add-target sits BEHIND the bars so clicking a bar edits it and clicking empty space adds one
       if (!readOnly) html += `<div class="tl-laneadd" data-cat="${escapeHtml(g.lane.cat)}" style="position:absolute;left:${G}px;top:${LABEL_H}px;right:0;height:${g.rows * ROW_H}px"></div>`;
-      // Where each row's NEXT bar starts, so an outside label only prints when it has clear room —
-      // keeps the packed short spans clean at "fit" and lets zooming in spread them out to reveal each.
+      // Where each row's NEXT bar starts. An above-bar label only prints when the run of clear space
+      // from THIS bar's start to the next bar's start on the same row can hold the name — that gap
+      // grows as you zoom, so a crowded stretch stays clean at "fit" and reveals each name as you
+      // zoom in (works even for bars butted right up against the next one, which have no room to
+      // their right at any zoom).
       const items = g.lane.items, nextStartX = new Array(items.length).fill(Infinity), seenRow = new Map();
       for (let i = items.length - 1; i >= 0; i--) { const r = items[i]._row; if (seenRow.has(r)) nextStartX[i] = xOf(items[seenRow.get(r)].start); seenRow.set(r, i); }
       items.forEach((it, i) => {
         const left = xOf(it.start), w = Math.max(pxy - 1, (it.end - it.start + 1) * pxy - 2);
-        const y = LABEL_H + it._row * ROW_H;
+        const rowTop = LABEL_H + it._row * ROW_H;
         const text = titleCase(it.subject), label = escapeHtml(text);
         const inside = w > 42 && !it.point; // wide enough to hold the name within the bar
         html += `<div class="tl-bar${it.point ? " pt" : ""}${it.ongoing ? " ong" : ""}" data-id="${escapeHtml(it.id)}"
-          style="left:${left}px;width:${w}px;top:${y}px;background:${g.lane.hue}">${inside ? label : ""}${it.ongoing ? '<span class="arw">›</span>' : ""}</div>`;
-        // A short span (e.g. a one-year relationship) can't fit its name inside the bar at any zoom —
-        // print it just to the right, in the lane's colour, but only when it won't run into the next
-        // bar on this row (so the fit view stays legible and you zoom in to read a crowded stretch).
-        const room = nextStartX[i] - (left + w) - 6;
-        if (!inside && room >= text.length * 6.6 + 6) html += `<div class="tl-bar-lab" style="left:${left + w + 5}px;top:${y}px;color:${g.lane.hue}">${label}</div>`;
+          style="left:${left}px;width:${w}px;top:${rowTop + LBL_H}px;background:${g.lane.hue}">${inside ? label : ""}${it.ongoing ? '<span class="arw">›</span>' : ""}</div>`;
+        if (!inside && nextStartX[i] - left >= text.length * 6.6 + 6)
+          html += `<div class="tl-bar-lab" style="left:${left}px;top:${rowTop}px;color:${g.lane.hue}">${label}</div>`;
       });
       html += `</div>`;
     }
@@ -441,8 +447,8 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
   }
   function zoomTo(newPxy, keepYear, screenX) {
     const scroll = root.querySelector("#tlScroll");
-    const minPxy = Math.min(fitPxy(), 80); // fit is the floor; never zoom out past the whole life
-    newPxy = Math.max(minPxy, Math.min(80, newPxy));
+    const minPxy = Math.min(fitPxy(), MAX_PXY); // fit is the floor; never zoom out past the whole life
+    newPxy = Math.max(minPxy, Math.min(MAX_PXY, newPxy));
     if (Math.abs(newPxy - pxy) < 0.01) return;
     pxy = newPxy; localStorage.setItem(zoomKey, String(Math.round(pxy)));
     draw();
