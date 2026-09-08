@@ -65,6 +65,10 @@ function injectCss() {
   .tl-zoom button:hover,.tl-add:hover{background:var(--paper-deep);}
   .tl-zoom button:focus-visible,.tl-add:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
   .tl-add{margin-left:8px;font-weight:600;}
+  .tl-playbtn{margin-left:10px;font:inherit;font-size:.9rem;line-height:1;background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:999px;padding:4px 12px;cursor:pointer;font-weight:600;}
+  .tl-playbtn:hover{filter:brightness(1.06);}
+  .tl-playbtn.playing{background:var(--card);color:var(--accent);}
+  .tl-playbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
   .tl-full{margin-left:8px;font:inherit;font-size:1rem;line-height:1;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:3px 9px;cursor:pointer;}
   .tl-full:hover{background:var(--paper-deep);}
   .tl-full:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
@@ -126,6 +130,7 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
   let Y0 = 1950, Y1 = NOW_Y;
   let pxy = 12;         // px per year (zoom)
   let cursor = NOW_Y;
+  let playRaf = 0, playYear = 0, playLast = 0; // "Play" animation: sweep the cursor across the years
   // Each row reserves LBL_H of headroom above its 20px bar for an outside name label (used when the
   // bar itself is too narrow to hold the name), so short/adjacent bars stay labelable at any zoom.
   const G = 104, RPAD = 46, LBL_H = 13, BAR_H = 20, ROW_H = LBL_H + BAR_H + 1, LABEL_H = 22, LANE_PAD = 8, EV_H = 40, AXIS_H = 30;
@@ -199,6 +204,7 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
 
   // ---- render shell ----
   function render() {
+    stopPlay(); // a full rebuild replaces the playhead/button; don't leave a loop running
     buildModel();
     if (!lanes.length && !events.length) {
       root.innerHTML = `<div class="tl-wrap"><p class="tl-empty">No states yet. States are memories with a category like <b>Places</b>, <b>Jobs</b>, <b>Schools</b>, or <b>Girl Friends</b> and a start year (an end year draws the span). Add a few in <b>Write</b> and they'll lay out here.</p></div>`;
@@ -219,6 +225,7 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
         <section class="tl-card">
           <div class="tl-top">
             <h3>The tracks</h3>
+            <button type="button" class="tl-playbtn" id="tlPlayBtn" aria-label="Play through the years" title="Play through the years">▶</button>
             <div class="tl-zoom">
               <button type="button" id="tlOut" aria-label="Zoom out">−</button>
               <button type="button" id="tlFit" aria-label="Fit whole life">Fit</button>
@@ -329,6 +336,43 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
     flag.textContent = cursor === Y1 ? cursor + " · now" : cursor;
   }
 
+  // ---- "Play": animate the cursor from the start of the life to now, so the State panel updates as
+  // the playhead sweeps across the years. Auto-scrolls to keep the playhead in view when zoomed in.
+  function placePlayhead(year) { // like positionPlay but at a fractional year (smooth motion)
+    const play = root.querySelector("#tlPlay"), flag = root.querySelector("#tlFlag");
+    if (!play) return;
+    const x = xOf(year);
+    play.style.left = x + "px"; flag.style.left = x + "px";
+  }
+  function keepPlayheadVisible(year) {
+    const sc = root.querySelector("#tlScroll"); if (!sc) return;
+    const x = xOf(year), m = 90;
+    if (x < sc.scrollLeft + m) sc.scrollLeft = x - m;
+    else if (x > sc.scrollLeft + sc.clientWidth - m) sc.scrollLeft = x - sc.clientWidth + m;
+  }
+  function setPlayBtn(playing) {
+    const b = root.querySelector("#tlPlayBtn");
+    if (b) { b.textContent = playing ? "⏸" : "▶"; b.setAttribute("aria-label", playing ? "Pause" : "Play through the years"); b.classList.toggle("playing", playing); }
+  }
+  function stopPlay() { if (playRaf) cancelAnimationFrame(playRaf); playRaf = 0; setPlayBtn(false); }
+  function startPlay() {
+    if (playRaf) return;
+    playYear = cursor >= Y1 ? Y0 : cursor; // replay from the beginning once it has reached now
+    playLast = performance.now();
+    setPlayBtn(true);
+    const speed = Math.max(3, SPAN() / 20); // years/sec — a whole life plays in ~20s
+    const tick = (now) => {
+      playYear = Math.min(Y1, playYear + Math.min(0.1, (now - playLast) / 1000) * speed);
+      playLast = now;
+      if (Math.round(playYear) !== cursor) setCursor(Math.round(playYear)); // refresh the State panel each year
+      placePlayhead(playYear); keepPlayheadVisible(playYear);
+      if (playYear >= Y1) { setCursor(Y1); stopPlay(); return; }
+      playRaf = requestAnimationFrame(tick);
+    };
+    playRaf = requestAnimationFrame(tick);
+  }
+  const togglePlay = () => (playRaf ? stopPlay() : startPlay());
+
   function activeAt(lane, year) {
     const hit = lane.items.filter((s) => s.start <= year && year <= s.end).sort((a, b) => b.start - a.start);
     return hit[0] || null;
@@ -405,6 +449,7 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
       let dragging = false, moved = false, downX = 0;
       plotEl.addEventListener("pointerdown", (e) => {
         if (e.target.closest(".tl-bar") || e.target.closest(".tl-ev")) return; // let those handle click
+        stopPlay(); // taking the cursor by hand ends playback
         dragging = true; moved = false; downX = e.clientX;
         try { plotEl.setPointerCapture(e.pointerId); } catch (_) {}
         setCursor(yearAt(e.clientX));
@@ -416,10 +461,11 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
       });
       plotEl.addEventListener("pointercancel", () => { dragging = false; });
       plotEl.addEventListener("keydown", (e) => {
-        if (e.key === "ArrowLeft") { setCursor(cursor - 1); e.preventDefault(); }
-        else if (e.key === "ArrowRight") { setCursor(cursor + 1); e.preventDefault(); }
-        else if (e.key === "Home") { setCursor(Y0); e.preventDefault(); }
-        else if (e.key === "End") { setCursor(Y1); e.preventDefault(); }
+        if (e.key === " ") { togglePlay(); e.preventDefault(); return; } // Space toggles playback
+        if (e.key === "ArrowLeft") { stopPlay(); setCursor(cursor - 1); e.preventDefault(); }
+        else if (e.key === "ArrowRight") { stopPlay(); setCursor(cursor + 1); e.preventDefault(); }
+        else if (e.key === "Home") { stopPlay(); setCursor(Y0); e.preventDefault(); }
+        else if (e.key === "End") { stopPlay(); setCursor(Y1); e.preventDefault(); }
       });
     }
     if (!scroll._tlWired) {
@@ -466,6 +512,7 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
     root.querySelector("#tlOut").addEventListener("click", () => zoomTo(pxy / 1.4, cursor));
     root.querySelector("#tlFit").addEventListener("click", fitToPanel);
     root.querySelector("#tlFull").addEventListener("click", toggleFull);
+    root.querySelector("#tlPlayBtn").addEventListener("click", togglePlay);
     const addBtn = root.querySelector("#tlAdd");
     if (addBtn) addBtn.addEventListener("click", () => openEditor(null, lanes[0] ? lanes[0].cat : "Jobs", cursor, addBtn.getBoundingClientRect().left, addBtn.getBoundingClientRect().bottom + 6));
   }
@@ -554,6 +601,7 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
   return {
     open: async () => { mems = await getAllMemories(); cursor = Math.min(NOW_Y, new Date().getFullYear()); fitPending = true; render(); },
     close: () => {
+      stopPlay();
       closePop(); hideTip(); if (tip) { tip.remove(); tip = null; } if (render._ro) render._ro.disconnect();
       if (document.fullscreenElement) document.exitFullscreen?.();
       root.querySelector(".tl-card")?.classList.remove("tl-faux-full");
