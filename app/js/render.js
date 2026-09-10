@@ -34,22 +34,38 @@ function refFor(itemText, proseParas) {
   return bestScore >= 2 ? best : -1; // need a couple of shared words to claim a link
 }
 
-// Outline where leaf items link (by data-ref) into the prose paragraphs.
+// Parse outline text into nodes, tagging each bullet with its display level, whether it's a LEAF
+// (no deeper-indented child follows), and whether that leaf is a PARAGRAPH (a few sentences) rather
+// than a short label — so leaves can be rendered as readable prose.
+function parseOutline(raw) {
+  const nodes = [];
+  for (const line of String(raw).replace(/\r/g, "").split("\n")) {
+    const m = line.match(/^(\s*)-\s+(.*)$/);
+    if (m) {
+      const depth = Math.floor(m[1].replace(/\t/g, "  ").length / 2) + 1;
+      nodes.push({ kind: "item", depth, level: Math.min(3, depth), text: m[2] });
+    } else if (line.trim()) nodes.push({ kind: "text", text: line.trim() });
+  }
+  nodes.forEach((n, i) => {
+    if (n.kind !== "item") return;
+    const next = nodes.slice(i + 1).find((x) => x.kind === "item");
+    n.leaf = !next || next.depth <= n.depth;
+    n.para = n.leaf && (n.text.length > 100 || (n.text.match(/[.!?](\s|$)/g) || []).length >= 2);
+  });
+  return nodes;
+}
+
+// Outline where short leaf labels link (by data-ref) into the prose paragraphs. Paragraph leaves
+// already carry the detail, so they aren't linked.
 function renderOutlineLinked(text, proseParas) {
   const raw = String(text).replace(/\r/g, "");
   if (!isOutlineText(raw)) return renderFull(raw);
   let out = '<div class="outline">';
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^(\s*)-\s+(.*)$/);
-    if (m) {
-      const indent = m[1].replace(/\t/g, "  ").length;
-      const level = Math.min(3, Math.floor(indent / 2) + 1);
-      const ref = refFor(m[2], proseParas);
-      const linked = ref >= 0 ? ` ol-linked" data-ref="${ref}` : "";
-      out += `<div class="ol-item ol-l${level}${linked}">${escapeHtml(m[2])}</div>`;
-    } else if (line.trim()) {
-      out += `<div class="ol-text">${escapeHtml(line.trim())}</div>`;
-    }
+  for (const n of parseOutline(raw)) {
+    if (n.kind === "text") { out += `<div class="ol-text">${escapeHtml(n.text)}</div>`; continue; }
+    const ref = n.para ? -1 : refFor(n.text, proseParas);
+    const linked = ref >= 0 ? ` ol-linked" data-ref="${ref}` : "";
+    out += `<div class="ol-item ol-l${n.level}${n.leaf ? " ol-leaf" : ""}${n.para ? " ol-para" : ""}${linked}">${escapeHtml(n.text)}</div>`;
   }
   return out + "</div>";
 }
@@ -57,7 +73,7 @@ function renderOutlineLinked(text, proseParas) {
 // Render an entry's representations: the first is shown, the rest fold away (on demand).
 // Shared by the Journal detail and the Write edit view.
 export function renderReps(reps, leadingHtml = "") {
-  const order = ["prose", "outline", "verbatim"];
+  const order = ["outline", "prose", "verbatim"]; // outline is the starting point (detail on its leaves)
   const present = order.filter((m) => reps?.[m]);
   if (present.length <= 1) return leadingHtml + renderFull(present.length ? reps[present[0]] : "");
 
@@ -101,15 +117,9 @@ export function renderFull(text) {
     return raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${escapeHtml(p)}</p>`).join("");
   }
   let out = '<div class="outline">';
-  for (const line of raw.split("\n")) {
-    const m = line.match(/^(\s*)-\s+(.*)$/);
-    if (m) {
-      const indent = m[1].replace(/\t/g, "  ").length;
-      const level = Math.min(3, Math.floor(indent / 2) + 1);
-      out += `<div class="ol-item ol-l${level}">${escapeHtml(m[2])}</div>`;
-    } else if (line.trim()) {
-      out += `<div class="ol-text">${escapeHtml(line.trim())}</div>`;
-    }
+  for (const n of parseOutline(raw)) {
+    if (n.kind === "text") out += `<div class="ol-text">${escapeHtml(n.text)}</div>`;
+    else out += `<div class="ol-item ol-l${n.level}${n.leaf ? " ol-leaf" : ""}${n.para ? " ol-para" : ""}">${escapeHtml(n.text)}</div>`;
   }
   return out + "</div>";
 }

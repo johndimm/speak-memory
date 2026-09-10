@@ -55,7 +55,7 @@ Return ONLY valid JSON with these keys:
 - sentence: a single sentence capturing the whole.
 - paragraph: one short paragraph (3–5 sentences).
 - summary: the complete summary — 2–4 SHORT paragraphs separated by \\n\\n; cover the people, events, feelings, and threads worth remembering.
-- outline: a REAL nested outline — every line starts with "- ", indent exactly 2 spaces per level, 1–3 levels as the material warrants; leaf bullets MAY be a sentence. Single newlines between bullets, no blank lines.
+- outline: a REAL nested outline that carries the DETAIL on its leaves — every line starts with "- ", indent exactly 2 spaces per level, 1–3 levels as the material warrants. Parent bullets are short topic labels; leaf bullets (deepest, no children) carry the substance: a full sentence for a simple item, or a short first-person paragraph (2–5 sentences) for a rich moment, keeping the vivid specifics. A leaf paragraph is still ONE bullet on ONE line (never break the line inside it). Single newlines between bullets, no blank lines.
 Escape any double quotes inside strings with a backslash.`;
 
 // The cheap distilled rungs only — fast, so a leaf page lands in a couple of seconds. The
@@ -74,13 +74,13 @@ const DETAIL_SYSTEM = `You expand a piece of writing into a complete summary and
 Return ONLY valid JSON with these keys:
 {"summary":"...","outline":"..."}
 - summary: the complete summary — 2–4 SHORT paragraphs separated by \\n\\n; cover the people, events, feelings, and threads worth remembering.
-- outline: a REAL nested outline — every line starts with "- ", indent exactly 2 spaces per level, 1–3 levels as the material warrants; leaf bullets MAY be a sentence. Single newlines between bullets, no blank lines.
+- outline: a REAL nested outline that carries the DETAIL on its leaves — every line starts with "- ", indent exactly 2 spaces per level, 1–3 levels as the material warrants. Parent bullets are short topic labels; leaf bullets (deepest, no children) carry the substance: a full sentence for a simple item, or a short first-person paragraph (2–5 sentences) for a rich moment, keeping the vivid specifics. A leaf paragraph is still ONE bullet on ONE line (never break the line inside it). Single newlines between bullets, no blank lines.
 Escape any double quotes inside strings with a backslash.`;
 
 const LEVEL_DEFS = `Each node's "levels" object has: {"word","phrase","sentence","paragraph","summary","outline","rewrite"}
 - word: ONE evocative word. phrase: 2–5 words. sentence: one sentence. paragraph: one short paragraph (3–5 sentences).
 - summary: the complete summary, 2–4 short paragraphs separated by \\n\\n.
-- outline: a nested outline — every line starts "- ", 2-space indent per level, 1–3 levels; single newlines between bullets.
+- outline: a nested outline — every line starts "- ", 2-space indent per level, 1–3 levels; parent bullets are short labels, leaf bullets carry the detail (a sentence, or a short first-person paragraph on one line); single newlines between bullets.
 - rewrite: for a LEAF only, a faithful retelling that condenses nothing (every remark appears); for roll-up nodes set "".`;
 
 const SPINE_SYSTEM = `You update a short chain of nested summaries in a single pass, following a dependency plan so a parent is only summarized after its children.
@@ -101,7 +101,7 @@ const MEMORY_WRITEUP_SYSTEM = `You are given a single PAST memory (a short factu
 Return ONLY valid JSON: {"prose":{"brief":"<one sentence>","full":"<1-2 short paragraphs>"},"outline":{"brief":"<one line>","full":"<nested bullet outline>"}}
 - First person, past tense: "I moved to Elm Street", never "the speaker"/"the writer".
 - prose.full: 1–2 short paragraphs re-telling the memory. prose.brief: one sentence headline.
-- outline.full: a REAL nested outline — every line begins "- ", indent exactly 2 spaces per level, 1–3 levels as the material warrants; leaf bullets may be a sentence. outline.brief: one-line headline.
+- outline.full: a REAL nested outline — every line begins "- ", indent exactly 2 spaces per level, 1–3 levels as the material warrants. Parent bullets are short topic labels; leaf bullets (deepest, no children) carry the detail: a full sentence, or a short first-person paragraph (2–5 sentences) for a rich moment. A leaf paragraph is still one bullet on one line. outline.brief: one-line headline.
 - Keep every fact accurate. Escape any double quotes inside strings with a backslash.`;
 
 const GENERATE_SYSTEM = `You invent a plausible, richly-specific JOURNAL for a famous subject — a real person, or a collective/entity (a band, a show, a country, a company). It is written in the FIRST PERSON, as if the subject kept a diary across their whole existence: affectionate, vivid, grounded in the real public record, but imagined in voice and interior detail.
@@ -139,9 +139,10 @@ function outlineDirective() {
     `\n- Begin every line with "- ".` +
     `\n- Indent exactly 2 spaces per level.` +
     `\n- YOU choose the depth from the material: use 2 levels for most days, add a 3rd level where a topic has rich sub-detail, and stay shallow (even 1 level) for simple days. Group related details under parent topics — don't return a flat list when there's real structure.` +
-    `\n- Parent bullets are short topic labels; leaf bullets (deepest, no children) MAY be a sentence or two of prose.` +
+    `\n- Parent bullets are short topic LABELS (a few words) — they give the structure.` +
+    `\n- LEAF bullets (deepest, no children) carry the DETAIL: a full sentence for a simple item, or a short first-person PARAGRAPH (2–5 sentences) for a rich moment — as much as it deserves, keeping the vivid specifics and your voice. A leaf paragraph is still ONE bullet on ONE line (never break the line inside it).` +
     `\n- One bullet per line, single newlines between bullets, no blank lines.` +
-    `\n\nExample:\n- Yard work\n  - Mapped the sprinkler heads\n    - Found two dead zones near the fence.\n- Google billing\n  - Still owes about $750 and is holding off until they respond.` +
+    `\n\nExample:\n- Yard work\n  - Sprinklers\n    - I mapped every head in the back yard chasing that brown patch by the fence. Two barely turn and one was buried under the juniper, so I dug it out — I think the pressure drops whenever the pool pump runs, since they share a line.\n- Google billing\n  - Still owes about $750 from the ad credit that never posted; I gave it two weeks before disputing the card.` +
     `\n\n"brief" stays a one-line headline. This overrides the "3-4 paragraphs" instruction.`;
 }
 

@@ -254,6 +254,11 @@ body { position: relative; }
 
 .ol-text { color: var(--ink-soft); line-height: 1.55; padding-left: 1.3rem; }
 
+/* A leaf bullet that holds a full paragraph reads as prose, not a terse label — override the
+   per-level label styling (bold/small/muted) so the detail is comfortable to read. */
+.ol-para { font-weight: 400; font-size: 1rem; color: var(--ink); line-height: 1.62; margin-top: 0.2rem; }
+.ol-para::before { top: 0.5em; }
+
 /* Outline items that link into the prose */
 .ol-linked { cursor: pointer; }
 .ol-linked:hover { color: var(--accent); }
