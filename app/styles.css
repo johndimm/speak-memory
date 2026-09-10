@@ -259,6 +259,18 @@ body { position: relative; }
 .ol-para { font-weight: 400; font-size: 1rem; color: var(--ink); line-height: 1.62; margin-top: 0.2rem; }
 .ol-para::before { top: 0.5em; }
 
+/* Compressed drill-down outline: top-level nodes show, branches open on click */
+.outline-tree .ol-node { display: flex; flex-direction: column; gap: 0.3rem; }
+.outline-tree summary.ol-branch { cursor: pointer; list-style: none; }
+.outline-tree summary.ol-branch::-webkit-details-marker { display: none; }
+.outline-tree summary.ol-branch:hover { color: var(--accent); }
+/* a disclosure triangle replaces the per-level bullet on a branch */
+.outline-tree summary.ol-branch::before { content: "▸"; color: var(--accent); font-size: 0.72em; top: 0.4em; }
+.outline-tree details[open] > summary.ol-branch::before { content: "▾"; }
+/* indentation comes from nesting here, so drop the per-level margins and the top-gap on l1 */
+.outline-tree .ol-item { margin-left: 0; margin-top: 0; }
+.outline-tree .ol-children { padding-left: 0.95rem; display: flex; flex-direction: column; gap: 0.3rem; }
+
 /* Outline items that link into the prose */
 .ol-linked { cursor: pointer; }
 .ol-linked:hover { color: var(--accent); }
@@ -770,13 +782,18 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .node-sentence { font-size: 1.15rem; color: var(--ink); line-height: 1.5; max-width: 52rem; margin: 0 0 0.6rem; }
 .node-zoom { max-width: 52rem; margin: 0 0 0.6rem; }
 .node-complete { color: var(--ink); line-height: 1.65; }
-.zoom-btn {
-  margin-top: 0.35rem;
-  border: none; background: none; padding: 0.15rem 0;
-  color: var(--accent); font: inherit; font-weight: 600; font-size: 0.9rem; cursor: pointer;
+.zoom-more, .zoom-less {
+  border: none; background: none; padding: 0;
+  color: var(--accent); font: inherit; font-weight: 600; cursor: pointer;
 }
-.zoom-btn::before { content: "▸  "; }
-.node-zoom[data-state="full"] .zoom-btn::before { content: "▾  "; }
+/* "More" sits inline at the end of the sentence paragraph */
+.zoom-more { font-size: 0.92rem; white-space: nowrap; }
+.zoom-more::after { content: " ›"; opacity: 0.6; }
+.zoom-more:hover, .zoom-less:hover { text-decoration: underline; }
+/* "Less" folds the full summary back — a block link below it, hidden until expanded */
+.zoom-less { display: block; margin-top: 0.5rem; font-size: 0.9rem; }
+.zoom-less::before { content: "▾  "; }
+.node-zoom[data-state="brief"] .zoom-less { display: none; }
 .lazy-hint { color: var(--ink-soft); font-style: italic; margin: 0.2rem 0; }
 .node-para { color: var(--ink-soft); line-height: 1.65; max-width: 52rem; margin: 0 0 0.9rem; }
 .node-outline { max-width: 52rem; margin: 0.1rem 0 0.9rem; } /* the leaf's leading outline block */
@@ -1027,9 +1044,13 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
   .week-day-header { flex-direction: column; }
   /* Tab bar wraps to its own full-width row; text tabs share the space, gear stays put. */
   .app-bar-inner { gap: 0.6rem; }
-  .mode-nav { width: 100%; gap: 0.2rem; }
-  .mode-btn { flex: 1 1 0; min-width: 0; padding: 0.5rem 0.35rem; font-size: 0.78rem; white-space: nowrap; }
-  .mode-btn-gear { flex: 0 0 auto; padding: 0.5rem 0.6rem; font-size: 0.95rem; }
+  /* Buttons grow to fill the row but never shrink below their own text, so a long label like
+     "Timeline" can't spill into its neighbour. If a phone is too narrow for one row, the pill
+     scrolls horizontally instead of overlapping. */
+  .mode-nav { width: 100%; gap: 0.15rem; overflow-x: auto; scrollbar-width: none; }
+  .mode-nav::-webkit-scrollbar { display: none; }
+  .mode-btn { flex: 1 0 auto; min-width: 0; padding: 0.5rem 0.3rem; font-size: 0.75rem; white-space: nowrap; }
+  .mode-btn-gear { flex: 0 0 auto; padding: 0.5rem 0.45rem; font-size: 0.9rem; }
 }
 
 /* Live summarization progress — a fixed toast showing the summary climbing the levels. */
