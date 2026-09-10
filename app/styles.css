@@ -779,6 +779,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .node-zoom[data-state="full"] .zoom-btn::before { content: "▾  "; }
 .lazy-hint { color: var(--ink-soft); font-style: italic; margin: 0.2rem 0; }
 .node-para { color: var(--ink-soft); line-height: 1.65; max-width: 52rem; margin: 0 0 0.9rem; }
+.node-outline { max-width: 52rem; margin: 0.1rem 0 0.9rem; } /* the leaf's leading outline block */
 .node-fold { max-width: 52rem; margin: 0.3rem 0; }
 .node-fold > summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.9rem; list-style: none; padding: 0.3rem 0; }
 .node-fold > summary::-webkit-details-marker { display: none; }

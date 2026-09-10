@@ -373,6 +373,7 @@ function renderDay() {
   setLazyDay(day, iso);
   els.root.innerHTML = actions + nodeScaffold({ name: formatDate(iso), levels: levelsOf(day), images: imagesHtml, isLeaf: true, verbatim, correction: day.correction || "" });
   els.root.querySelector("#day-edit").addEventListener("click", () => onEditRequested?.(iso));
+  if (lazyLeaf) generateLeafDetail(); // build the leading outline right away, not on a click
 }
 
 function openDetail(iso) {
@@ -638,15 +639,20 @@ function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", ele
       + (canSummary ? `<button type="button" class="zoom-btn" data-zoom="summary"${hasSummary ? "" : ` data-lazy="1"`}>Complete summary</button>` : "")
       + `</div>`
     : "";
-  // Outline stays a fold below; for leaves it's generated lazily alongside the summary.
-  const outlineFold = v.outline
+  // The outline is the richest form: at a LEAF it LEADS the page — open, first, generated on open —
+  // so drilling all the way in lands you on the structured detail. Roll-up nodes keep it as a fold.
+  const outlineOpen = isLeaf
+    ? `<section class="node-outline"><div class="node-fold-body" data-detail="outline">${v.outline ? renderFull(v.outline) : `<p class="lazy-hint">✦ Building the outline…</p>`}</div></section>`
+    : "";
+  const outlineFold = (!isLeaf && v.outline)
     ? `<details class="node-fold"><summary>Outline</summary><div class="node-fold-body">${renderFull(v.outline)}</div></details>`
-    : (isLeaf ? `<details class="node-fold" data-lazy="1"><summary>Outline</summary><div class="node-fold-body" data-detail="outline"><p class="lazy-hint">Open to build the outline…</p></div></details>` : "");
+    : "";
   return `${name ? `<h2 class="node-name">${escapeHtml(name)}</h2>` : ""}`
     + (subtitle ? `<p class="node-subtitle">${escapeHtml(subtitle)}</p>` : "")
     + (summarizing ? summarizingNote() : "")
-    + (v.word ? `<p class="node-word">${escapeHtml(v.word)}</p>` : "")
-    + (v.phrase ? `<p class="node-phrase">${escapeHtml(v.phrase)}</p>` : "")
+    + outlineOpen // leaf: the outline is the first thing you see
+    + (!isLeaf && v.word ? `<p class="node-word">${escapeHtml(v.word)}</p>` : "") // the big word/phrase are
+    + (!isLeaf && v.phrase ? `<p class="node-phrase">${escapeHtml(v.phrase)}</p>` : "") // zoom-OUT rungs; skip at a leaf
     + zoom
     + images
     + (elementsHtml ? `${elementsLabel ? `<p class="nav-hint">${escapeHtml(elementsLabel)}</p>` : ""}${elementsHtml}` : "")
@@ -818,6 +824,7 @@ function renderSingleMemory(m, name) {
   </div>`;
   setLazyMemory(m);
   els.root.innerHTML = actions + nodeScaffold({ name: name || m.subject || m.label || "Memory", subtitle: memYearRange(m), levels: levelsOf(m), images: imagesHtmlFrom(memImageUrls(m)), isLeaf: true, verbatim: m.text, correction: m.correction || "" });
+  if (lazyLeaf) generateLeafDetail(); // build the leading outline right away, not on a click
 }
 
 // A category: a single memory (no subjects) is shown directly; otherwise its summary +

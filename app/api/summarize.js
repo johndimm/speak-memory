@@ -47,6 +47,19 @@ Return ONLY valid JSON: {"memories":[{"startYear":<int|null>,"endYear":<int|null
 - "label": a short human phrase for the time, e.g. "1959", "the 1970s", "your 20s (1974–1983)", "sometime in life".
 - Ignore the present, the future, and passages with no time indicator. If there are none, return {"memories":[]}.`;
 
+// The descriptive outline rule alone isn't enough — models default to scattering a moment into terse
+// one-fact bullets. This concrete example makes them GATHER each rich moment into a paragraph LEAF.
+// Appended to the ladder/detail outline prompts (the leaf drill-down path).
+const OUTLINE_LEAF_EXAMPLE = `
+
+CRITICAL for the "outline": do NOT explode one moment into a stack of short bullets. Parent bullets are short topic LABELS; each LEAF bullet (deepest, no children) GATHERS that moment's detail into a first-person paragraph (2–5 sentences) when it's rich, or a single sentence when it's simple. A leaf paragraph is still ONE bullet on ONE line. Follow this shape exactly:
+- Google billing
+  - The $750 that never posted
+    - They still owe me about seven hundred fifty dollars from a credit that never posted. I sat on hold forty minutes and finally got a guy named Dev who actually helped and escalated it. If nothing changes in two weeks I'll dispute it with the card company.
+- Dinner with Marta
+  - The Seattle decision
+    - We talked for a long time about whether she should take the Seattle offer. She's scared, mostly about leaving her mom, but I think she wants it — I told her she'd regret not trying more than trying.`;
+
 const LEVELS_SYSTEM = `You distill a piece of writing into a ladder of summaries — each level a little fuller than the one before — plus a nested outline, so a reader can zoom from a single word all the way down to the full text.
 Return ONLY valid JSON with these keys:
 {"word":"...","phrase":"...","sentence":"...","paragraph":"...","summary":"...","outline":"..."}
@@ -563,7 +576,7 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
         return;
       }
       // Full ladder (roll-ups): distilled rungs + complete summary + outline.
-      const sys = LEVELS_SYSTEM + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + styleDirective(style);
+      const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + styleDirective(style);
       const r = await callLLM(sys, user, style ? 0.8 : 0.4, ["word", "phrase", "sentence", "paragraph", "summary"], cfg);
       res.status(200).json({
         word: s(r.word), phrase: s(r.phrase), sentence: s(r.sentence),
@@ -583,7 +596,7 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       const correctionNote = correction
         ? `\n\nCORRECTION — The reader flagged a previous summary as wrong. Apply and honor this correction: ${String(correction).slice(0, 1000)}`
         : "";
-      const sys = DETAIL_SYSTEM + FIRST_PERSON_NOTE + subjectNote + correctionNote + styleDirective(style);
+      const sys = DETAIL_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + styleDirective(style);
       const ctx = `Context: ${type}${label ? ` — ${label}` : ""}${date ? `, ${date}` : ""}${localTime ? ` (written ${localTime})` : ""}.`;
       const r = await callLLM(sys, `${ctx}\n\nText:\n\n${String(text).slice(0, 16000)}`, style ? 0.8 : 0.4, ["summary", "outline"], cfg);
       const s = (v) => (typeof v === "string" ? v.trim() : "");
