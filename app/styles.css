@@ -773,6 +773,48 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
   background: rgba(196, 92, 38, 0.08); border: 1px solid var(--accent-soft); border-radius: var(--radius);
   color: var(--accent); padding: 0.7rem 1rem; font-size: 0.9rem; line-height: 1.4;
 }
+.summarizing-note .sn-count { font-weight: 600; }
+
+/* ---- Activity page: live view of the summarization queue ------------------------------- */
+.activity { max-width: 52rem; margin: 0 auto; }
+.act-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.act-title { font-family: var(--font-display); font-size: 2rem; font-weight: 400; margin: 0; }
+.act-actions { display: flex; gap: 0.5rem; align-items: center; }
+.act-clear { border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 0.8rem; padding: 0.35rem 0.85rem; border-radius: 999px; cursor: pointer; }
+.act-clear:hover { border-color: var(--accent-soft); color: var(--ink); }
+.act-retry { border: none; background: var(--accent); color: #fff; font: inherit; font-size: 0.8rem; font-weight: 600; padding: 0.4rem 0.95rem; border-radius: 999px; cursor: pointer; }
+.act-errbanner { background: rgba(179, 38, 30, 0.1); border: 1px solid rgba(179, 38, 30, 0.4); color: #b3261e; border-radius: var(--radius); padding: 0.7rem 1rem; font-size: 0.9rem; margin: 0 0 1rem; }
+.act-bar { height: 8px; border-radius: 999px; background: var(--paper-deep); overflow: hidden; margin: 1rem 0 0.6rem; }
+.act-bar-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.4s ease; }
+.act-stats { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.85rem; color: var(--ink-soft); margin-bottom: 1.2rem; }
+.act-stat b { color: var(--ink); }
+.act-s-running b { color: var(--accent); }
+.act-s-error b { color: #b3261e; }
+.act-section { font-family: var(--font-display); font-weight: 400; font-size: 1.2rem; color: var(--ink-soft); margin: 1.4rem 0 0.5rem; }
+.act-list { display: flex; flex-direction: column; gap: 2px; }
+.act-list-done { opacity: 0.85; }
+.act-row {
+  display: grid; grid-template-columns: 0.8rem 1fr auto auto auto; align-items: center; gap: 0.6rem;
+  padding: 0.5rem 0.75rem; border-radius: 10px; background: var(--card); border: 1px solid var(--line); font-size: 0.9rem;
+}
+.act-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--line); }
+.act-running .act-dot { background: var(--accent); animation: act-pulse 1.1s ease-in-out infinite; }
+.act-queued .act-dot { background: var(--accent-soft); }
+.act-pending .act-dot { background: var(--line); }
+.act-done .act-dot, .act-copy .act-dot { background: #3a7d44; }
+.act-error .act-dot { background: #b3261e; }
+@keyframes act-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.act-label { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-kind { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); opacity: 0.8; }
+.act-state { font-size: 0.8rem; color: var(--ink-soft); white-space: nowrap; }
+.act-running .act-state { color: var(--accent); }
+.act-error .act-state { color: #b3261e; }
+.act-dur { font-size: 0.78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 3rem; text-align: right; }
+.act-empty { color: var(--ink-soft); font-style: italic; margin-top: 1rem; }
+@media (max-width: 640px) {
+  .act-row { grid-template-columns: 0.7rem 1fr auto; }
+  .act-kind, .act-dur { display: none; }
+}
 
 /* ---- Unified node page (every level shares this) ---- */
 .node-name { font-family: var(--font-display); font-size: 2.4rem; line-height: 1.1; color: var(--ink); margin: 0.4rem 0 0.35rem; }
@@ -1039,6 +1081,78 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
   flex-shrink: 0;
 }
 .chat-send:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- Futures: imagine the journal continuing, then step into it ------------------------ */
+.futures { max-width: 52rem; margin: 0 auto; }
+
+/* Banner shown while you're browsing an imagined future (a sample-like journal). */
+.fut-inbanner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; justify-content: space-between;
+  background: var(--paper-deep); border: 1px solid var(--accent-soft); border-radius: var(--radius);
+  padding: 0.7rem 1rem; margin-bottom: 1.4rem; color: var(--ink-soft); font-size: 0.9rem;
+}
+.fut-back {
+  border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600;
+  padding: 0.45rem 1rem; border-radius: 999px; cursor: pointer; flex-shrink: 0;
+}
+
+/* Composer */
+.fut-title { font-family: var(--font-display); font-size: 2rem; font-weight: 400; margin: 0 0 0.3rem; }
+.fut-lead { color: var(--ink-soft); max-width: 42rem; line-height: 1.55; margin: 0 0 1rem; }
+.fut-nudge {
+  width: 100%; font: inherit; color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 12px; padding: 0.75rem 1rem; resize: vertical; line-height: 1.5;
+}
+.fut-nudge:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+.fut-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; margin-top: 0.9rem; }
+.fut-horizons { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.fut-h { border: none; background: var(--card); color: var(--ink-soft); font: inherit; font-size: 0.85rem; padding: 0.5rem 1rem; cursor: pointer; }
+.fut-h.active { background: var(--ink); color: var(--paper); }
+.fut-count { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.85rem; color: var(--ink-soft); }
+.fut-count input {
+  width: 3.4rem; font: inherit; color: var(--ink); background: var(--card);
+  border: 1px solid var(--line); border-radius: 8px; padding: 0.35rem 0.5rem; text-align: center;
+}
+.fut-count input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+.fut-go {
+  border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600;
+  padding: 0.6rem 1.4rem; border-radius: 999px; cursor: pointer;
+}
+.fut-go:disabled { opacity: 0.5; cursor: default; }
+.fut-status { margin-top: 1rem; color: var(--ink-soft); font-size: 0.9rem; }
+.fut-status.working::before { content: "◷ "; }
+.fut-status.error { color: var(--accent); }
+
+/* Gallery of futures you've made — open one to step into it */
+.fut-gallery { margin-top: 2rem; border-top: 1px solid var(--line); padding-top: 1.4rem; }
+.fut-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.75rem; }
+.fut-card-wrap { position: relative; }
+.fut-card {
+  width: 100%; display: flex; align-items: center; gap: 0.85rem; text-align: left;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 0.85rem 1rem; cursor: pointer; font: inherit; color: var(--ink);
+}
+.fut-card:hover { border-color: var(--accent-soft); }
+.fut-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.fut-card-year {
+  font-family: var(--font-display); font-size: 1.5rem; color: var(--accent);
+  flex-shrink: 0; min-width: 3rem;
+}
+.fut-card-text { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.fut-card-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fut-card-tag { font-size: 0.78rem; color: var(--ink-soft); }
+.fut-card-tag.fut-gen { color: var(--accent); }
+.fut-card-tag.fut-err { color: var(--accent); }
+.fut-card.fut-generating { border-style: dashed; animation: fut-pulse 1.6s ease-in-out infinite; }
+.fut-card.fut-error { border-color: var(--accent-soft); }
+@keyframes fut-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.62; } }
+.fut-empty { color: var(--ink-soft); font-style: italic; }
+.fut-card-del {
+  position: absolute; top: 0.4rem; right: 0.4rem; width: 1.5rem; height: 1.5rem; line-height: 1;
+  border: none; border-radius: 50%; background: transparent; color: var(--ink-soft);
+  font-size: 1.1rem; cursor: pointer; opacity: 0.5;
+}
+.fut-card-del:hover { opacity: 1; color: var(--accent); background: var(--paper-deep); }
 
 @media (max-width: 640px) {
   .week-day-header { flex-direction: column; }

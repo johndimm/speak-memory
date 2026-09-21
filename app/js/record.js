@@ -25,8 +25,12 @@ function withTimeout(promise, ms, what) {
 
 // The reader's own model/key/endpoint (from Settings), sent with each summary request.
 function llmOverrides() {
+  // Built-in provider (value "") uses the server's own key/model — never send a saved key then,
+  // or a stale one would override the good server key and 401 every call.
+  const provider = localStorage.getItem("llm-provider") || "";
+  if (!provider) return {};
   return {
-    provider: localStorage.getItem("llm-provider") || "",
+    provider,
     apiKey: localStorage.getItem("llm-api-key") || "",
     model: localStorage.getItem("llm-model") || "",
     baseUrl: localStorage.getItem("llm-base-url") || "",

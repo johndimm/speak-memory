@@ -5,10 +5,11 @@
 // children change. No manual button — see autoSummarize().
 
 import { getAllEntries, getEntry, putEntry, deleteEntry, getPeriod, getAllPeriods, putPeriod, deletePeriod, getAllMemories, putMemory, storedToBlob } from "./db.js";
-import { escapeHtml, renderFull, renderReps, wireReps, isOutlineText } from "./render.js";
+import { escapeHtml, renderFull, renderOutlineTree, renderReps, wireReps, isOutlineText } from "./render.js";
 import { withMode, availableModes, repsOf } from "./entry.js";
 import { renderGraphSvg } from "./graph.js";
 import { jkey } from "./journal.js";
+import { add as logAdd, set as logSet } from "./llmlog.js";
 
 const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -628,15 +629,18 @@ function nodeLinksHtml(items) {
 function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", elementsLabel = "", images = "", isLeaf = false, verbatim = "", correction = "" }) {
   const v = levels || {};
   const summarizing = !v.sentence && !v.paragraph && !v.summary;
-  // The sentence ZOOMS in place: a "Complete summary" toggle swaps it for the full summary
-  // (rather than stacking below). Leaves generate that summary lazily on first open.
+  // The sentence ZOOMS in place: a "More" link at the end of the paragraph swaps it for the full
+  // summary (rather than stacking below), and a "Less" link folds it back. Leaves generate that
+  // summary lazily on first open.
   const hasSummary = !!v.summary;
   const canSummary = hasSummary || isLeaf;
   const zoom = v.sentence
     ? `<div class="node-zoom" data-state="brief">`
-      + `<p class="node-sentence">${escapeHtml(v.sentence)}</p>`
+      + `<p class="node-sentence">${escapeHtml(v.sentence)}`
+        + (canSummary ? ` <button type="button" class="zoom-more" data-zoom="summary"${hasSummary ? "" : ` data-lazy="1"`}>More</button>` : "")
+      + `</p>`
       + `<div class="node-complete" data-detail="summary" hidden>${hasSummary ? renderFull(v.summary) : `<p class="lazy-hint">Writing the full summary…</p>`}</div>`
-      + (canSummary ? `<button type="button" class="zoom-btn" data-zoom="summary"${hasSummary ? "" : ` data-lazy="1"`}>Complete summary</button>` : "")
+      + (canSummary ? `<button type="button" class="zoom-less" data-zoom="summary">Less</button>` : "")
       + `</div>`
     : "";
   // The outline is the richest form: at a LEAF it LEADS the page — open, first, generated on open —
@@ -644,8 +648,11 @@ function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", ele
   const outlineOpen = isLeaf
     ? `<section class="node-outline"><div class="node-fold-body" data-detail="outline">${v.outline ? renderFull(v.outline) : `<p class="lazy-hint">✦ Building the outline…</p>`}</div></section>`
     : "";
-  const outlineFold = (!isLeaf && v.outline)
-    ? `<details class="node-fold"><summary>Outline</summary><div class="node-fold-body">${renderFull(v.outline)}</div></details>`
+  // Roll-up nodes show the outline compressed — top-level nodes visible, deeper levels a click
+  // away — sitting after the images and before the child links, so you can drill the outline in
+  // place before choosing a child to open.
+  const outlineTree = (!isLeaf && v.outline)
+    ? `<section class="node-outline">${renderOutlineTree(v.outline)}</section>`
     : "";
   return `${name ? `<h2 class="node-name">${escapeHtml(name)}</h2>` : ""}`
     + (subtitle ? `<p class="node-subtitle">${escapeHtml(subtitle)}</p>` : "")
@@ -655,8 +662,8 @@ function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", ele
     + (!isLeaf && v.phrase ? `<p class="node-phrase">${escapeHtml(v.phrase)}</p>` : "") // zoom-OUT rungs; skip at a leaf
     + zoom
     + images
+    + outlineTree // roll-up: compressed outline after the images, before the children
     + (elementsHtml ? `${elementsLabel ? `<p class="nav-hint">${escapeHtml(elementsLabel)}</p>` : ""}${elementsHtml}` : "")
-    + outlineFold
     + ((isLeaf && verbatim) ? `<details class="node-fold"><summary>Verbatim transcript</summary><div class="node-fold-body node-verbatim">${escapeHtml(verbatim)}</div></details>` : "")
     + (isLeaf ? `<details class="node-fold correct-fold"${correction ? " open" : ""}><summary>The summary isn't right?</summary><div class="node-fold-body">`
         + `<textarea class="correct-input" rows="2" placeholder="Say what's wrong — a name, a date, two things mixed up…">${escapeHtml(correction)}</textarea>`
@@ -780,9 +787,16 @@ async function correctLeaf(correctionText, statusEl) {
   } finally { lazyBusy = false; }
 }
 
-// A "working on the summary" banner, shown while an item is still just verbatim.
+// A "working on the summary" banner, shown while an item is still just verbatim. When a batch is
+// in flight (e.g. you just stepped into a freshly-imagined future), show how far along it is so a
+// queued item doesn't look stuck — the page still updates itself the moment this one is ready.
 function summarizingNote() {
-  return `<p class="summarizing-note">✦ Writing the summary… this usually takes 15–30 seconds. The page updates on its own when it's ready.</p>`;
+  const queued = summarizing && passTotal > 1;
+  const progress = queued ? ` <span class="sn-count">(${passDone} of ${passTotal} done)</span>` : "";
+  const tail = queued
+    ? "Working through the queue — this page fills in on its own when its turn comes."
+    : "This usually takes 15–30 seconds. The page updates on its own when it's ready.";
+  return `<p class="summarizing-note">✦ Writing the summary…${progress} ${tail}</p>`;
 }
 
 // Open a memory's own page. Sets its category/subject so the breadcrumb is correct no
@@ -878,6 +892,7 @@ function renderMemory() {
 // out or errored) are retried on a backoff so nothing stays stuck on "Summarizing…".
 let summarizing = false;
 let rerunPending = false;
+let passDone = 0, passTotal = 0; // live progress of the current summarization pass (for placeholders)
 let autoRetries = 0;
 let retryTimer = null;
 const MAX_AUTO_RETRIES = 6;
@@ -932,8 +947,13 @@ function autoSummarize() {
 // serial build forever. Throws on timeout or a non-OK response.
 // The reader's own model/key/endpoint (from Settings), sent with every request. Empty → server default.
 function llmOverrides() {
+  // Built-in provider (value "") means "use the server's own key/model". Never send a saved
+  // apiKey/model/baseUrl in that case — a stale key from a past custom provider would otherwise
+  // override the good server key and 401 every call.
+  const provider = localStorage.getItem("llm-provider") || "";
+  if (!provider) return {};
   return {
-    provider: localStorage.getItem("llm-provider") || "",
+    provider,
     apiKey: localStorage.getItem("llm-api-key") || "",
     model: localStorage.getItem("llm-model") || "",
     baseUrl: localStorage.getItem("llm-base-url") || "",
@@ -947,7 +967,13 @@ async function postSummarize(body, timeoutMs = 60000) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...llmOverrides(), ...body }), signal: ctrl.signal,
     });
-    if (!r.ok) throw new Error(`Server ${r.status}`);
+    if (!r.ok) {
+      // Surface the API's own error text (e.g. a DeepSeek rate-limit or a bad-config message),
+      // not just the status — otherwise "Server 500" hides the real cause on the Activity page.
+      let detail = "";
+      try { detail = (await r.json())?.error || ""; } catch { /* body wasn't JSON */ }
+      throw new Error(`Server ${r.status}${detail ? ": " + String(detail).slice(0, 100) : ""}`);
+    }
     return await r.json();
   } finally { clearTimeout(timer); }
 }
@@ -1215,11 +1241,12 @@ async function runAutoPass() {
   let changed = false, failed = 0;
   const limit = makeLimiter(AUTO_CONCURRENCY); // caps in-flight summarize calls for this pass
   // Live progress: one clear line — what's summarizing now, at which level, and how many are done.
-  let doneCount = 0;
+  let doneCount = 0, totalCount = 0;
   const note = (label, type) => setProgress(
     `Summarizing <span class="sp-now">${escapeHtml(label)}</span>`
     + (type && LEVEL_WORD[type] ? ` <span class="sp-level">${LEVEL_WORD[type]}</span>` : "")
-    + (doneCount ? ` <span class="sp-count">· ${doneCount} done</span>` : "")
+    + (totalCount ? ` <span class="sp-count">· ${doneCount} of ${totalCount} done</span>`
+                  : (doneCount ? ` <span class="sp-count">· ${doneCount} done</span>` : ""))
   );
 
   // ---- The summarization graph + its dirty/ready calculus (shared with the graph overlay) ---
@@ -1230,6 +1257,18 @@ async function runAutoPass() {
   const entryByDate = new Map((await getAllEntries()).map((e) => [e.date, e]));
   const periodById = new Map((await getAllPeriods()).map((p) => [p.key, p]));
   const { memOf, childObj, inputHash, isDirty, isReady, briefOf } = makeGraphState(nodes, entryByDate, periodById);
+  totalCount = [...nodes.keys()].filter(isDirty).length; // how many nodes this pass will summarize
+  passTotal = totalCount; passDone = 0; // mirror to module scope for the "Writing the summary…" placeholder
+
+  // Log only nodes that will make a REAL LLM call — leaves (day/memory) and multi-child rollups.
+  // A single-child period copies up with no call, so it would just clutter the queue as "waiting".
+  const jobIds = new Map();
+  for (const id of nodes.keys()) {
+    if (!isDirty(id)) continue;
+    const n = node(id);
+    const realCall = n.type === "day" || n.type === "memory" || n.children.length > 1;
+    if (realCall) jobIds.set(id, logAdd(n.label, n.type));
+  }
 
   // Prioritize the subtree the user is looking at so its "writing…" note clears first.
   const focusId = focusNodeId(nodes);
@@ -1269,17 +1308,22 @@ async function runAutoPass() {
   const failedIds = new Set(); // failed this pass — skip so the loop can't spin; retried next pass
   const process = async (id) => {
     const n = node(id);
-    note(n.label, n.type); // show this node as the one in progress
-    activeIds.add(id); publish(); // light it up in the graph overlay
+    // A period with a single child is a pure copy-up (storePeriod makes no model call), so don't
+    // announce it as "Summarizing", light it up, or force a full re-render — it's instant, and the
+    // end-of-pass render covers it. Real work (day/memory leaves, multi-child rollups) still shows.
+    const copyUp = n.type !== "day" && n.type !== "memory" && n.children.length === 1;
+    const jid = jobIds.get(id);
+    if (!copyUp) { note(n.label, n.type); activeIds.add(id); publish(); logSet(jid, "running"); }
     try {
       if (n.type === "day") await processDay(id);
       else if (n.type === "memory") await processMemory(id);
       else await processPeriod(id);
-      doneCount++;
+      doneCount++; passDone = doneCount;
       changed = true;
-      render();
-    } catch { failed++; failedIds.add(id); }
-    finally { activeIds.delete(id); publish(); }
+      logSet(jid, copyUp ? "copy" : "done");
+      if (!copyUp) render();
+    } catch (e) { failed++; failedIds.add(id); logSet(jid, "error", { error: (e && e.message) || "failed" }); }
+    finally { if (!copyUp) { activeIds.delete(id); publish(); } }
   };
 
   // ---- The loop ----------------------------------------------------------------------------
@@ -1291,6 +1335,7 @@ async function runAutoPass() {
     const ready = [...nodes.keys()].filter((id) => !failedIds.has(id) && isDirty(id) && isReady(id));
     if (!ready.length) break;
     ready.sort((a, b) => (focusSet.has(b) ? 1 : 0) - (focusSet.has(a) ? 1 : 0));
+    for (const id of ready) logSet(jobIds.get(id), "queued"); // ready, now waiting for a slot
     await Promise.all(ready.map((id) => limit(() => process(id))));
   }
 
@@ -1381,16 +1426,16 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
     // Timeline bar → jump to that memory (works on decade/category/subject pages).
     const bar = e.target.closest(".mtl-bar[data-mem-id], .mtl-bar-label[data-mem-id]");
     if (bar) { goToMemory(bar.dataset.memId); return; }
-    // "Complete summary" zoom: swap the sentence for the full summary (generate it if lazy).
-    const zbtn = e.target.closest(".zoom-btn[data-zoom='summary']");
+    // "More"/"Less" zoom: swap the sentence for the full summary (generate it if lazy) and back.
+    const zbtn = e.target.closest("[data-zoom='summary']");
     if (zbtn) {
       const zoomEl = zbtn.closest(".node-zoom");
       const sentenceEl = zoomEl.querySelector(".node-sentence");
       const completeEl = zoomEl.querySelector(".node-complete");
       if (zoomEl.dataset.state === "full") {
-        completeEl.hidden = true; sentenceEl.hidden = false; zoomEl.dataset.state = "brief"; zbtn.textContent = "Complete summary";
+        completeEl.hidden = true; sentenceEl.hidden = false; zoomEl.dataset.state = "brief";
       } else {
-        sentenceEl.hidden = true; completeEl.hidden = false; zoomEl.dataset.state = "full"; zbtn.textContent = "Show sentence";
+        sentenceEl.hidden = true; completeEl.hidden = false; zoomEl.dataset.state = "full";
         if (zbtn.dataset.lazy) { zbtn.removeAttribute("data-lazy"); await generateLeafDetail(); }
       }
       return;
@@ -1459,6 +1504,9 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
       if (focusDate) state.focusDate = focusDate;
       await reloadAndRender();
     },
+    // Load data and start the background summarization pass without making the Journal the visible
+    // view — used when landing straight on the Activity page (e.g. stepping into a fresh future).
+    async prime() { await reloadAndRender(); },
     // Open the Journal on any graph node (from the graph's "Open ›" preview link).
     async showNode(nav) {
       if (!nav) return;

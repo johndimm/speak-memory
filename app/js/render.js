@@ -111,6 +111,34 @@ export function wireReps(container) {
   });
 }
 
+// Nest the flat parseOutline list into a tree by depth.
+function outlineTree(nodes) {
+  const roots = [];
+  const stack = [];
+  for (const n of nodes) {
+    if (n.kind !== "item") continue; // stray text lines are dropped from the compressed view
+    const node = { ...n, children: [] };
+    while (stack.length && stack[stack.length - 1].depth >= n.depth) stack.pop();
+    (stack.length ? stack[stack.length - 1].children : roots).push(node);
+    stack.push(node);
+  }
+  return roots;
+}
+
+// A compressed, drill-down outline: the top-level nodes show right away, and any node with
+// children is a collapsible <details> you open to drill in. Leaves render as plain items.
+export function renderOutlineTree(text) {
+  const raw = String(text).replace(/\r/g, "");
+  if (!isOutlineText(raw)) return renderFull(raw);
+  const render = (node) => {
+    const cls = `ol-item ol-l${node.level}${node.leaf ? " ol-leaf" : ""}${node.para ? " ol-para" : ""}`;
+    if (!node.children.length) return `<div class="${cls}">${escapeHtml(node.text)}</div>`;
+    return `<details class="ol-node"><summary class="${cls} ol-branch">${escapeHtml(node.text)}</summary>`
+      + `<div class="ol-children">${node.children.map(render).join("")}</div></details>`;
+  };
+  return `<div class="outline outline-tree">${outlineTree(parseOutline(raw)).map(render).join("")}</div>`;
+}
+
 export function renderFull(text) {
   const raw = String(text).replace(/\r/g, "");
   if (!isOutlineText(raw)) {

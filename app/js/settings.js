@@ -96,7 +96,7 @@ function dataURLtoBlob(dataURL) {
   return new Blob([arr], { type: mime });
 }
 
-export function initSettings(root, { onImported } = {}) {
+export function initSettings(root, { onImported, onOpenLives } = {}) {
   root.innerHTML = `
     <div class="settings">
       <section class="settings-group">
@@ -201,6 +201,14 @@ export function initSettings(root, { onImported } = {}) {
       </section>
 
       <section class="settings-group">
+        <h2 class="settings-h">Lives</h2>
+        <div class="doc-list">
+          <button type="button" class="import-link" id="open-lives">Your journal &amp; sample lives ›</button>
+        </div>
+        <p class="field-hint">Switch between your own journal and the gallery of sample lives.</p>
+      </section>
+
+      <section class="settings-group">
         <h2 class="settings-h">Guide &amp; about</h2>
         <div class="doc-list">
           <button type="button" class="import-link doc-open" data-doc="users-guide">User's Guide</button>
@@ -226,6 +234,7 @@ export function initSettings(root, { onImported } = {}) {
   `;
 
   root.querySelectorAll(".doc-open").forEach((b) => b.addEventListener("click", () => openDoc(b.dataset.doc, b.textContent)));
+  root.querySelector("#open-lives")?.addEventListener("click", () => onOpenLives?.());
 
   // AI model — pick a provider (Anthropic / OpenAI have a model picker), or configure any
   // OpenAI-compatible endpoint manually. Everything is kept on this device.

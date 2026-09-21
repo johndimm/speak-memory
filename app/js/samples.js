@@ -66,8 +66,12 @@ function wirePhotos(root) {
 }
 
 function llmOverrides() {
+  // Built-in provider (value "") uses the server's own key/model — never send a saved key then,
+  // or a stale one would override the good server key and 401 every call.
+  const provider = localStorage.getItem("llm-provider") || "";
+  if (!provider) return {};
   return {
-    provider: localStorage.getItem("llm-provider") || "",
+    provider,
     apiKey: localStorage.getItem("llm-api-key") || "",
     model: localStorage.getItem("llm-model") || "",
     baseUrl: localStorage.getItem("llm-base-url") || "",
@@ -92,7 +96,7 @@ export function renderJournalsSection() {
   const registry = listJournals();
   const readyIds = new Set(registry.map((j) => j.id));
   const curatedSlugs = new Set(PICKS.map((p) => slugify(p.name)));
-  const custom = registry.filter((j) => !curatedSlugs.has(j.id));
+  const custom = registry.filter((j) => !curatedSlugs.has(j.id) && j.kind !== "future");
 
   const ownTitle = localStorage.getItem("journal-title") || "Speak, Memory";
   const ownCard = `<button type="button" class="sample-card${active === "" ? " active" : ""}" data-own="1">
