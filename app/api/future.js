@@ -5,6 +5,10 @@
 // like a real entry, so a future renders with the same outline/prose/verbatim UI as any day.
 // Same DeepSeek plumbing as chat.js; the key stays here.
 
+// One long LLM call generates many days at once, so give the function room (default timeouts are
+// far too short — even a small future takes 20–30s). Vercel clamps this to the plan's ceiling.
+export const config = { maxDuration: 300 };
+
 const API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEFAULT_MODEL = "deepseek-v4-flash";
 const CONTEXT_BUDGET = 60000; // ~chars of entry text to include

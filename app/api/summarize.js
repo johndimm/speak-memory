@@ -1,6 +1,9 @@
 // Vercel serverless function — turns a raw journal text box into {brief, full}.
 // The DeepSeek key lives in this function's env (DEEPSEEK_API_KEY), never in the browser.
 
+// Big/reasoning models and the "generate a whole life" mode can run long; give it headroom.
+export const config = { maxDuration: 300 };
+
 const API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEFAULT_MODEL = "deepseek-v4-flash";
 
