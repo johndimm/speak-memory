@@ -11,7 +11,8 @@ export const config = { maxDuration: 300 };
 
 const API_URL = "https://api.deepseek.com/v1/chat/completions";
 const DEFAULT_MODEL = "deepseek-v4-flash";
-const CONTEXT_BUDGET = 60000; // ~chars of entry text to include
+const CONTEXT_BUDGET = 30000; // ~chars of entry text to ground on (kept modest so a big journal
+                              // doesn't make this single generation call slow enough to time out)
 
 const FUTURE_SYSTEM = `You are the author of the journal below, writing FUTURE entries — as if the journal simply kept going.
 You have read the whole journal (every entry, with its date), so you know your own voice, your people, your
