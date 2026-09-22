@@ -889,6 +889,16 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .verbatim-input { width: 100%; font: inherit; font-size: 0.92rem; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.8rem; resize: vertical; line-height: 1.6; }
 .verbatim-input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
 .verbatim-status { font-size: 0.82rem; color: var(--ink-soft); }
+
+/* Per-node comment box (below the outline): speak/type your take → folded into the summary */
+.node-comment { max-width: 52rem; margin: 1.2rem 0 0.5rem; }
+.node-comment-row { display: flex; gap: 0.5rem; align-items: flex-end; }
+.node-comment-input { flex: 1; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem 0.8rem; resize: vertical; line-height: 1.5; }
+.node-comment-input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+.node-comment-mic { border: 1px solid var(--line); background: var(--card); font-size: 1.1rem; padding: 0.5rem 0.7rem; border-radius: 999px; cursor: pointer; flex-shrink: 0; }
+.node-comment-actions { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; }
+.node-comment-add { border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600; padding: 0.45rem 1rem; border-radius: 999px; cursor: pointer; }
+.node-comment-status { font-size: 0.82rem; color: var(--ink-soft); }
 .node-links { display: flex; flex-direction: column; gap: 0.5rem; max-width: 52rem; margin: 0.4rem 0 1.4rem; }
 .node-link { display: flex; flex-direction: column; gap: 0.15rem; text-align: left; width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 1rem; cursor: pointer; font: inherit; color: var(--ink); transition: border-color 0.2s; }
 .node-link:hover { border-color: var(--accent-soft); }

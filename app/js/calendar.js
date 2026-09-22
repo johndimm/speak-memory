@@ -10,6 +10,7 @@ import { withMode, availableModes, repsOf } from "./entry.js";
 import { renderGraphSvg } from "./graph.js";
 import { jkey } from "./journal.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
+import { setupDictation } from "./dictation.js";
 
 const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -764,10 +765,17 @@ function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", ele
     + images
     + (elementsHtml ? `${elementsLabel ? `<p class="nav-hint">${escapeHtml(elementsLabel)}</p>` : ""}${elementsHtml}` : "")
     + outlineHtml               // outline at the bottom
-    + (isLeaf ? `<details class="node-fold correct-fold"${correction ? " open" : ""}><summary>The summary isn't right?</summary><div class="node-fold-body">`
-        + `<textarea class="correct-input" rows="2" placeholder="Say what's wrong — a name, a date, two things mixed up…">${escapeHtml(correction)}</textarea>`
-        + `<button type="button" class="correct-btn">Fix the summary</button>`
-        + `<p class="correct-status"></p></div></details>` : "");
+    // Speak/type your own take, below the outline. It's added to this node's text (a leaf's
+    // transcript; a roll-up's note) and folded into its summary. Mic is desktop-only (mobile uses
+    // the keyboard mic); the textarea works everywhere.
+    + `<section class="node-comment">`
+      + `<p class="nav-hint">${isLeaf ? "Add to this day — speak or type; it joins the transcript and re-summarizes." : "Add your take — speak or type; it folds into this summary."}</p>`
+      + `<div class="node-comment-row">`
+      + `<textarea class="node-comment-input" rows="2" placeholder="As I see it…"></textarea>`
+      + `<button type="button" class="node-comment-mic" hidden aria-label="Dictate">🎙</button>`
+      + `</div>`
+      + `<div class="node-comment-actions"><button type="button" class="node-comment-add">Add &amp; re-summarize</button><span class="node-comment-status"></span></div>`
+      + `</section>`;
 }
 
 async function renderLife() {
@@ -935,6 +943,40 @@ async function saveVerbatimEdit(body) {
     await reloadAndRender(); // re-summarize this leaf from the edited words, and roll it up (see Activity)
   } catch (err) {
     if (statusEl) statusEl.textContent = `Couldn't save: ${(err && err.message) || err}`;
+  }
+}
+
+// ---- Comment box below the outline: your spoken/typed take, folded into this node's summary --
+// Leaf: appended to the transcript (raw), then re-summarized. Roll-up: appended to the node's note,
+// which storePeriod folds into its rollup. Either way, the text affects this node's summary.
+async function addNodeComment(section) {
+  const ta = section.querySelector(".node-comment-input");
+  const statusEl = section.querySelector(".node-comment-status");
+  const text = (ta && ta.value || "").trim();
+  if (!text) return;
+  const ref = currentNodeRef();
+  if (!ref) { if (statusEl) statusEl.textContent = "Nowhere to add this."; return; }
+  if (statusEl) statusEl.textContent = "Adding & re-summarizing…";
+  try {
+    if (ref.kind === "day") {
+      const e = (await getEntry(ref.date)) || { date: ref.date };
+      const raw = (e.raw ? e.raw + "\n\n" : "") + text;
+      const next = { ...e, raw, rawSavedAt: Date.now(), updatedAt: Date.now() };
+      delete next.levels; delete next.prose; delete next.outline; delete next.brief; delete next.full;
+      await putEntry(next);
+    } else if (ref.kind === "mem") {
+      const m = allMemories.find((x) => x.id === ref.id);
+      if (!m) throw new Error("not found");
+      const next = { ...m, text: (m.text ? m.text + "\n\n" : "") + text, needsSummary: true, updatedAt: Date.now() };
+      delete next.levels; delete next.prose; delete next.outline;
+      await putMemory(next);
+    } else {
+      const p = (await getPeriod(ref.key)) || { key: ref.key };
+      await putPeriod({ ...p, note: (p.note ? p.note + "\n" : "") + text }); // folded into the rollup; hash changes → re-summarized
+    }
+    await reloadAndRender();
+  } catch (err) {
+    if (statusEl) statusEl.textContent = `Couldn't add: ${(err && err.message) || err}`;
   }
 }
 
@@ -1697,8 +1739,15 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
   if (els.periodSummary) wireReps(els.periodSummary);
   // Restore saved outline expansion whenever a node page (re)renders; save it when the reader
   // opens/closes an outline node (the `toggle` event doesn't bubble, so listen in the capture phase).
-  new MutationObserver(() => { if (els.root.querySelector(".ol-node[data-ol-key]")) restoreOutline(); })
-    .observe(els.root, { childList: true, subtree: true });
+  // Also wire the per-node comment box's dictation mic once it (re)appears.
+  new MutationObserver(() => {
+    if (els.root.querySelector(".ol-node[data-ol-key]")) restoreOutline();
+    const section = els.root.querySelector(".node-comment:not([data-wired])");
+    if (section) {
+      section.setAttribute("data-wired", "1");
+      setupDictation(section.querySelector(".node-comment-mic"), section.querySelector(".node-comment-input"), section.querySelector(".node-comment-status"), () => {});
+    }
+  }).observe(els.root, { childList: true, subtree: true });
   els.root.addEventListener("toggle", (e) => {
     const d = e.target;
     if (d.classList && d.classList.contains("ol-node") && els.root.contains(d)) scheduleSaveOutline();
@@ -1731,6 +1780,9 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
       correctLeaf(body.querySelector(".correct-input").value.trim(), body.querySelector(".correct-status"));
       return;
     }
+    // Comment box → add my take to this node and re-summarize.
+    const addBtn = e.target.closest(".node-comment-add");
+    if (addBtn) { addNodeComment(addBtn.closest(".node-comment")); return; }
     // Edit the verbatim transcript inline → swap the text for a textarea with Save / Cancel.
     const veditBtn = e.target.closest(".verbatim-edit");
     if (veditBtn) { beginVerbatimEdit(veditBtn.closest(".node-fold-body")); return; }
