@@ -167,6 +167,17 @@ function outlineDirective() {
 
 const FIRST_PERSON_NOTE = `\n\nPERSON — Write the prose ("brief" and "full") in the FIRST PERSON, as the person whose journal this is ("I went…", "I felt…", "I decided…"). Never refer to them as "the speaker", "the writer", or "the author".`;
 
+// When known entities are supplied, tell the model to write references to them as {{e:id|Name}}
+// tokens (so a later rename/merge updates every summary at render time, with no re-summarization).
+function entitiesNote(entities) {
+  const list = Array.isArray(entities) ? entities.slice(0, 200) : [];
+  if (!list.length) return "";
+  const roster = list.map((e) => `- ${e.id} = ${e.canonical}${(e.aliases && e.aliases.length) ? " (also: " + e.aliases.join(", ") + ")" : ""}`).join("\n");
+  return `\n\nENTITY TOKENS — These individuals are known. Whenever you refer to one of them in ANY output field (word, phrase, sentence, paragraph, summary, outline), write a token of the form {{e:<id>|<CanonicalName>}} instead of the plain name — even if the source text used a different spelling, nickname, or alias. Use the id and canonical name EXACTLY as listed. For anyone or anything NOT in this list, write the name normally (do not invent ids).
+KNOWN:
+${roster}`;
+}
+
 function styleDirective(style) {
   if (!style) return "";
   return `\n\nVOICE OVERRIDE — Rewrite both "brief" and "full" FROM SCRATCH in the unmistakable prose style ` +
@@ -582,7 +593,7 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
         return;
       }
       // Full ladder (roll-ups): distilled rungs + complete summary + outline.
-      const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + styleDirective(style);
+      const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + entitiesNote(body.entities) + styleDirective(style);
       const r = await callLLM(sys, user, style ? 0.8 : 0.4, ["word", "phrase", "sentence", "paragraph", "summary"], cfg);
       res.status(200).json({
         word: s(r.word), phrase: s(r.phrase), sentence: s(r.sentence),
@@ -602,7 +613,7 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       const correctionNote = correction
         ? `\n\nCORRECTION — The reader flagged a previous summary as wrong. Apply and honor this correction: ${String(correction).slice(0, 1000)}`
         : "";
-      const sys = DETAIL_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + styleDirective(style);
+      const sys = DETAIL_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + entitiesNote(body.entities) + styleDirective(style);
       const ctx = `Context: ${type}${label ? ` — ${label}` : ""}${date ? `, ${date}` : ""}${localTime ? ` (written ${localTime})` : ""}.`;
       const r = await callLLM(sys, `${ctx}\n\nText:\n\n${String(text).slice(0, 16000)}`, style ? 0.8 : 0.4, ["summary", "outline"], cfg);
       const s = (v) => (typeof v === "string" ? v.trim() : "");

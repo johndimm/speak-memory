@@ -9,6 +9,24 @@ export function escapeHtml(t) {
     .replace(/"/g, "&quot;");
 }
 
+// ---- Entity tokens ------------------------------------------------------------------------
+// Summaries store references to individuals as {{e:<id>|<Name>}} instead of a literal name, so a
+// rename/spelling-fix/merge updates every summary at render time with no re-summarization. The map
+// (id → canonical name) is kept in memory and refreshed when entities change; an unknown/bad id
+// falls back to the name embedded in the token, so text never renders worse than plain names.
+let entityMap = new Map();
+export function setEntityMap(idToName) {
+  entityMap = idToName instanceof Map ? idToName : new Map(Object.entries(idToName || {}));
+}
+// Match {{e:<id>|<Name>}} — and tolerate the model dropping the "e:" prefix ({{<id>|<Name>}}).
+// The id is restricted to token-safe chars so this never swallows ordinary braces in prose.
+const ENTITY_TOKEN = /\{\{(?:e:)?([A-Za-z0-9_:-]+)(?:\|([^{}]*))?\}\}/g;
+export function resolveEntityTokens(text) {
+  const s = String(text ?? "");
+  if (s.indexOf("{{") === -1) return s;
+  return s.replace(ENTITY_TOKEN, (_, id, name) => entityMap.get(String(id).trim()) || (name || "").trim() || "");
+}
+
 export function isOutlineText(text) {
   return /^\s*-\s+/m.test(String(text));
 }
@@ -58,7 +76,7 @@ function parseOutline(raw) {
 // Outline where short leaf labels link (by data-ref) into the prose paragraphs. Paragraph leaves
 // already carry the detail, so they aren't linked.
 function renderOutlineLinked(text, proseParas) {
-  const raw = String(text).replace(/\r/g, "");
+  const raw = resolveEntityTokens(String(text).replace(/\r/g, ""));
   if (!isOutlineText(raw)) return renderFull(raw);
   let out = '<div class="outline">';
   for (const n of parseOutline(raw)) {
@@ -77,7 +95,7 @@ export function renderReps(reps, leadingHtml = "") {
   const present = order.filter((m) => reps?.[m]);
   if (present.length <= 1) return leadingHtml + renderFull(present.length ? reps[present[0]] : "");
 
-  const proseParas = proseParagraphs(reps.prose);
+  const proseParas = proseParagraphs(resolveEntityTokens(reps.prose));
   // Render each rep the same whether it's shown open or folded, so the outline→prose
   // links keep working regardless of order (prose paragraphs carry data-p indices).
   const bodyFor = (m) => {
@@ -128,7 +146,7 @@ function outlineTree(nodes) {
 // A compressed, drill-down outline: the top-level nodes show right away, and any node with
 // children is a collapsible <details> you open to drill in. Leaves render as plain items.
 export function renderOutlineTree(text) {
-  const raw = String(text).replace(/\r/g, "");
+  const raw = resolveEntityTokens(String(text).replace(/\r/g, ""));
   if (!isOutlineText(raw)) return renderFull(raw);
   // `path` is a stable index chain ("0", "0.2", …) so a caller can save/restore which nodes are open.
   const render = (node, path) => {
@@ -141,7 +159,7 @@ export function renderOutlineTree(text) {
 }
 
 export function renderFull(text) {
-  const raw = String(text).replace(/\r/g, "");
+  const raw = resolveEntityTokens(String(text).replace(/\r/g, ""));
   if (!isOutlineText(raw)) {
     return raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${escapeHtml(p)}</p>`).join("");
   }

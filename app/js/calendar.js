@@ -4,8 +4,8 @@
 // it ends (a week when the next week starts, etc.), and higher levels update as their
 // children change. No manual button — see autoSummarize().
 
-import { getAllEntries, getEntry, putEntry, deleteEntry, getPeriod, getAllPeriods, putPeriod, deletePeriod, getAllMemories, putMemory, storedToBlob } from "./db.js";
-import { escapeHtml, renderFull, renderOutlineTree, renderReps, wireReps, isOutlineText } from "./render.js";
+import { getAllEntries, getEntry, putEntry, deleteEntry, getPeriod, getAllPeriods, putPeriod, deletePeriod, getAllMemories, putMemory, getAllEntities, storedToBlob } from "./db.js";
+import { escapeHtml, renderFull, renderOutlineTree, renderReps, wireReps, isOutlineText, resolveEntityTokens, setEntityMap } from "./render.js";
 import { withMode, availableModes, repsOf } from "./entry.js";
 import { renderGraphSvg } from "./graph.js";
 import { jkey } from "./journal.js";
@@ -30,6 +30,7 @@ export function restoreJournalPos() {
   return false;
 }
 let journal = { days: {}, dateRange: null };
+let entityRoster = []; // [{id, canonical, aliases, kind}] — passed to summarization so it emits tokens
 let objectUrls = [];
 let els = {};
 let detailIso = null;        // day currently open in the panel
@@ -101,6 +102,13 @@ async function load() {
   objectUrls.forEach(URL.revokeObjectURL);
   objectUrls = [];
   allMemories = await getAllMemories();
+  // Keep the entity registry in memory: a map (id → canonical) so summary tokens resolve at render,
+  // and a roster passed into summarization so new summaries EMIT {{e:id|Name}} tokens.
+  try {
+    const ents = await getAllEntities();
+    setEntityMap(new Map(ents.map((e) => [e.id, e.canonical])));
+    entityRoster = ents.map((e) => ({ id: e.id, canonical: e.canonical, aliases: e.aliases || [], kind: e.entityKind || "person" }));
+  } catch { entityRoster = []; }
   const entries = await getAllEntries();
   const days = {};
   for (const e of entries) {
@@ -399,7 +407,7 @@ function openDetail(iso) {
 
   els.detailModes.hidden = true;
   els.detailBadge.hidden = true;
-  els.detailBrief.textContent = day.brief;
+  els.detailBrief.textContent = resolveEntityTokens(day.brief);
 
   const imagesHtml = day.images?.length
     ? `<div class="detail-images">${day.images.map((img) => img.video
@@ -708,7 +716,7 @@ function nodeLinksHtml(items) {
     const showThumb = it.thumb && !shownImages.has(it.thumb); // no repeats on the page
     if (showThumb) shownImages.add(it.thumb);
     const thumb = showThumb ? `<img class="node-link-thumb" src="${escapeHtml(it.thumb)}" alt="" loading="lazy" onerror="this.remove()">` : "";
-    return `<button type="button" class="node-link${showThumb ? " has-thumb" : ""}" ${attrs}>${thumb}<span class="node-link-text"><span class="node-link-name">${escapeHtml(it.label)}</span>${it.sentence ? `<span class="node-link-line">${escapeHtml(it.sentence)}</span>` : ""}</span></button>`;
+    return `<button type="button" class="node-link${showThumb ? " has-thumb" : ""}" ${attrs}>${thumb}<span class="node-link-text"><span class="node-link-name">${escapeHtml(it.label)}</span>${it.sentence ? `<span class="node-link-line">${escapeHtml(resolveEntityTokens(it.sentence))}</span>` : ""}</span></button>`;
   }).join("")}</div>`;
 }
 function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", elementsLabel = "", images = "", isLeaf = false, verbatim = "", correction = "" }) {
@@ -749,8 +757,8 @@ function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", ele
   return `${name ? `<h2 class="node-name">${escapeHtml(name)}</h2>` : ""}`
     + (subtitle ? `<p class="node-subtitle">${escapeHtml(subtitle)}</p>` : "")
     + (summarizing ? summarizingNote() : "")
-    + (!isLeaf && v.word ? `<p class="node-word">${escapeHtml(v.word)}</p>` : "")   // zoom-OUT rungs, non-leaf
-    + (!isLeaf && v.phrase ? `<p class="node-phrase">${escapeHtml(v.phrase)}</p>` : "")
+    + (!isLeaf && v.word ? `<p class="node-word">${escapeHtml(resolveEntityTokens(v.word))}</p>` : "")   // zoom-OUT rungs, non-leaf
+    + (!isLeaf && v.phrase ? `<p class="node-phrase">${escapeHtml(resolveEntityTokens(v.phrase))}</p>` : "")
     + summaryHtml               // full summary at the top
     + verbatimHtml              // leaf: transcript right after the summary
     + images
@@ -853,7 +861,7 @@ async function generateLeafDetail() {
       return;
     }
     const style = localStorage.getItem("summary-style") || "";
-    const d = await postSummarize({ mode: "detail", text: raw, style, correction: lazyLeaf.correction, ...lazyLeaf.ctx });
+    const d = await postSummarize({ mode: "detail", text: raw, style, correction: lazyLeaf.correction, entities: entityRoster, ...lazyLeaf.ctx });
     await lazyLeaf.applyLevels({ summary: d.summary || "", outline: d.outline || "" });
     if (sBody) sBody.innerHTML = renderFull(d.summary || "");
     if (oBody) oBody.innerHTML = renderOutlineTree(d.outline || ""); // collapsed tree at the bottom
@@ -1622,7 +1630,8 @@ async function reloadAndRender() {
 // plus a no-condense "rewrite" for leaf nodes). Voice/subject handled server-side.
 async function nodeLevels(text, opts) {
   const style = localStorage.getItem("summary-style") || "";
-  return postSummarize({ mode: "levels", text, style, ...opts });
+  // Pass the entity roster so the summary refers to known individuals as {{e:id|Name}} tokens.
+  return postSummarize({ mode: "levels", text, style, entities: entityRoster, ...opts });
 }
 // Legacy fields kept in sync with levels so the existing rendering keeps working.
 function legacyFromLevels(v) {
