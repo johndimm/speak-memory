@@ -68,6 +68,7 @@ function renderLives() {
 const places = initPlaces(placesView); // map of a life; opened lazily (loads Leaflet on first open)
 const timeline = initTimeline(timelineView, {
   onEditMemory: (mem) => setMode("write", mem),      // "Edit full ›" opens the memory in Write
+  onOpenMemory: (mem) => openMemoryInJournal(mem),   // tap a bar → read that state's full page (works read-only)
   onChanged: () => { /* memories changed inline; Journal reloads on its next open */ },
 });
 const futures = initFutures(futuresView); // imagine the journal continuing; several futures to compare

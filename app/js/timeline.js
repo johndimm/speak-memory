@@ -103,6 +103,8 @@ function injectCss() {
   @media(max-width:640px){.tl-stats{grid-template-columns:repeat(2,1fr)}}
   .tl-tip{position:fixed;z-index:60;pointer-events:none;background:var(--ink);color:var(--paper);font-size:.78rem;line-height:1.35;padding:6px 9px;border-radius:7px;box-shadow:var(--shadow);max-width:240px;opacity:0;transition:opacity .1s;}
   .tl-tip .s{font-family:var(--font-display);font-size:.92rem;}
+  .tl-tip-snip{margin-top:4px;opacity:.85;font-size:.74rem;line-height:1.3;}
+  .tl-tip-hint{margin-top:4px;opacity:.65;font-size:.7rem;}
   .tl-pop{position:fixed;z-index:70;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:14px;width:min(20rem,92vw);}
   .tl-pop h4{margin:0 0 10px;font-family:var(--font-display);font-weight:400;font-size:1.1rem;}
   .tl-field{display:block;margin-bottom:9px;}
@@ -121,7 +123,7 @@ function injectCss() {
   document.head.appendChild(s);
 }
 
-export function initTimeline(root, { onEditMemory, onChanged } = {}) {
+export function initTimeline(root, { onEditMemory, onOpenMemory, onChanged } = {}) {
   injectCss();
   const readOnly = isSampleJournal();
   let mems = [];        // all memories, by reference
@@ -476,10 +478,18 @@ export function initTimeline(root, { onEditMemory, onChanged } = {}) {
     // bars & events
     plotEl.querySelectorAll(".tl-bar").forEach((b) => {
       const it = findState(b.dataset.id);
-      b.addEventListener("pointerenter", (e) => it && showTip(`<div class="s">${escapeHtml(titleCase(it.subject))}</div><div>${it.ongoing ? `${it.start} – now · ${NOW_Y - it.start} yrs` : (it.start === it.end ? `${it.start}` : `${it.start}–${it.end} · ${it.end - it.start} yr${it.end - it.start !== 1 ? "s" : ""}`)}</div>`, e.clientX, e.clientY));
+      const snip = (m) => { const t = (m && (m.text || (m.prose && m.prose.full) || m.brief) || "").replace(/\s+/g, " ").trim(); return t ? `<div class="tl-tip-snip">${escapeHtml(t.slice(0, 160))}${t.length > 160 ? "…" : ""}</div>` : ""; };
+      const span = (it.ongoing ? `${it.start} – now · ${NOW_Y - it.start} yrs` : (it.start === it.end ? `${it.start}` : `${it.start}–${it.end} · ${it.end - it.start} yr${it.end - it.start !== 1 ? "s" : ""}`));
+      b.addEventListener("pointerenter", (e) => it && showTip(`<div class="s">${escapeHtml(titleCase(it.subject))}</div><div>${span}</div>${snip(it.mem)}<div class="tl-tip-hint">tap to see the basis ›</div>`, e.clientX, e.clientY));
       b.addEventListener("pointermove", (e) => tip.style.opacity == 1 && showTip(tip.innerHTML, e.clientX, e.clientY));
       b.addEventListener("pointerleave", hideTip);
-      b.addEventListener("click", (e) => { e.stopPropagation(); if (!readOnly && it) openEditor(it, it.mem.category, it.start, e.clientX, e.clientY); });
+      // Tap a bar → open its source page (read the full state text + summary). On your own journal
+      // this is the quick-edit; anywhere (incl. read-only futures) "see the basis" opens the page.
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!readOnly && it) { openEditor(it, it.mem.category, it.start, e.clientX, e.clientY); }
+        else if (it && onOpenMemory) { onOpenMemory(it.mem); }
+      });
     });
     plotEl.querySelectorAll(".tl-ev").forEach((v) => {
       v.addEventListener("pointerenter", (e) => showTip(`<div class="s">${escapeHtml(titleCase(v.dataset.ev))}</div><div>${escapeHtml(v.dataset.kind)} · ${v.dataset.year}</div>`, e.clientX, e.clientY));
