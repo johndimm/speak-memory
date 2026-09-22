@@ -1,5 +1,5 @@
 import { initRecord } from "./record.js";
-import { initCalendar, initGraphView } from "./calendar.js";
+import { initCalendar, initGraphView, restoreJournalPos } from "./calendar.js";
 import { initSettings } from "./settings.js";
 import { renderJournalsSection, wireJournalsSection } from "./samples.js";
 import { initPlaces } from "./places.js";
@@ -116,7 +116,9 @@ const calendar = initCalendar({
   onAddMemory: (seed) => setMode("write", seed), // "Add another" → Write, pre-filled category/subject
 });
 
+const LAST_MODE_KEY = jkey("last-mode");
 function setMode(mode, arg, zoom) {
+  try { if (mode !== "settings") localStorage.setItem(LAST_MODE_KEY, mode); } catch { /* ignore */ } // remember the tab for reload
   modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
   writeView.hidden = mode !== "write";
   browseView.hidden = mode !== "browse";
@@ -170,8 +172,12 @@ const settings = initSettings(settingsView, {
   onOpenLives: () => setMode("lives"),           // Lives now lives under Settings (Help), not the top nav
 });
 
-// A sample life is read-only: open it in the Journal at the whole-life root (never Write), and
-// the body class hides the write/edit/delete affordances (see styles.css).
+// Restore the tab you were last on (per journal) so a reload lands you where you were; for the
+// Journal, also restore the exact page (zoom/date/entity) you were viewing.
+const savedMode = (() => { try { return localStorage.getItem(LAST_MODE_KEY) || ""; } catch { return ""; } })();
+const VALID_MODES = new Set(["write", "browse", "timeline", "futures", "places", "people", "graph", "activity"]);
+
+// A sample life is read-only: it never opens Write; the body class hides write/edit/delete (styles.css).
 if (isSampleJournal()) {
   document.body.classList.add("sample-journal");
   // A just-imagined future lands on the Activity page, so you WATCH the summaries run (queued →
@@ -181,9 +187,15 @@ if (isSampleJournal()) {
   if (landActivity && landActivity === activeJournalId()) {
     sessionStorage.removeItem("land-on-graph");
     setMode("activity");   // opening Activity primes the pass, then shows the live queue
+  } else if (savedMode && savedMode !== "write" && VALID_MODES.has(savedMode)) {
+    if (savedMode === "browse") { restoreJournalPos(); setMode("browse"); }
+    else setMode(savedMode);
   } else {
     setMode("browse", undefined, "life");
   }
+} else if (savedMode && VALID_MODES.has(savedMode)) {
+  if (savedMode === "browse") { restoreJournalPos(); setMode("browse"); } // back to the exact Journal page
+  else setMode(savedMode);
 } else {
-  setMode("write"); // your own journal opens on Today
+  setMode("write"); // first run: your own journal opens on Today
 }

@@ -15,6 +15,20 @@ const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Initial zoom = the "Opens on" setting (Settings › Journal); defaults to the latest week.
 const state = { zoom: localStorage.getItem("journal-landing") || "week", focusDate: null, category: null, subject: null, memoryId: null };
+
+// Remember where in the Journal you were, so a reload (or re-opening the tab) lands you back on the
+// same page instead of resetting. Saved per journal.
+const POS_KEY = jkey("journal-pos");
+function savePos() {
+  try { localStorage.setItem(POS_KEY, JSON.stringify({ zoom: state.zoom, focusDate: state.focusDate, category: state.category, subject: state.subject, memoryId: state.memoryId })); } catch { /* ignore */ }
+}
+export function restoreJournalPos() {
+  try {
+    const p = JSON.parse(localStorage.getItem(POS_KEY) || "null");
+    if (p && p.zoom) { Object.assign(state, { focusDate: null, category: null, subject: null, memoryId: null }, p); return true; }
+  } catch { /* ignore */ }
+  return false;
+}
 let journal = { days: {}, dateRange: null };
 let objectUrls = [];
 let els = {};
@@ -501,6 +515,7 @@ function navDown(zoom, focusDate) {
 let shownImages = new Set();
 function render() {
   shownImages = new Set();
+  savePos(); // remember this page so a reload returns here
   renderBreadcrumb();
   updatePeriodNav();
   renderPeriodHeader();
