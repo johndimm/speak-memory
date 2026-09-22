@@ -36,7 +36,6 @@
         <button class="mode-btn" data-mode="futures">Futures</button>
         <button class="mode-btn" data-mode="places">Places</button>
         <button class="mode-btn" data-mode="people">People</button>
-        <button class="mode-btn" data-mode="graph">Graph</button>
         <button class="mode-btn" data-mode="activity">Activity</button>
         <button class="mode-btn mode-btn-gear" data-mode="settings" aria-label="Settings" title="Settings">⚙</button>
       </nav>
@@ -45,6 +44,11 @@
 
   <main class="app-main">
     <section id="write-view" class="view"></section>
+
+    <div id="activity-subnav" class="subnav" hidden>
+      <button type="button" class="subnav-btn active" data-sub="queue">Queue</button>
+      <button type="button" class="subnav-btn" data-sub="graph">Graph</button>
+    </div>
     <section id="graph-view" class="view" hidden></section>
 
     <section id="lives-view" class="view" hidden></section>

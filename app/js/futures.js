@@ -213,7 +213,12 @@ export function initFutures(root) {
       if (!getFuture(id)) { activeGen.delete(id); return; }
 
       // Seed the RAW days into the future's own database. Summaries are generated when you open it.
-      await seedJournal(dbNameFor(id), { entries: data.days.map((d) => ({ date: d.date, text: d.raw })) });
+      // Days become journal entries; imagined life-states become span memories → the Timeline lanes.
+      const memories = Array.isArray(data.states) ? data.states.map((s) => ({
+        category: s.category || "Life", subject: s.subject || "", label: s.subject || "",
+        startYear: s.startYear, endYear: s.endYear, text: s.text || s.subject || "",
+      })) : [];
+      await seedJournal(dbNameFor(id), { entries: data.days.map((d) => ({ date: d.date, text: d.raw })), memories });
       localStorage.setItem(jkey("journal-title", id), (getFuture(id) || {}).title || `${data.endYear}`);
       localStorage.setItem(jkey("year-grouping", id), "calendar");
       finish({ status: "ready", days: data.days.length });

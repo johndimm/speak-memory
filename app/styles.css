@@ -775,6 +775,11 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 }
 .summarizing-note .sn-count { font-weight: 600; }
 
+/* Sub-nav inside the Activity tab (Queue | Graph) */
+.subnav { display: flex; gap: 0.4rem; max-width: 52rem; margin: 0 auto 1rem; }
+.subnav-btn { border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 0.85rem; padding: 0.4rem 1rem; border-radius: 999px; cursor: pointer; }
+.subnav-btn.active { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
 /* ---- Activity page: live view of the summarization queue ------------------------------- */
 .activity { max-width: 52rem; margin: 0 auto; }
 .act-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }

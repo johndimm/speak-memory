@@ -81,6 +81,8 @@ const people = initEntities(peopleView, {
 function openMemoryInJournal(mem) {
   modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "browse"));
   writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true; placesView.hidden = true; timelineView.hidden = true;
+  futuresView.hidden = true; activityView.hidden = true; peopleView.hidden = true;
+  if (activitySubnav) activitySubnav.hidden = true;
   browseView.hidden = false;
   graph.close(); timeline.close();
   calendar.showMemory(mem);
@@ -117,36 +119,50 @@ const calendar = initCalendar({
 });
 
 const LAST_MODE_KEY = jkey("last-mode");
+const activitySubnav = document.getElementById("activity-subnav");
+let activitySub = "queue"; // which face of the Activity tab: the queue list, or the node graph
 function setMode(mode, arg, zoom) {
   try { if (mode !== "settings") localStorage.setItem(LAST_MODE_KEY, mode); } catch { /* ignore */ } // remember the tab for reload
   modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
+  // Graph now lives inside the Activity tab as a sub-view (Queue | Graph).
+  const showGraph = mode === "activity" && activitySub === "graph";
+  const showQueue = mode === "activity" && activitySub === "queue";
   writeView.hidden = mode !== "write";
   browseView.hidden = mode !== "browse";
   settingsView.hidden = mode !== "settings";
-  graphView.hidden = mode !== "graph";
+  graphView.hidden = !showGraph;
   livesView.hidden = mode !== "lives";
   placesView.hidden = mode !== "places";
   timelineView.hidden = mode !== "timeline";
   futuresView.hidden = mode !== "futures";
-  activityView.hidden = mode !== "activity";
+  activityView.hidden = !showQueue;
   peopleView.hidden = mode !== "people";
-  if (mode !== "graph") graph.close(); // stop live graph updates when leaving the tab
+  if (activitySubnav) {
+    activitySubnav.hidden = mode !== "activity";
+    activitySubnav.querySelectorAll(".subnav-btn").forEach((b) => b.classList.toggle("active", b.dataset.sub === activitySub));
+  }
+  if (!showGraph) graph.close(); // stop live graph updates when its sub-view isn't showing
   if (mode !== "places") places.close(); // tear down the map when leaving
   if (mode !== "timeline") timeline.close(); // drop the timeline's tooltip/observer when leaving
   if (mode !== "futures") futures.close();
   if (mode !== "activity") activity.close();
   if (mode !== "people") people.close();
   if (mode === "browse") calendar.reload(arg, zoom);
-  else if (mode === "graph") graph.open();
   else if (mode === "settings") settings.refresh();
   else if (mode === "lives") renderLives();
   else if (mode === "places") places.open();
   else if (mode === "timeline") timeline.open();
   else if (mode === "futures") futures.open();
-  else if (mode === "activity") { calendar.prime(); activity.open(); } // ensure the pass is running, then show the queue
+  else if (mode === "activity") { calendar.prime(); if (showGraph) { activity.close(); graph.open(); } else { activity.open(); } } // pass runs; show queue or graph
   else if (mode === "people") people.open();
   else recorder.refresh(arg); // arg = date (day) or memory object to edit
 }
+if (activitySubnav) activitySubnav.addEventListener("click", (e) => {
+  const b = e.target.closest(".subnav-btn");
+  if (!b) return;
+  activitySub = b.dataset.sub === "graph" ? "graph" : "queue";
+  setMode("activity");
+});
 
 modeBtns.forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
 
@@ -161,6 +177,8 @@ const graph = initGraphView(graphView, {
   onOpen: (nav) => {
     modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "browse"));
     writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true; placesView.hidden = true; timelineView.hidden = true;
+    futuresView.hidden = true; activityView.hidden = true; peopleView.hidden = true;
+    if (activitySubnav) activitySubnav.hidden = true;
     browseView.hidden = false;
     graph.close(); timeline.close();
     calendar.showNode(nav);
@@ -174,8 +192,9 @@ const settings = initSettings(settingsView, {
 
 // Restore the tab you were last on (per journal) so a reload lands you where you were; for the
 // Journal, also restore the exact page (zoom/date/entity) you were viewing.
-const savedMode = (() => { try { return localStorage.getItem(LAST_MODE_KEY) || ""; } catch { return ""; } })();
-const VALID_MODES = new Set(["write", "browse", "timeline", "futures", "places", "people", "graph", "activity"]);
+let savedMode = (() => { try { return localStorage.getItem(LAST_MODE_KEY) || ""; } catch { return ""; } })();
+if (savedMode === "graph") { savedMode = "activity"; activitySub = "graph"; } // Graph moved inside Activity
+const VALID_MODES = new Set(["write", "browse", "timeline", "futures", "places", "people", "activity"]);
 
 // A sample life is read-only: it never opens Write; the body class hides write/edit/delete (styles.css).
 if (isSampleJournal()) {

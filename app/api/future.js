@@ -34,10 +34,16 @@ Rules:
   below asks you to steer it a certain way.
 - Never break character or mention being an AI, a model, or a prediction. You are the journal, continuing.
 
+Also imagine the enduring STATES of this future life — the parallel tracks that span years, not single
+days: where you live, your work, your relationships, your health, ongoing projects, anything with a
+duration. Each state is a span with a start and (usually) end year across {START_YEAR}–{END_YEAR},
+growing out of where the journal leaves off. These populate a life timeline, so give real year spans.
+
 Return ONLY valid JSON, no markdown fence, in exactly this shape:
 {"bridge":"<one or two short sentences: how you got from now to this stretch of years>",
- "days":[{"date":"YYYY-MM-DD","raw":"<the raw diary entry for that day, first person>"}, ...]}
-Order "days" chronologically. Escape any double quotes inside strings with a backslash.`;
+ "days":[{"date":"YYYY-MM-DD","raw":"<the raw diary entry for that day, first person>"}, ...],
+ "states":[{"category":"Home|Work|Relationship|Health|Project|Place","subject":"<short label, e.g. 'the house on Pine St' or 'teaching at the college'>","startYear":YYYY,"endYear":YYYY,"text":"<a sentence or two, first person, on this chapter>"}, ...]}
+Order "days" chronologically. Give about {DAYS} states across the span. Escape any double quotes inside strings with a backslash.`;
 
 function buildContext(entries) {
   const sorted = [...entries].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
@@ -133,7 +139,21 @@ export default async function handler(req, res) {
       : [];
     if (!days.length) { res.status(502).json({ error: "The model didn't return any days — try again." }); return; }
 
-    res.status(200).json({ bridge: String(parsed?.bridge || ""), days, years, baseYear, endYear });
+    // Enduring life-states (year spans) → the future's Timeline lanes.
+    const yr = (v) => { const n = parseInt(String(v).slice(0, 4), 10); return Number.isFinite(n) ? n : null; };
+    const states = Array.isArray(parsed?.states)
+      ? parsed.states
+          .filter((s) => s && s.subject && yr(s.startYear))
+          .map((s) => ({
+            category: String(s.category || "Life").slice(0, 40),
+            subject: String(s.subject).slice(0, 120),
+            startYear: yr(s.startYear),
+            endYear: yr(s.endYear) || yr(s.startYear),
+            text: String(s.text || s.subject).slice(0, 2000),
+          }))
+      : [];
+
+    res.status(200).json({ bridge: String(parsed?.bridge || ""), days, states, years, baseYear, endYear });
   } catch (err) {
     res.status(500).json({ error: err.message || "Could not imagine the future" });
   }
