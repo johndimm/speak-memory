@@ -426,6 +426,76 @@ function closeDetail() {
   els.detailBackdrop.hidden = true;
 }
 
+// ---- Outline expansion: remember which outline nodes are open, per node page ---------------
+// The outline renders collapsed to its top level; as the reader drills in, we remember which
+// nodes they opened (keyed by the page and each node's stable path) and restore it next time.
+const OLX_KEY = jkey("outline-expansion");
+let olSaveTimer = null;
+function loadOlx() { try { return JSON.parse(localStorage.getItem(OLX_KEY) || "{}"); } catch { return {}; } }
+function saveOlx(o) { try { localStorage.setItem(OLX_KEY, JSON.stringify(o)); } catch { /* full/blocked */ } }
+function outlinePageKey() {
+  return [state.zoom, state.focusDate || "", state.category || "", state.subject || "", state.memoryId || ""].join("|");
+}
+function restoreOutline() {
+  const open = new Set(loadOlx()[outlinePageKey()] || []);
+  els.root.querySelectorAll(".ol-node[data-ol-key]").forEach((d) => { d.open = open.has(d.dataset.olKey); });
+}
+function saveOutlineState() {
+  const open = [...els.root.querySelectorAll(".ol-node[data-ol-key]")].filter((x) => x.open).map((x) => x.dataset.olKey);
+  const all = loadOlx();
+  all[outlinePageKey()] = open;
+  const keys = Object.keys(all);
+  if (keys.length > 150) delete all[keys[0]]; // keep the map bounded
+  saveOlx(all);
+}
+function scheduleSaveOutline() { clearTimeout(olSaveTimer); olSaveTimer = setTimeout(saveOutlineState, 150); }
+
+// ---- Single-child collapse ---------------------------------------------------------------
+// Drilling into a period that has exactly one child skips straight through to the first branch
+// (2+ children) or the leaf day, so you never click through a chain of levels that all show the
+// same copied-up summary.
+function timeChildren(zoom, focus) {
+  const days = Object.keys(journal.days);
+  if (zoom === "decade") {
+    const dd = bucketStart(+String(focus).slice(0, 4));
+    const years = [...new Set(days.map((d) => +d.slice(0, 4)).filter((y) => bucketStart(y) === dd))].sort((a, b) => a - b);
+    return years.map((y) => ({ zoom: "year", focusDate: firstEntryDateIn("year", String(y)) }));
+  }
+  if (zoom === "year") {
+    const y = String(focus).slice(0, 4);
+    const months = [...new Set(days.filter((d) => d.startsWith(y)).map((d) => d.slice(0, 7)))].sort();
+    return months.map((mk) => ({ zoom: "month", focusDate: firstEntryDateIn("month", mk) }));
+  }
+  if (zoom === "month") {
+    const mk = String(focus).slice(0, 7);
+    const starts = [...new Set(days.filter((d) => d.startsWith(mk)).map(sundayWeekStart))].sort();
+    return starts.map((ws) => {
+      const firstDay = days.filter((d) => d.startsWith(mk) && sundayWeekStart(d) === ws).sort()[0] || ws;
+      return { zoom: "week", focusDate: firstDay };
+    });
+  }
+  if (zoom === "week") {
+    return weekDates(focus).filter((iso) => journal.days[iso]).map((iso) => ({ zoom: "day", focusDate: iso }));
+  }
+  return []; // day is a leaf
+}
+function descend(zoom, focusDate) {
+  for (let guard = 0; guard < 12; guard++) {
+    const kids = timeChildren(zoom, focusDate);
+    if (kids.length !== 1) break;
+    ({ zoom, focusDate } = kids[0]);
+    if (zoom === "day") break;
+  }
+  return { zoom, focusDate };
+}
+// Drill DOWN into a time node, collapsing any single-child chain first.
+function navDown(zoom, focusDate) {
+  const t = descend(zoom, focusDate);
+  state.zoom = t.zoom;
+  state.focusDate = t.focusDate;
+  render();
+}
+
 // Image URLs already shown on the current page — reset each render so no picture repeats within
 // one page (e.g. several memories that fall back to the same portrait).
 let shownImages = new Set();
@@ -629,42 +699,44 @@ function nodeLinksHtml(items) {
 function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", elementsLabel = "", images = "", isLeaf = false, verbatim = "", correction = "" }) {
   const v = levels || {};
   const summarizing = !v.sentence && !v.paragraph && !v.summary;
-  // The sentence ZOOMS in place: a "More" link at the end of the paragraph swaps it for the full
-  // summary (rather than stacking below), and a "Less" link folds it back. Leaves generate that
-  // summary lazily on first open.
   const hasSummary = !!v.summary;
   const canSummary = hasSummary || isLeaf;
-  const zoom = v.sentence
-    ? `<div class="node-zoom" data-state="brief">`
-      + `<p class="node-sentence">${escapeHtml(v.sentence)}`
-        + (canSummary ? ` <button type="button" class="zoom-more" data-zoom="summary"${hasSummary ? "" : ` data-lazy="1"`}>More</button>` : "")
-      + `</p>`
-      + `<div class="node-complete" data-detail="summary" hidden>${hasSummary ? renderFull(v.summary) : `<p class="lazy-hint">Writing the full summary…</p>`}</div>`
-      + (canSummary ? `<button type="button" class="zoom-less" data-zoom="summary">Less</button>` : "")
-      + `</div>`
+
+  // 1) The summary sits at the top, expanded. Show the best summary we already have (full, else the
+  //    paragraph, else the sentence) right away; a leaf then upgrades it to the full summary on load
+  //    (generateLeafDetail targets [data-detail="summary"]) — so there's no bare "writing…" wait.
+  const summaryText = v.summary || v.paragraph || v.sentence || "";
+  const summaryHtml = `<div class="node-summary" data-detail="summary">`
+    + (summaryText ? renderFull(summaryText)
+        : canSummary ? `<p class="lazy-hint">✦ Writing the summary…</p>` : "")
+    + `</div>`;
+
+  // 2) On a leaf, the verbatim transcript is shown right after the summary, open (still collapsible).
+  const verbatimHtml = (isLeaf && verbatim)
+    ? `<details class="node-fold node-verbatim-fold" open><summary>Verbatim transcript</summary>`
+      + `<div class="node-fold-body node-verbatim">${escapeHtml(verbatim)}</div></details>`
     : "";
-  // The outline is the richest form: at a LEAF it LEADS the page — open, first, generated on open —
-  // so drilling all the way in lands you on the structured detail. Roll-up nodes keep it as a fold.
-  const outlineOpen = isLeaf
-    ? `<section class="node-outline"><div class="node-fold-body" data-detail="outline">${v.outline ? renderFull(v.outline) : `<p class="lazy-hint">✦ Building the outline…</p>`}</div></section>`
+
+  // 3) The outline lives at the BOTTOM for every node, as a drill-down tree collapsed to its top
+  //    level (its expansion is saved/restored per page — see restoreOutline/saveOutline).
+  const hasOutline = !!v.outline;
+  const outlineHtml = (hasOutline || (isLeaf && canSummary))
+    ? `<section class="node-outline"><p class="nav-hint">Outline</p>`
+      + `<div class="node-outline-body" data-detail="outline">`
+      + (hasOutline ? renderOutlineTree(v.outline) : `<p class="lazy-hint">✦ Building the outline…</p>`)
+      + `</div></section>`
     : "";
-  // Roll-up nodes show the outline compressed — top-level nodes visible, deeper levels a click
-  // away — sitting after the images and before the child links, so you can drill the outline in
-  // place before choosing a child to open.
-  const outlineTree = (!isLeaf && v.outline)
-    ? `<section class="node-outline">${renderOutlineTree(v.outline)}</section>`
-    : "";
+
   return `${name ? `<h2 class="node-name">${escapeHtml(name)}</h2>` : ""}`
     + (subtitle ? `<p class="node-subtitle">${escapeHtml(subtitle)}</p>` : "")
     + (summarizing ? summarizingNote() : "")
-    + outlineOpen // leaf: the outline is the first thing you see
-    + (!isLeaf && v.word ? `<p class="node-word">${escapeHtml(v.word)}</p>` : "") // the big word/phrase are
-    + (!isLeaf && v.phrase ? `<p class="node-phrase">${escapeHtml(v.phrase)}</p>` : "") // zoom-OUT rungs; skip at a leaf
-    + zoom
+    + (!isLeaf && v.word ? `<p class="node-word">${escapeHtml(v.word)}</p>` : "")   // zoom-OUT rungs, non-leaf
+    + (!isLeaf && v.phrase ? `<p class="node-phrase">${escapeHtml(v.phrase)}</p>` : "")
+    + summaryHtml               // full summary at the top
+    + verbatimHtml              // leaf: transcript right after the summary
     + images
-    + outlineTree // roll-up: compressed outline after the images, before the children
     + (elementsHtml ? `${elementsLabel ? `<p class="nav-hint">${escapeHtml(elementsLabel)}</p>` : ""}${elementsHtml}` : "")
-    + ((isLeaf && verbatim) ? `<details class="node-fold"><summary>Verbatim transcript</summary><div class="node-fold-body node-verbatim">${escapeHtml(verbatim)}</div></details>` : "")
+    + outlineHtml               // outline at the bottom
     + (isLeaf ? `<details class="node-fold correct-fold"${correction ? " open" : ""}><summary>The summary isn't right?</summary><div class="node-fold-body">`
         + `<textarea class="correct-input" rows="2" placeholder="Say what's wrong — a name, a date, two things mixed up…">${escapeHtml(correction)}</textarea>`
         + `<button type="button" class="correct-btn">Fix the summary</button>`
@@ -741,9 +813,14 @@ function setLazyMemory(m) { currentLeaf = makeMemoryLeaf(m); lazyLeaf = (m.level
 // summary/outline bodies (one call fills both). No-op once done — lazyLeaf is cleared.
 async function generateLeafDetail() {
   if (!lazyLeaf || lazyBusy) return;
-  const sBody = els.root.querySelector('.node-complete[data-detail="summary"]');
-  const oBody = els.root.querySelector('.node-fold-body[data-detail="outline"]');
+  const sBody = els.root.querySelector('[data-detail="summary"]');
+  const oBody = els.root.querySelector('[data-detail="outline"]');
   lazyBusy = true;
+  // Show this on-demand summary in Activity too — otherwise the page says "Writing…" while the
+  // Activity queue looks empty (the batch pass logs there; this per-leaf call did not, until now).
+  const label = lazyLeaf.ctx && lazyLeaf.ctx.type === "day" ? formatDate(lazyLeaf.ctx.date, "short") : (lazyLeaf.ctx && lazyLeaf.ctx.label) || "this entry";
+  const jid = logAdd(label, (lazyLeaf.ctx && lazyLeaf.ctx.type) || "detail");
+  logSet(jid, "running");
   const spin = `<p class="lazy-hint">✦ Writing…</p>`;
   if (sBody) sBody.innerHTML = spin;
   if (oBody) oBody.innerHTML = spin;
@@ -753,19 +830,22 @@ async function generateLeafDetail() {
       const msg = `<p class="lazy-hint">The full text isn't stored for this entry anymore.</p>`;
       if (sBody) sBody.innerHTML = msg;
       if (oBody) oBody.innerHTML = msg;
+      logSet(jid, "error", { error: "no source text" });
       return;
     }
     const style = localStorage.getItem("summary-style") || "";
     const d = await postSummarize({ mode: "detail", text: raw, style, correction: lazyLeaf.correction, ...lazyLeaf.ctx });
     await lazyLeaf.applyLevels({ summary: d.summary || "", outline: d.outline || "" });
     if (sBody) sBody.innerHTML = renderFull(d.summary || "");
-    if (oBody) oBody.innerHTML = renderFull(d.outline || "");
+    if (oBody) oBody.innerHTML = renderOutlineTree(d.outline || ""); // collapsed tree at the bottom
     els.root.querySelectorAll("[data-lazy]").forEach((el) => el.removeAttribute("data-lazy"));
     lazyLeaf = null;
-  } catch {
+    logSet(jid, "done");
+  } catch (e) {
     const msg = `<p class="lazy-hint">Couldn't generate right now — tap again to retry.</p>`;
     if (sBody) sBody.innerHTML = msg;
     if (oBody) oBody.innerHTML = msg;
+    logSet(jid, "error", { error: (e && e.message) || "failed" });
   } finally { lazyBusy = false; }
 }
 
@@ -1038,8 +1118,11 @@ function makeGraphState(nodes, entryByDate, periodById) {
   const inputHash = (id) => hashBriefs(node(id).children.map((cid) => ({ date: cid, brief: briefOf(cid) })));
   const isDirty = (id) => {
     const n = node(id);
-    if (n.type === "day") { const e = entryByDate.get(n.iso), cd = journal.days[n.iso]; return !!(e && e.raw) && !(cd && cd.levels); }
-    if (n.type === "memory") { const m = memOf(id); return !!m && (!m.levels || m.needsSummary); }
+    // A leaf needs (re)summarizing until it has a FULL summary — not just the cheap rungs — so a
+    // day/memory is usable the moment you reach it, without a lazy on-open call. (Older entries that
+    // only have the distilled rungs get upgraded to the full summary on the next pass.)
+    if (n.type === "day") { const e = entryByDate.get(n.iso), cd = journal.days[n.iso]; return !!(e && e.raw) && !(cd && cd.levels && cd.levels.summary); }
+    if (n.type === "memory") { const m = memOf(id); return !!m && (!m.levels || !m.levels.summary || m.needsSummary); }
     const p = periodById.get(n.key); return !p || p.hash !== inputHash(id);
   };
   const isClean = (id) => !isDirty(id);
@@ -1382,11 +1465,14 @@ function childPara(c) { const v = childLevels(c); return v.paragraph || v.summar
 // Leaf summaries (days, memories) — FAST: only the distilled rungs (word/phrase/sentence/
 // paragraph). The heavy complete-summary + outline are generated lazily when a reader opens
 // those folds (see generateLeafDetail). The memory's subject fixes its name/spelling.
+// Leaves get the FULL ladder (summary + outline included) in the pass, so a day is ready to read
+// the moment you reach it — no separate lazy "detail" call, no waiting after a click. (distilled:false
+// uses LEVELS_SYSTEM, which returns word→paragraph PLUS the complete summary and outline in one call.)
 async function sumDayLevels(date, text, correction = "") {
-  return nodeLevels(text, { type: "day", label: date, isLeaf: true, date, distilled: true, correction });
+  return nodeLevels(text, { type: "day", label: date, isLeaf: true, date, distilled: false, correction });
 }
 async function sumMemLevels(m) {
-  return nodeLevels(m.text, { type: "memory", label: m.label || String(m.startYear || ""), isLeaf: true, subject: m.subject || "", date: `${m.startYear || 2000}-01-01`, distilled: true, correction: m.correction || "" });
+  return nodeLevels(m.text, { type: "memory", label: m.label || String(m.startYear || ""), isLeaf: true, subject: m.subject || "", date: `${m.startYear || 2000}-01-01`, distilled: false, correction: m.correction || "" });
 }
 
 // Roll-up input: prefer each child's FULL summary; step down to paragraph, then sentence,
@@ -1422,6 +1508,14 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
   wireReps(els.detailFull);
   wireReps(els.root);
   if (els.periodSummary) wireReps(els.periodSummary);
+  // Restore saved outline expansion whenever a node page (re)renders; save it when the reader
+  // opens/closes an outline node (the `toggle` event doesn't bubble, so listen in the capture phase).
+  new MutationObserver(() => { if (els.root.querySelector(".ol-node[data-ol-key]")) restoreOutline(); })
+    .observe(els.root, { childList: true, subtree: true });
+  els.root.addEventListener("toggle", (e) => {
+    const d = e.target;
+    if (d.classList && d.classList.contains("ol-node") && els.root.contains(d)) scheduleSaveOutline();
+  }, true);
   els.root.addEventListener("click", async (e) => {
     // Timeline bar → jump to that memory (works on decade/category/subject pages).
     const bar = e.target.closest(".mtl-bar[data-mem-id], .mtl-bar-label[data-mem-id]");
@@ -1456,11 +1550,11 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
       if (d.mem) goToMemory(d.mem);
       else if (d.category != null) { state.zoom = "category"; state.category = d.category; state.subject = null; render(); }
       else if (d.subject != null) { state.zoom = "subject"; state.subject = d.subject; render(); }
-      else if (d.decade) { state.zoom = "decade"; state.focusDate = firstEntryDateIn("decade", d.decade); render(); }
-      else if (d.year) { state.zoom = "year"; state.focusDate = firstEntryDateIn("year", d.year); render(); }
-      else if (d.month) { state.zoom = "month"; state.focusDate = firstEntryDateIn("month", d.month); render(); }
-      else if (d.week) { state.zoom = "week"; state.focusDate = d.week; render(); }
-      else if (d.day) { state.zoom = "day"; state.focusDate = d.day; render(); }
+      else if (d.decade) navDown("decade", firstEntryDateIn("decade", d.decade));
+      else if (d.year) navDown("year", firstEntryDateIn("year", d.year));
+      else if (d.month) navDown("month", firstEntryDateIn("month", d.month));
+      else if (d.week) navDown("week", d.week);
+      else if (d.day) navDown("day", d.day);
       return;
     }
     const add = e.target.closest(".add-mem");

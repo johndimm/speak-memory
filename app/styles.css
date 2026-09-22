@@ -824,6 +824,9 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .node-sentence { font-size: 1.15rem; color: var(--ink); line-height: 1.5; max-width: 52rem; margin: 0 0 0.6rem; }
 .node-zoom { max-width: 52rem; margin: 0 0 0.6rem; }
 .node-complete { color: var(--ink); line-height: 1.65; }
+/* Full summary at the top of every node page */
+.node-summary { color: var(--ink); line-height: 1.65; max-width: 52rem; margin: 0.2rem 0 0.9rem; font-size: 1.05rem; }
+.node-summary > p:first-child { margin-top: 0; }
 .zoom-more, .zoom-less {
   border: none; background: none; padding: 0;
   color: var(--accent); font: inherit; font-weight: 600; cursor: pointer;

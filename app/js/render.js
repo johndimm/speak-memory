@@ -130,13 +130,14 @@ function outlineTree(nodes) {
 export function renderOutlineTree(text) {
   const raw = String(text).replace(/\r/g, "");
   if (!isOutlineText(raw)) return renderFull(raw);
-  const render = (node) => {
+  // `path` is a stable index chain ("0", "0.2", …) so a caller can save/restore which nodes are open.
+  const render = (node, path) => {
     const cls = `ol-item ol-l${node.level}${node.leaf ? " ol-leaf" : ""}${node.para ? " ol-para" : ""}`;
     if (!node.children.length) return `<div class="${cls}">${escapeHtml(node.text)}</div>`;
-    return `<details class="ol-node"><summary class="${cls} ol-branch">${escapeHtml(node.text)}</summary>`
-      + `<div class="ol-children">${node.children.map(render).join("")}</div></details>`;
+    return `<details class="ol-node" data-ol-key="${path}"><summary class="${cls} ol-branch">${escapeHtml(node.text)}</summary>`
+      + `<div class="ol-children">${node.children.map((c, i) => render(c, path + "." + i)).join("")}</div></details>`;
   };
-  return `<div class="outline outline-tree">${outlineTree(parseOutline(raw)).map(render).join("")}</div>`;
+  return `<div class="outline outline-tree">${outlineTree(parseOutline(raw)).map((n, i) => render(n, String(i))).join("")}</div>`;
 }
 
 export function renderFull(text) {
