@@ -248,8 +248,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     render();
   }
 
-  // Jump to a mentioned day/memory (handled by the host so the Journal opens it).
+  // Delegated once on the stable root (survives re-renders): open an entity card, or jump to a mention.
   root.addEventListener("click", (e) => {
+    const card = e.target.closest(".ent-card[data-open]");
+    if (card) { openId = card.dataset.open; renderEntity(openId); return; }
     const m = e.target.closest(".ent-mention[data-goto]");
     if (!m) return;
     if (m.dataset.kind === "day") onOpenDay?.(m.dataset.goto);
