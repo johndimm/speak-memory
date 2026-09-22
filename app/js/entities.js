@@ -61,43 +61,56 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     scanning = true;
     try {
       const sources = await allSources();
-      const untagged = sources.filter((s) => (s.raw || s.text) && !Array.isArray(s.entityRefs));
-      if (!untagged.length) { setStatus("Everything's already scanned. Re-scan anyway from an entry's page if a name looks off.", ""); return; }
+      let queue = sources.filter((s) => (s.raw || s.text) && !Array.isArray(s.entityRefs));
+      if (!queue.length) { setStatus("Everything's already scanned. Re-scan anyway from an entry's page if a name looks off.", ""); return; }
 
       // Load the current roster; grow it as new names appear (so later entries resolve to earlier ones).
       let roster = await getAllEntities();
       const byId = new Map(roster.map((e) => [e.id, e]));
+      const total = queue.length;
       let done = 0, found = 0;
-      for (const src of untagged) {
+
+      const scanOne = async (src) => {
         const text = src.raw || src.text || "";
         const label = src.date ? src.date : (src.subject || src.label || "memory");
         const jid = logAdd(label, "scan");
         logSet(jid, "running");
-        try {
-          const known = roster.map((e) => ({ id: e.id, canonical: e.canonical, aliases: e.aliases || [], kind: e.entityKind }));
-          const { mentions } = await postEntities(text, known);
-          const refs = [];
-          for (const m of mentions) {
-            // The LLM is the resolver: it returns a known id when this mention matches an existing
-            // entity (spelling variants and all), else marks it new. We only create when it says new.
-            let ent = m.id && byId.get(m.id);
-            if (!ent) {
-              ent = { id: uid(), entityKind: m.kind || "person", canonical: m.name.trim(), aliases: [], note: "", createdAt: Date.now(), updatedAt: Date.now() };
-              await putEntity(ent);
-              roster.push(ent); byId.set(ent.id, ent);
-              found++;
-            }
-            if (!refs.includes(ent.id)) refs.push(ent.id);
+        const known = roster.map((e) => ({ id: e.id, canonical: e.canonical, aliases: e.aliases || [], kind: e.entityKind }));
+        const { mentions } = await postEntities(text, known);
+        const refs = [];
+        for (const m of mentions) {
+          // The LLM is the resolver: it returns a known id when this mention matches an existing
+          // entity (spelling variants and all), else marks it new. We only create when it says new.
+          let ent = m.id && byId.get(m.id);
+          if (!ent) {
+            ent = { id: uid(), entityKind: m.kind || "person", canonical: m.name.trim(), aliases: [], note: "", createdAt: Date.now(), updatedAt: Date.now() };
+            await putEntity(ent);
+            roster.push(ent); byId.set(ent.id, ent);
+            found++;
           }
-          // Persist the refs on the source item.
-          const next = { ...src, entityRefs: refs };
-          if (src.date) await putEntry(next); else await putMemory(next);
-          logSet(jid, "done");
-        } catch (err) { logSet(jid, "error", { error: (err && err.message) || "failed" }); }
-        done++;
-        setStatus(`Scanning… ${done} of ${untagged.length}${found ? ` · ${found} new` : ""}`, "working");
+          if (!refs.includes(ent.id)) refs.push(ent.id);
+        }
+        const next = { ...src, entityRefs: refs };
+        if (src.date) await putEntry(next); else await putMemory(next);
+        logSet(jid, "done");
+      };
+
+      // Up to 3 passes: flaky calls (occasional malformed JSON) are retried automatically so a scan
+      // finishes clean instead of leaving a handful failed. A source that fails all passes is left
+      // untagged, so a later "Scan new entries" still picks it up.
+      for (let pass = 0; pass < 3 && queue.length; pass++) {
+        const failures = [];
+        for (const src of queue) {
+          try { await scanOne(src); }
+          catch { failures.push(src); }
+          done++;
+          setStatus(`Scanning… ${Math.min(done, total)} of ${total}${found ? ` · ${found} new` : ""}${failures.length ? ` · retrying ${failures.length}` : ""}`, "working");
+        }
+        queue = failures;
+        done = total - queue.length; // reflect what's actually landed before a retry pass
       }
-      setStatus(`Done — scanned ${done} entr${done === 1 ? "y" : "ies"}, ${found} new individual${found === 1 ? "" : "s"}.`, "ok");
+      if (queue.length) setStatus(`Scanned with ${queue.length} still failing — tap “Scan new entries” to retry them.`, "error");
+      else setStatus(`Done — ${found} new individual${found === 1 ? "" : "s"} across ${total} entr${total === 1 ? "y" : "ies"}.`, "ok");
       render();
     } finally { scanning = false; }
   }
