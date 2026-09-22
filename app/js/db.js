@@ -260,3 +260,24 @@ export async function clearAllMemories() {
   const mems = (await getAllItems()).filter((i) => kindOf(i) === "memory");
   await tx(ITEMS, "readwrite", (s) => Promise.all(mems.map((i) => reqToPromise(s.delete(i.id)))));
 }
+
+// ---- Entities (kind "entity") — people, animals, places, things a journal refers to. -----
+// Each has a canonical name plus aliases, so every reference resolves to one identity ("Ghost"
+// and "Baby Kitty" are the same cat). Stored in the same ITEMS store, so seeding/migration/export
+// carry them along. Entries carry an `entityRefs: [entityId]` list of who/what they mention.
+export function getAllEntities() {
+  return getAllItems().then((r) => r.filter((i) => kindOf(i) === "entity"));
+}
+export function getEntity(id) {
+  return tx(ITEMS, "readonly", (s) => reqToPromise(s.get(id))).then((i) => (i && kindOf(i) === "entity" ? i : undefined));
+}
+export function putEntity(ent) {
+  return tx(ITEMS, "readwrite", (s) => reqToPromise(s.put({ ...ent, kind: "entity" })));
+}
+export function deleteEntity(id) {
+  return tx(ITEMS, "readwrite", (s) => reqToPromise(s.delete(id)));
+}
+export async function clearAllEntities() {
+  const ents = (await getAllItems()).filter((i) => kindOf(i) === "entity");
+  await tx(ITEMS, "readwrite", (s) => Promise.all(ents.map((i) => reqToPromise(s.delete(i.id)))));
+}

@@ -610,6 +610,32 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       return;
     }
 
+    // Extract named entities (people, animals, places, things) from an entry, resolving each to an
+    // existing entity when it matches (by canonical name or alias, tolerating spelling variants) or
+    // proposing a new one. Powers the entity registry and the "every mention of X" timeline.
+    if (mode === "entities") {
+      const text = String(body.text || "").trim();
+      if (!text) { res.status(200).json({ mentions: [] }); return; }
+      const known = Array.isArray(body.known) ? body.known.slice(0, 400) : [];
+      const roster = known.length
+        ? known.map((e) => `- id=${e.id} [${e.kind || "person"}] ${e.canonical}${(e.aliases && e.aliases.length) ? " (aka " + e.aliases.join(", ") + ")" : ""}`).join("\n")
+        : "(none yet)";
+      const sys = `You extract the named INDIVIDUALS a journal entry refers to: people and animals by name, and named places, organizations, or things that matter to this life. Skip generic references ("my boss", "the dog") unless a name is given. Resolve pronouns only when the name is unambiguous in the entry.
+For EACH distinct individual mentioned, decide if it matches one already known (below), tolerating spelling variants and transcription errors (e.g. "Zay"/"Zey" = "Ze"), nicknames, and aka names. Return the matching id if so; otherwise mark it new.
+KNOWN ENTITIES:
+${roster}
+Return ONLY valid JSON: {"mentions":[{"id":"<known id or empty>","name":"<name as best canonicalized>","kind":"person|animal|place|org|thing","isNew":true|false}]}. Use the KNOWN id and its exact canonical spelling when it matches; set isNew=true and id="" only when it is genuinely not in the list. Do not invent ids. Escape double quotes with a backslash.`;
+      const r = await callJsonObject(sys, `Entry:\n\n${text.slice(0, 12000)}`, 0.2, cfg);
+      const mentions = Array.isArray(r.mentions) ? r.mentions.filter((m) => m && m.name).map((m) => ({
+        id: typeof m.id === "string" ? m.id : "",
+        name: String(m.name).slice(0, 80),
+        kind: ["person", "animal", "place", "org", "thing"].includes(m.kind) ? m.kind : "person",
+        isNew: !!m.isNew && !m.id,
+      })) : [];
+      res.status(200).json({ mentions });
+      return;
+    }
+
     // Amend a raw transcript from a reader's correction note (e.g. fix a misspelled name).
     if (mode === "amend") {
       const { text = "", selection = "", note = "" } = body;

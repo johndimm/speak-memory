@@ -1185,6 +1185,42 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .fut-card.fut-error { border-color: var(--accent-soft); }
 @keyframes fut-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.62; } }
 .fut-empty { color: var(--ink-soft); font-style: italic; }
+
+/* ---- People & Animals: the entity registry -------------------------------------------- */
+.entities { max-width: 52rem; margin: 0 auto; }
+.ent-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.ent-title { font-family: var(--font-display); font-size: 2rem; font-weight: 400; margin: 0; }
+.ent-scan { border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600; padding: 0.5rem 1.1rem; border-radius: 999px; cursor: pointer; }
+.ent-status { margin: 0.8rem 0; font-size: 0.9rem; color: var(--ink-soft); }
+.ent-status.working::before { content: "◷ "; }
+.ent-status.ok { color: #3a7d44; }
+.ent-status.error { color: #b3261e; }
+.ent-empty { color: var(--ink-soft); font-style: italic; margin-top: 1rem; }
+.ent-kind { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; color: var(--ink-soft); margin: 1.4rem 0 0.6rem; }
+.ent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; }
+.ent-card { display: flex; align-items: baseline; gap: 0.5rem; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 0.9rem; cursor: pointer; font: inherit; color: var(--ink); }
+.ent-card:hover { border-color: var(--accent-soft); }
+.ent-name { font-weight: 600; }
+.ent-aka { font-size: 0.78rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ent-count { margin-left: auto; font-size: 0.8rem; color: var(--paper); background: var(--accent-soft); border-radius: 999px; padding: 0.05rem 0.5rem; min-width: 1.5rem; text-align: center; }
+.ent-back { border: none; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0.2rem 0; margin-bottom: 0.6rem; }
+.ent-profile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: 0.7rem; }
+.ent-canon { font-family: var(--font-display); font-size: 1.8rem; color: var(--ink); background: transparent; border: none; border-bottom: 1px solid var(--line); padding: 0.2rem 0; }
+.ent-canon:focus { outline: none; border-bottom-color: var(--accent); }
+.ent-kindsel, .ent-field input, #ent-merge-sel { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 0.4rem 0.6rem; }
+.ent-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; color: var(--ink-soft); }
+.ent-profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.2rem; }
+.ent-save { border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600; padding: 0.45rem 1rem; border-radius: 999px; cursor: pointer; }
+.ent-merge { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: var(--ink-soft); }
+.ent-merge button, .ent-del { border: 1px solid var(--line); background: none; color: var(--ink-soft); font: inherit; font-size: 0.82rem; padding: 0.4rem 0.85rem; border-radius: 999px; cursor: pointer; }
+.ent-del { margin-left: auto; }
+.ent-del:hover { border-color: var(--accent-soft); color: #b3261e; }
+.ent-mentions { display: flex; flex-direction: column; gap: 2px; }
+.ent-mention { display: grid; grid-template-columns: 6rem 1fr; gap: 0.7rem; align-items: baseline; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.8rem; cursor: pointer; font: inherit; color: var(--ink); }
+.ent-mention:hover { border-color: var(--accent-soft); }
+.ent-when { font-size: 0.8rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+.ent-snip { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .ent-mention { grid-template-columns: 4.5rem 1fr; } }
 .fut-card-del {
   position: absolute; top: 0.4rem; right: 0.4rem; width: 1.5rem; height: 1.5rem; line-height: 1;
   border: none; border-radius: 50%; background: transparent; color: var(--ink-soft);

@@ -6,7 +6,8 @@ import { initPlaces } from "./places.js";
 import { initTimeline } from "./timeline.js";
 import { initFutures } from "./futures.js";
 import { initActivity } from "./activity.js";
-import { purgeRaw } from "./db.js";
+import { initEntities } from "./entities.js";
+import { purgeRaw, getAllMemories } from "./db.js";
 import { jkey, isSampleJournal, activeJournalId } from "./journal.js";
 
 // Keep raw text for the most recent entries only; drop older raw (summaries are kept).
@@ -56,6 +57,7 @@ const placesView = document.getElementById("places-view");
 const timelineView = document.getElementById("timeline-view");
 const futuresView = document.getElementById("futures-view");
 const activityView = document.getElementById("activity-view");
+const peopleView = document.getElementById("people-view");
 const modeBtns = [...document.querySelectorAll(".mode-btn")];
 
 // The "Lives" tab: your own journal + the sample-lives gallery (switching journals reloads).
@@ -70,6 +72,10 @@ const timeline = initTimeline(timelineView, {
 });
 const futures = initFutures(futuresView); // imagine the journal continuing; several futures to compare
 const activity = initActivity(activityView, { onRetry: () => calendar.prime() }); // live queue; Retry re-runs the pass
+const people = initEntities(peopleView, {
+  onOpenDay: (date) => setMode("browse", date, "day"),          // a mention → open that day in the Journal
+  onOpenMemory: async (id) => { const m = (await getAllMemories()).find((x) => x.id === id); if (m) openMemoryInJournal(m); },
+});
 
 // Open a memory's page in the Journal (after saving/editing it in Write).
 function openMemoryInJournal(mem) {
@@ -121,11 +127,13 @@ function setMode(mode, arg, zoom) {
   timelineView.hidden = mode !== "timeline";
   futuresView.hidden = mode !== "futures";
   activityView.hidden = mode !== "activity";
+  peopleView.hidden = mode !== "people";
   if (mode !== "graph") graph.close(); // stop live graph updates when leaving the tab
   if (mode !== "places") places.close(); // tear down the map when leaving
   if (mode !== "timeline") timeline.close(); // drop the timeline's tooltip/observer when leaving
   if (mode !== "futures") futures.close();
   if (mode !== "activity") activity.close();
+  if (mode !== "people") people.close();
   if (mode === "browse") calendar.reload(arg, zoom);
   else if (mode === "graph") graph.open();
   else if (mode === "settings") settings.refresh();
@@ -134,6 +142,7 @@ function setMode(mode, arg, zoom) {
   else if (mode === "timeline") timeline.open();
   else if (mode === "futures") futures.open();
   else if (mode === "activity") { calendar.prime(); activity.open(); } // ensure the pass is running, then show the queue
+  else if (mode === "people") people.open();
   else recorder.refresh(arg); // arg = date (day) or memory object to edit
 }
 
