@@ -827,6 +827,34 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 /* Full summary at the top of every node page */
 .node-summary { color: var(--ink); line-height: 1.65; max-width: 52rem; margin: 0.2rem 0 0.9rem; font-size: 1.05rem; }
 .node-summary > p:first-child { margin-top: 0; }
+
+/* Report-a-mistake: the "Fix this" chip that appears on text selection, and its panel */
+#fixsel-bar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(1rem + env(safe-area-inset-bottom)); z-index: 70;
+  border: none; background: var(--ink); color: var(--paper); font: inherit; font-size: 0.9rem; font-weight: 600;
+  padding: 0.6rem 1.1rem; border-radius: 999px; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,0.28);
+  max-width: 90vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#fixsel-panel {
+  position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center;
+  background: rgba(26,22,18,0.35); padding: 1rem;
+}
+.fixsel-card {
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 1.2rem; width: min(30rem, 100%); display: flex; flex-direction: column; gap: 0.7rem;
+}
+.fixsel-title { font-family: var(--font-display); font-weight: 400; font-size: 1.4rem; margin: 0; }
+.fixsel-quote { margin: 0; color: var(--ink-soft); font-style: italic; background: var(--paper-deep); border-radius: 10px; padding: 0.6rem 0.8rem; }
+.fixsel-note { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.8rem; resize: vertical; line-height: 1.5; }
+.fixsel-note:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+.fixsel-actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
+.fixsel-cancel { border: 1px solid var(--line); background: none; color: var(--ink-soft); font: inherit; padding: 0.5rem 1rem; border-radius: 999px; cursor: pointer; }
+.fixsel-apply { border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600; padding: 0.5rem 1.2rem; border-radius: 999px; cursor: pointer; }
+.fixsel-status { margin: 0; font-size: 0.85rem; color: var(--ink-soft); min-height: 1.1em; }
+.fixsel-status.working::before { content: "◷ "; }
+.fixsel-status.ok { color: #3a7d44; }
+.fixsel-status.error { color: #b3261e; }
 .zoom-more, .zoom-less {
   border: none; background: none; padding: 0;
   color: var(--accent); font: inherit; font-weight: 600; cursor: pointer;
@@ -849,6 +877,13 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .node-fold[open] > summary::before { content: "▾  "; }
 .node-fold-body { color: var(--ink-soft); line-height: 1.65; padding: 0.2rem 0 0.6rem; }
 .node-verbatim { white-space: pre-wrap; font-size: 0.92rem; }
+.verbatim-tools { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; flex-wrap: wrap; }
+.verbatim-edit, .verbatim-cancel { border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 0.82rem; padding: 0.35rem 0.85rem; border-radius: 999px; cursor: pointer; }
+.verbatim-edit:hover, .verbatim-cancel:hover { border-color: var(--accent-soft); color: var(--ink); }
+.verbatim-save { border: none; background: var(--accent); color: #fff; font: inherit; font-size: 0.82rem; font-weight: 600; padding: 0.4rem 0.95rem; border-radius: 999px; cursor: pointer; }
+.verbatim-input { width: 100%; font: inherit; font-size: 0.92rem; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.8rem; resize: vertical; line-height: 1.6; }
+.verbatim-input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+.verbatim-status { font-size: 0.82rem; color: var(--ink-soft); }
 .node-links { display: flex; flex-direction: column; gap: 0.5rem; max-width: 52rem; margin: 0.4rem 0 1.4rem; }
 .node-link { display: flex; flex-direction: column; gap: 0.15rem; text-align: left; width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 1rem; cursor: pointer; font: inherit; color: var(--ink); transition: border-color 0.2s; }
 .node-link:hover { border-color: var(--accent-soft); }

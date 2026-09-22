@@ -93,6 +93,9 @@ Return ONLY valid JSON with these keys:
 - outline: a REAL nested outline that carries the DETAIL on its leaves — every line starts with "- ", indent exactly 2 spaces per level, 1–3 levels as the material warrants. Parent bullets are short topic labels; leaf bullets (deepest, no children) carry the substance: a full sentence for a simple item, or a short first-person paragraph (2–5 sentences) for a rich moment, keeping the vivid specifics. A leaf paragraph is still ONE bullet on ONE line (never break the line inside it). Single newlines between bullets, no blank lines.
 Escape any double quotes inside strings with a backslash.`;
 
+// Correct a raw transcript from a reader's note (e.g. a misspelled name). Faithful, minimal edit.
+const AMEND_SYSTEM = `You correct a first-person journal transcript from a reader's note. You are given the raw transcript, a passage the reader flagged (a quote from the transcript or from a summary of it), and what they say is wrong. Rewrite the transcript so the correction is applied everywhere it occurs — e.g. fixing a name's spelling in every mention — changing ONLY what the note requires and preserving the voice, wording, punctuation, and every other detail exactly. If the transcript does not actually contain the flagged error, return it unchanged with "changed": false. Return ONLY valid JSON: {"raw":"<the full corrected transcript>","changed":true} (or false). Escape any double quotes inside strings with a backslash.`;
+
 const LEVEL_DEFS = `Each node's "levels" object has: {"word","phrase","sentence","paragraph","summary","outline","rewrite"}
 - word: ONE evocative word. phrase: 2–5 words. sentence: one sentence. paragraph: one short paragraph (3–5 sentences).
 - summary: the complete summary, 2–4 short paragraphs separated by \\n\\n.
@@ -604,6 +607,17 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       const r = await callLLM(sys, `${ctx}\n\nText:\n\n${String(text).slice(0, 16000)}`, style ? 0.8 : 0.4, ["summary", "outline"], cfg);
       const s = (v) => (typeof v === "string" ? v.trim() : "");
       res.status(200).json({ summary: structureFull(s(r.summary)), outline: s(r.outline) });
+      return;
+    }
+
+    // Amend a raw transcript from a reader's correction note (e.g. fix a misspelled name).
+    if (mode === "amend") {
+      const { text = "", selection = "", note = "" } = body;
+      if (!text.trim()) { res.status(400).json({ error: "No text provided" }); return; }
+      const user = `Flagged passage: "${String(selection).slice(0, 500)}"\nWhat's wrong / the fix: ${String(note).slice(0, 1000)}\n\nTranscript:\n\n${String(text).slice(0, 16000)}`;
+      const r = await callLLM(AMEND_SYSTEM, user, 0.2, ["raw"], cfg);
+      const raw = typeof r.raw === "string" ? r.raw : "";
+      res.status(200).json({ raw, changed: r.changed !== false && raw.trim() !== String(text).trim() });
       return;
     }
 

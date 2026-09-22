@@ -712,9 +712,13 @@ function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", ele
     + `</div>`;
 
   // 2) On a leaf, the verbatim transcript is shown right after the summary, open (still collapsible).
+  //    It's directly editable — fix a mistake in the raw words and re-summarize (works on futures too).
   const verbatimHtml = (isLeaf && verbatim)
     ? `<details class="node-fold node-verbatim-fold" open><summary>Verbatim transcript</summary>`
-      + `<div class="node-fold-body node-verbatim">${escapeHtml(verbatim)}</div></details>`
+      + `<div class="node-fold-body">`
+      + `<div class="node-verbatim" data-verbatim>${escapeHtml(verbatim)}</div>`
+      + `<div class="verbatim-tools"><button type="button" class="verbatim-edit">✎ Edit transcript</button></div>`
+      + `</div></details>`
     : "";
 
   // 3) The outline lives at the BOTTOM for every node, as a drill-down tree collapsed to its top
@@ -865,6 +869,157 @@ async function correctLeaf(correctionText, statusEl) {
   } catch {
     if (statusEl) { statusEl.textContent = "Couldn't re-summarize — try again."; statusEl.className = "correct-status error"; }
   } finally { lazyBusy = false; }
+}
+
+// ---- Edit the verbatim transcript inline (leaf pages) → re-summarize from the fixed words ----
+function beginVerbatimEdit(body) {
+  if (!body) return;
+  const view = body.querySelector("[data-verbatim]");
+  const tools = body.querySelector(".verbatim-tools");
+  if (!view || view.dataset.editing) return;
+  const raw = view.textContent;
+  view.dataset.editing = "1";
+  view.innerHTML = `<textarea class="verbatim-input" rows="8"></textarea>`;
+  view.querySelector(".verbatim-input").value = raw;
+  if (tools) tools.innerHTML = `<button type="button" class="verbatim-save">Save &amp; re-summarize</button>`
+    + `<button type="button" class="verbatim-cancel">Cancel</button>`
+    + `<span class="verbatim-status"></span>`;
+  view.querySelector(".verbatim-input").focus();
+}
+async function saveVerbatimEdit(body) {
+  if (!body) return;
+  const ta = body.querySelector(".verbatim-input");
+  const statusEl = body.querySelector(".verbatim-status");
+  if (!ta) return;
+  const text = ta.value.trim();
+  if (!text) { if (statusEl) statusEl.textContent = "Transcript can't be empty."; return; }
+  const ref = currentNodeRef();
+  if (!ref || (ref.kind !== "day" && ref.kind !== "mem")) { if (statusEl) statusEl.textContent = "Can only edit a day or memory transcript."; return; }
+  if (statusEl) statusEl.textContent = "Saving…";
+  try {
+    if (ref.kind === "day") {
+      const e = (await getEntry(ref.date)) || { date: ref.date };
+      const next = { ...e, raw: text, rawSavedAt: Date.now(), updatedAt: Date.now() };
+      delete next.levels; delete next.prose; delete next.outline; delete next.brief; delete next.full;
+      await putEntry(next);
+    } else {
+      const m = allMemories.find((x) => x.id === ref.id);
+      if (!m) throw new Error("memory not found");
+      const next = { ...m, text, needsSummary: true, updatedAt: Date.now() };
+      delete next.levels; delete next.prose; delete next.outline;
+      await putMemory(next);
+    }
+    await reloadAndRender(); // re-summarize this leaf from the edited words, and roll it up (see Activity)
+  } catch (err) {
+    if (statusEl) statusEl.textContent = `Couldn't save: ${(err && err.message) || err}`;
+  }
+}
+
+// ---- Report a mistake on any node → attach a note, folded into that node's summary --------
+// The reader selects text anywhere and says what's wrong. We store the note ("In reference to
+// '<selected>': <note>") on the node they're viewing — a leaf's correction, or a roll-up's note —
+// and re-summarize that node so the fix is honored and rolls up. Works at every level: if the
+// exact leaf can't be pinned down, the note catches it at the parent.
+function currentNodeRef() {
+  const s = state;
+  if (s.zoom === "day") return { kind: "day", date: s.focusDate };
+  if (s.zoom === "memory") return { kind: "mem", id: s.memoryId };
+  if (s.zoom === "week") return { kind: "period", key: "W" + sundayWeekStart(s.focusDate) };
+  if (s.zoom === "month") return { kind: "period", key: "M" + s.focusDate.slice(0, 7) };
+  if (s.zoom === "year") return { kind: "period", key: "Y" + s.focusDate.slice(0, 4) };
+  if (s.zoom === "decade") return { kind: "period", key: bucketKey(bucketStart(+s.focusDate.slice(0, 4))) };
+  if (s.zoom === "life") return { kind: "period", key: "LIFE" };
+  if (s.zoom === "category") return { kind: "period", key: catKey(s.category) };
+  if (s.zoom === "subject") return { kind: "period", key: subKey(s.category, s.subject) };
+  return null;
+}
+async function amendReport(selection, note, setStatus) {
+  const ref = currentNodeRef();
+  const noteT = (note || "").trim();
+  const sel = (selection || "").trim();
+  const text = (sel ? `In reference to "${sel}": ` : "") + noteT;
+  if (!ref || !noteT) { setStatus("Nothing to attach the note to here.", "error"); return; }
+  setStatus("Adding your note and re-summarizing…", "working");
+  try {
+    if (ref.kind === "day") {
+      const e = await getEntry(ref.date);
+      if (!e) throw new Error("entry not found");
+      const correction = (e.correction ? e.correction + "\n" : "") + text;
+      const next = { ...e, correction, updatedAt: Date.now() };
+      delete next.levels; delete next.prose; delete next.outline; delete next.brief; delete next.full;
+      await putEntry(next);
+    } else if (ref.kind === "mem") {
+      const m = allMemories.find((x) => x.id === ref.id);
+      if (!m) throw new Error("memory not found");
+      const correction = (m.correction ? m.correction + "\n" : "") + text;
+      const next = { ...m, correction, needsSummary: true, updatedAt: Date.now() };
+      delete next.levels; delete next.prose; delete next.outline;
+      await putMemory(next);
+    } else {
+      const p = (await getPeriod(ref.key)) || { key: ref.key };
+      const noteAll = (p.note ? p.note + "\n" : "") + text;
+      await putPeriod({ ...p, note: noteAll }); // hash now differs from inputHash → re-summarized with the note
+    }
+    setStatus("Re-summarizing — watch Activity…", "ok");
+    await reloadAndRender(); // re-summarize this node with the note, and roll the fix up every level
+  } catch (e) {
+    setStatus(`Couldn't apply: ${(e && e.message) || e}`, "error");
+  }
+}
+
+// The selection toolbar: a chip that appears when you select text on a node page, opening a small
+// panel to say what's wrong. Built once and reused; created lazily on the document body.
+function setupFixSelection() {
+  let sel = "";
+  const bar = document.createElement("button");
+  bar.id = "fixsel-bar"; bar.type = "button"; bar.hidden = true;
+  const panel = document.createElement("div");
+  panel.id = "fixsel-panel"; panel.hidden = true;
+  panel.innerHTML = `<div class="fixsel-card">
+      <h3 class="fixsel-title">Report a mistake</h3>
+      <p class="fixsel-quote"></p>
+      <textarea class="fixsel-note" rows="3" placeholder="What's wrong? e.g. “Zay is misspelled — it should be Ze, short for Jose.”"></textarea>
+      <div class="fixsel-actions"><button type="button" class="fixsel-cancel">Cancel</button><button type="button" class="fixsel-apply">Fix it</button></div>
+      <p class="fixsel-status"></p>
+    </div>`;
+  document.body.appendChild(bar);
+  document.body.appendChild(panel);
+  const quote = panel.querySelector(".fixsel-quote");
+  const noteEl = panel.querySelector(".fixsel-note");
+  const statusEl = panel.querySelector(".fixsel-status");
+  const setStatus = (msg, cls = "") => { statusEl.textContent = msg; statusEl.className = "fixsel-status" + (cls ? " " + cls : ""); };
+
+  document.addEventListener("selectionchange", () => {
+    if (!panel.hidden) return; // don't fight the open panel
+    const s = window.getSelection();
+    const text = s && s.toString().trim();
+    const anchor = s && s.anchorNode;
+    const inContent = anchor && els.root && els.root.contains(anchor.nodeType === 3 ? anchor.parentNode : anchor);
+    if (text && text.length >= 2 && inContent) {
+      sel = text;
+      bar.textContent = `✎ Fix “${text.length > 40 ? text.slice(0, 40) + "…" : text}”`;
+      bar.hidden = false;
+    } else {
+      bar.hidden = true;
+    }
+  });
+  bar.addEventListener("click", () => {
+    bar.hidden = true;
+    quote.textContent = `“${sel}”`;
+    noteEl.value = "";
+    setStatus("");
+    panel.hidden = false;
+    noteEl.focus();
+  });
+  const close = () => { panel.hidden = true; };
+  panel.querySelector(".fixsel-cancel").addEventListener("click", close);
+  panel.addEventListener("click", (e) => { if (e.target === panel) close(); });
+  panel.querySelector(".fixsel-apply").addEventListener("click", async () => {
+    const note = noteEl.value.trim();
+    if (!note) { noteEl.focus(); return; }
+    await amendReport(sel, note, setStatus);
+    if (statusEl.classList.contains("ok")) setTimeout(close, 1400);
+  });
 }
 
 // A "working on the summary" banner, shown while an item is still just verbatim. When a batch is
@@ -1115,7 +1270,13 @@ function makeGraphState(nodes, entryByDate, periodById) {
     if (n.type === "memory") return memChild(memOf(id));
     const p = periodById.get(n.key); return { date: n.label, brief: p && p.brief, full: p && p.full, levels: p && p.levels };
   };
-  const inputHash = (id) => hashBriefs(node(id).children.map((cid) => ({ date: cid, brief: briefOf(cid) })));
+  // The hash also folds in the node's own note, so attaching/editing a note marks it dirty and it
+  // re-summarizes honoring the note (a period's note lives on its stored record).
+  const inputHash = (id) => {
+    const n = node(id);
+    const note = n.key ? (periodById.get(n.key)?.note || "") : "";
+    return hashBriefs([...n.children.map((cid) => ({ date: cid, brief: briefOf(cid) })), { date: "__note__", brief: note }]);
+  };
   const isDirty = (id) => {
     const n = node(id);
     // A leaf needs (re)summarizing until it has a FULL summary — not just the cheap rungs — so a
@@ -1349,7 +1510,7 @@ async function runAutoPass() {
   for (const id of nodes.keys()) {
     if (!isDirty(id)) continue;
     const n = node(id);
-    const realCall = n.type === "day" || n.type === "memory" || n.children.length > 1;
+    const realCall = n.type === "day" || n.type === "memory" || n.children.length > 1 || !!(n.key && periodById.get(n.key)?.note);
     if (realCall) jobIds.set(id, logAdd(n.label, n.type));
   }
 
@@ -1394,7 +1555,7 @@ async function runAutoPass() {
     // A period with a single child is a pure copy-up (storePeriod makes no model call), so don't
     // announce it as "Summarizing", light it up, or force a full re-render — it's instant, and the
     // end-of-pass render covers it. Real work (day/memory leaves, multi-child rollups) still shows.
-    const copyUp = n.type !== "day" && n.type !== "memory" && n.children.length === 1;
+    const copyUp = n.type !== "day" && n.type !== "memory" && n.children.length === 1 && !(n.key && periodById.get(n.key)?.note);
     const jid = jobIds.get(id);
     if (!copyUp) { note(n.label, n.type); activeIds.add(id); publish(); logSet(jid, "running"); }
     try {
@@ -1490,13 +1651,15 @@ function rollupInput(children) {
 // Build one period from its children. Copy-up: a single child needs NO call — its levels
 // are the period's. Otherwise summarize the children's chosen level. Stores levels + legacy.
 async function storePeriod(key, type, label, children, hash) {
+  // Preserve any note the reader attached to this roll-up; fold it into the summary as a correction.
+  const note = (await getPeriod(key))?.note || "";
   let levels;
-  if (children.length === 1) {
-    levels = { ...childLevels(children[0]), rewrite: "" };
+  if (children.length === 1 && !note) {
+    levels = { ...childLevels(children[0]), rewrite: "" }; // copy-up (no note to apply, no call)
   } else {
-    levels = await nodeLevels(rollupInput(children), { type, label, isLeaf: false });
+    levels = await nodeLevels(rollupInput(children), { type, label, isLeaf: false, correction: note });
   }
-  await putPeriod({ key, type, label, hash, levels, ...legacyFromLevels(levels) });
+  await putPeriod({ key, type, label, hash, levels, note, ...legacyFromLevels(levels) });
 }
 
 
@@ -1516,6 +1679,7 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
     const d = e.target;
     if (d.classList && d.classList.contains("ol-node") && els.root.contains(d)) scheduleSaveOutline();
   }, true);
+  setupFixSelection(); // select text on a node page → "Fix this" → correct it at the source
   els.root.addEventListener("click", async (e) => {
     // Timeline bar → jump to that memory (works on decade/category/subject pages).
     const bar = e.target.closest(".mtl-bar[data-mem-id], .mtl-bar-label[data-mem-id]");
@@ -1543,6 +1707,13 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
       correctLeaf(body.querySelector(".correct-input").value.trim(), body.querySelector(".correct-status"));
       return;
     }
+    // Edit the verbatim transcript inline → swap the text for a textarea with Save / Cancel.
+    const veditBtn = e.target.closest(".verbatim-edit");
+    if (veditBtn) { beginVerbatimEdit(veditBtn.closest(".node-fold-body")); return; }
+    const vsave = e.target.closest(".verbatim-save");
+    if (vsave) { saveVerbatimEdit(vsave.closest(".node-fold-body")); return; }
+    const vcancel = e.target.closest(".verbatim-cancel");
+    if (vcancel) { render(); return; }
     // Generic element-link navigation (decade/year/month/week/day/category/subject/memory).
     const link = e.target.closest(".node-link");
     if (link) {
