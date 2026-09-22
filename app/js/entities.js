@@ -34,6 +34,24 @@ async function postEntities(text, known) {
   } finally { clearTimeout(timer); }
 }
 
+// Ask a scoped question about one entity, answered only from the entries that mention it.
+async function postChat(messages, entries) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const r = await fetch("/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...llmOverrides(), messages, entries, localTime: new Date().toLocaleString() }), signal: ctrl.signal,
+    });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `Server ${r.status}`); }
+    return await r.json();
+  } finally { clearTimeout(timer); }
+}
+function renderAnswerText(t) {
+  const esc = String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return "<p>" + esc.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>") + "</p>";
+}
+
 // A short date for a source item (day = its date; memory = its year range or label).
 function itemWhen(it) {
   if (it.kind === "journal" || it.date) return it.date;
@@ -207,11 +225,50 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           </div>
           <div id="ent-pstatus" class="ent-status" hidden></div>
         </div>
+
+        <div class="ent-ask">
+          <form class="ent-ask-form" id="ent-ask-form">
+            <input type="text" id="ent-ask-input" placeholder="Ask about ${escapeHtml(ent.canonical)} — “who is ${escapeHtml(ent.canonical)}?”, “when did we meet?”">
+            <button type="submit" class="ent-ask-btn">Ask</button>
+          </form>
+          <div id="ent-ask-answer" class="ent-ask-answer" hidden></div>
+        </div>
+
         <h3 class="ent-kind">${mentions.length} mention${mentions.length === 1 ? "" : "s"}, in time order</h3>
         <div class="ent-mentions">${rows || '<p class="ent-empty">No mentions tagged yet.</p>'}</div>
       </div>`;
 
     const pstatus = (msg, cls) => { const el = root.querySelector("#ent-pstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
+
+    // Ask about this entity — answered only from the entries that mention it.
+    root.querySelector("#ent-ask-form")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const input = root.querySelector("#ent-ask-input");
+      const ans = root.querySelector("#ent-ask-answer");
+      const q = input.value.trim();
+      if (!q) return;
+      ans.hidden = false;
+      ans.innerHTML = `<p class="ent-ask-working">◷ Reading ${escapeHtml(ent.canonical)}'s ${mentions.length} mention${mentions.length === 1 ? "" : "s"}…</p>`;
+      try {
+        const entries = mentions.map((s) => ({
+          date: s.date || `${s.startYear || ""}`, dayOfWeek: s.dayOfWeek || "",
+          brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "",
+        }));
+        const sys = `Answer only about "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}${ent.note ? `. Known background: ${ent.note}` : ""}. Use only the entries below, which are the ones mentioning them. Be concise and cite dates.`;
+        const { reply } = await postChat([{ role: "user", content: `${sys}\n\n${q}` }], entries);
+        ans.innerHTML = renderAnswerText(reply)
+          + `<button type="button" class="ent-ask-save" id="ent-ask-save">Save as background</button>`;
+        root.querySelector("#ent-ask-save")?.addEventListener("click", async () => {
+          const fresh = (await getEntity(id)) || ent;
+          await putEntity({ ...fresh, note: reply.slice(0, 2000), updatedAt: Date.now() });
+          const noteInput = root.querySelector("#ent-note"); if (noteInput) noteInput.value = reply.slice(0, 2000);
+          pstatus("Saved as background.", "ok");
+        });
+      } catch (err) {
+        ans.innerHTML = `<p class="ent-ask-err">Couldn't answer: ${escapeHtml((err && err.message) || String(err))}</p>`;
+      }
+    });
+
     root.querySelector("#ent-back").addEventListener("click", () => { openId = null; render(); });
     root.querySelector("#ent-save").addEventListener("click", async () => {
       const next = {

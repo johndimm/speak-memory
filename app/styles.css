@@ -1220,6 +1220,17 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-merge button, .ent-del { border: 1px solid var(--line); background: none; color: var(--ink-soft); font: inherit; font-size: 0.82rem; padding: 0.4rem 0.85rem; border-radius: 999px; cursor: pointer; }
 .ent-del { margin-left: auto; }
 .ent-del:hover { border-color: var(--accent-soft); color: #b3261e; }
+.ent-ask { margin: 1.2rem 0; }
+.ent-ask-form { display: flex; gap: 0.5rem; }
+#ent-ask-input { flex: 1; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 0.6rem 1rem; }
+#ent-ask-input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+.ent-ask-btn { border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600; padding: 0.6rem 1.2rem; border-radius: 999px; cursor: pointer; }
+.ent-ask-answer { margin-top: 0.8rem; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.8rem 1rem; line-height: 1.6; color: var(--ink); }
+.ent-ask-answer p { margin: 0 0 0.6rem; }
+.ent-ask-working { color: var(--ink-soft); }
+.ent-ask-err { color: #b3261e; }
+.ent-ask-save { border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 0.82rem; padding: 0.35rem 0.85rem; border-radius: 999px; cursor: pointer; margin-top: 0.3rem; }
+.ent-ask-save:hover { border-color: var(--accent-soft); color: var(--ink); }
 .ent-mentions { display: flex; flex-direction: column; gap: 2px; }
 .ent-mention { display: grid; grid-template-columns: 6rem 1fr; gap: 0.7rem; align-items: baseline; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.8rem; cursor: pointer; font: inherit; color: var(--ink); }
 .ent-mention:hover { border-color: var(--accent-soft); }
