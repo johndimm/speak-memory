@@ -1729,7 +1729,7 @@ async function storePeriod(key, type, label, children, hash) {
 }
 
 
-export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {}) {
+export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOpenEntity } = {}) {
   els = elements;
   onEditRequested = onEdit;
   onEditMemoryRequested = onEditMemory;
@@ -1737,6 +1737,11 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory } = {
   wireReps(els.detailFull);
   wireReps(els.root);
   if (els.periodSummary) wireReps(els.periodSummary);
+  // Tapping a name-link in any summary opens that entity's page (all its mentions, in time order).
+  const entityClick = (e) => { const a = e.target.closest(".ent-link[data-eid]"); if (a) { e.stopPropagation(); onOpenEntity?.(a.dataset.eid); } };
+  els.root.addEventListener("click", entityClick);
+  els.detailFull.addEventListener("click", entityClick);
+  if (els.periodSummary) els.periodSummary.addEventListener("click", entityClick);
   // Restore saved outline expansion whenever a node page (re)renders; save it when the reader
   // opens/closes an outline node (the `toggle` event doesn't bubble, so listen in the capture phase).
   // Also wire the per-node comment box's dictation mic once it (re)appears.

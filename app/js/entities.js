@@ -330,6 +330,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
   return {
     open() { render(); },
+    openEntity(id) { openId = id; renderEntity(id); }, // jump straight to one entity (from a name-link)
     close() { /* nothing to tear down */ },
   };
 }

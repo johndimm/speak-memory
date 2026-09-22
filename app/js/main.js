@@ -117,6 +117,7 @@ const calendar = initCalendar({
   onEdit: (date) => setMode("write", date), // Journal "Edit" opens the day in the Write editor
   onEditMemory: (mem) => setMode("write", mem), // edit a memory in the same Write form
   onAddMemory: (seed) => setMode("write", seed), // "Add another" → Write, pre-filled category/subject
+  onOpenEntity: (id) => { setMode("people"); people.openEntity(id); }, // tap a name in a summary → its page
 });
 
 const LAST_MODE_KEY = jkey("last-mode");

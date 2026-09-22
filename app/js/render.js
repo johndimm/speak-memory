@@ -21,10 +21,27 @@ export function setEntityMap(idToName) {
 // Match {{e:<id>|<Name>}} — and tolerate the model dropping the "e:" prefix ({{<id>|<Name>}}).
 // The id is restricted to token-safe chars so this never swallows ordinary braces in prose.
 const ENTITY_TOKEN = /\{\{(?:e:)?([A-Za-z0-9_:-]+)(?:\|([^{}]*))?\}\}/g;
+// Plain-text resolution (for textContent, tooltips): token → canonical name (or the fallback name).
 export function resolveEntityTokens(text) {
   const s = String(text ?? "");
   if (s.indexOf("{{") === -1) return s;
   return s.replace(ENTITY_TOKEN, (_, id, name) => entityMap.get(String(id).trim()) || (name || "").trim() || "");
+}
+// Link resolution (for rendered HTML): token → a tappable name that opens the entity's page. The
+// tokens survive escapeHtml (they contain no &<>"), so call this on already-escaped HTML. A known id
+// becomes a button; an unknown id falls back to plain text (no page to open).
+export function resolveEntityLinks(html) {
+  const s = String(html ?? "");
+  if (s.indexOf("{{") === -1) return s;
+  return s.replace(ENTITY_TOKEN, (_, id, name) => {
+    const key = String(id).trim();
+    const canonical = entityMap.get(key);
+    const label = escapeHtml(canonical || (name || "").trim() || "");
+    if (!label) return "";
+    return canonical
+      ? `<button type="button" class="ent-link" data-eid="${escapeHtml(key)}">${label}</button>`
+      : label;
+  });
 }
 
 export function isOutlineText(text) {
@@ -76,7 +93,7 @@ function parseOutline(raw) {
 // Outline where short leaf labels link (by data-ref) into the prose paragraphs. Paragraph leaves
 // already carry the detail, so they aren't linked.
 function renderOutlineLinked(text, proseParas) {
-  const raw = resolveEntityTokens(String(text).replace(/\r/g, ""));
+  const raw = String(text).replace(/\r/g, "");
   if (!isOutlineText(raw)) return renderFull(raw);
   let out = '<div class="outline">';
   for (const n of parseOutline(raw)) {
@@ -85,7 +102,7 @@ function renderOutlineLinked(text, proseParas) {
     const linked = ref >= 0 ? ` ol-linked" data-ref="${ref}` : "";
     out += `<div class="ol-item ol-l${n.level}${n.leaf ? " ol-leaf" : ""}${n.para ? " ol-para" : ""}${linked}">${escapeHtml(n.text)}</div>`;
   }
-  return out + "</div>";
+  return resolveEntityLinks(out + "</div>");
 }
 
 // Render an entry's representations: the first is shown, the rest fold away (on demand).
@@ -95,13 +112,13 @@ export function renderReps(reps, leadingHtml = "") {
   const present = order.filter((m) => reps?.[m]);
   if (present.length <= 1) return leadingHtml + renderFull(present.length ? reps[present[0]] : "");
 
-  const proseParas = proseParagraphs(resolveEntityTokens(reps.prose));
+  const proseParas = proseParagraphs(reps.prose);
   // Render each rep the same whether it's shown open or folded, so the outline→prose
   // links keep working regardless of order (prose paragraphs carry data-p indices).
   const bodyFor = (m) => {
-    if (m === "prose") return proseParas.map((p, idx) => `<p data-p="${idx}">${escapeHtml(p)}</p>`).join("");
+    if (m === "prose") return resolveEntityLinks(proseParas.map((p, idx) => `<p data-p="${idx}">${escapeHtml(p)}</p>`).join(""));
     if (m === "outline") return renderOutlineLinked(reps.outline, proseParas);
-    return renderFull(reps[m]);
+    return renderFull(reps[m]); // verbatim has no tokens; renderFull passes it through
   };
   let html = leadingHtml;
   present.forEach((m, i) => {
@@ -146,7 +163,7 @@ function outlineTree(nodes) {
 // A compressed, drill-down outline: the top-level nodes show right away, and any node with
 // children is a collapsible <details> you open to drill in. Leaves render as plain items.
 export function renderOutlineTree(text) {
-  const raw = resolveEntityTokens(String(text).replace(/\r/g, ""));
+  const raw = String(text).replace(/\r/g, "");
   if (!isOutlineText(raw)) return renderFull(raw);
   // `path` is a stable index chain ("0", "0.2", …) so a caller can save/restore which nodes are open.
   const render = (node, path) => {
@@ -155,18 +172,19 @@ export function renderOutlineTree(text) {
     return `<details class="ol-node" data-ol-key="${path}"><summary class="${cls} ol-branch">${escapeHtml(node.text)}</summary>`
       + `<div class="ol-children">${node.children.map((c, i) => render(c, path + "." + i)).join("")}</div></details>`;
   };
-  return `<div class="outline outline-tree">${outlineTree(parseOutline(raw)).map((n, i) => render(n, String(i))).join("")}</div>`;
+  return resolveEntityLinks(`<div class="outline outline-tree">${outlineTree(parseOutline(raw)).map((n, i) => render(n, String(i))).join("")}</div>`);
 }
 
 export function renderFull(text) {
-  const raw = resolveEntityTokens(String(text).replace(/\r/g, ""));
+  // Keep entity tokens through escaping, then turn them into tappable name-links at the end.
+  const raw = String(text).replace(/\r/g, "");
   if (!isOutlineText(raw)) {
-    return raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${escapeHtml(p)}</p>`).join("");
+    return resolveEntityLinks(raw.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean).map((p) => `<p>${escapeHtml(p)}</p>`).join(""));
   }
   let out = '<div class="outline">';
   for (const n of parseOutline(raw)) {
     if (n.kind === "text") out += `<div class="ol-text">${escapeHtml(n.text)}</div>`;
     else out += `<div class="ol-item ol-l${n.level}${n.leaf ? " ol-leaf" : ""}${n.para ? " ol-para" : ""}">${escapeHtml(n.text)}</div>`;
   }
-  return out + "</div>";
+  return resolveEntityLinks(out + "</div>");
 }
