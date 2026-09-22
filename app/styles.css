@@ -1238,6 +1238,12 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-merge button, .ent-del { border: 1px solid var(--line); background: none; color: var(--ink-soft); font: inherit; font-size: 0.82rem; padding: 0.4rem 0.85rem; border-radius: 999px; cursor: pointer; }
 .ent-del { margin-left: auto; }
 .ent-del:hover { border-color: var(--accent-soft); color: #b3261e; }
+.ent-summary { margin: 1rem 0; }
+.ent-summary-body { background: var(--paper-deep); border-radius: var(--radius); padding: 0.9rem 1.1rem; line-height: 1.6; color: var(--ink); }
+.ent-summary-body p { margin: 0 0 0.6rem; }
+.ent-summary-body p:last-child { margin-bottom: 0; }
+.ent-summary-refresh { border: none; background: none; color: var(--ink-soft); font: inherit; font-size: 0.8rem; cursor: pointer; margin-top: 0.4rem; }
+.ent-summary-refresh:hover { color: var(--accent); }
 .ent-ask { margin: 1.2rem 0; }
 .ent-ask-form { display: flex; gap: 0.5rem; }
 #ent-ask-input { flex: 1; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 0.6rem 1rem; }

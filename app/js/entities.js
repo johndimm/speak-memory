@@ -226,6 +226,12 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           <div id="ent-pstatus" class="ent-status" hidden></div>
         </div>
 
+        <div class="ent-summary" id="ent-summary">
+          ${ent.profile
+            ? `<div class="ent-summary-body">${renderAnswerText(ent.profile)}</div><button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`
+            : mentions.length ? `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>` : ""}
+        </div>
+
         <div class="ent-ask">
           <form class="ent-ask-form" id="ent-ask-form">
             <input type="text" id="ent-ask-input" placeholder="Ask about ${escapeHtml(ent.canonical)} — “who is ${escapeHtml(ent.canonical)}?”, “when did we meet?”">
@@ -239,6 +245,31 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       </div>`;
 
     const pstatus = (msg, cls) => { const el = root.querySelector("#ent-pstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
+
+    // Each name gets an LLM-written profile, generated from its mentions and cached on the entity.
+    const mentionEntries = () => mentions.map((s) => ({
+      date: s.date || `${s.startYear || ""}`, dayOfWeek: s.dayOfWeek || "",
+      brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "",
+    }));
+    async function genProfile() {
+      const box = root.querySelector("#ent-summary");
+      if (!box || !mentions.length) return;
+      box.innerHTML = `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>`;
+      try {
+        const sys = `Write a short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}${ent.note ? `. Known background: ${ent.note}` : ""}, based ONLY on the journal entries below that mention them. In 2–4 sentences, first person from the journal-keeper's view: who they are, the relationship, and how it changed over time. Mention years where useful. Don't invent anything not supported by the entries.`;
+        const { reply } = await postChat([{ role: "user", content: `${sys}\n\nWrite the profile now.` }], mentionEntries());
+        const fresh = (await getEntity(id)) || ent;
+        await putEntity({ ...fresh, profile: reply, profileAt: Date.now(), updatedAt: Date.now() });
+        ent.profile = reply;
+        box.innerHTML = `<div class="ent-summary-body">${renderAnswerText(reply)}</div><button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`;
+        root.querySelector("#ent-summary-refresh")?.addEventListener("click", genProfile);
+      } catch (err) {
+        box.innerHTML = `<p class="ent-ask-err">Couldn't write a profile: ${escapeHtml((err && err.message) || String(err))}</p><button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Try again</button>`;
+        root.querySelector("#ent-summary-refresh")?.addEventListener("click", genProfile);
+      }
+    }
+    root.querySelector("#ent-summary-refresh")?.addEventListener("click", genProfile);
+    if (!ent.profile && mentions.length) genProfile(); // auto-write on first open
 
     // Ask about this entity — answered only from the entries that mention it.
     root.querySelector("#ent-ask-form")?.addEventListener("submit", async (e) => {
