@@ -1226,6 +1226,9 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-card:hover { border-color: var(--accent-soft); }
 .ent-name { font-weight: 600; }
 .ent-aka { font-size: 0.78rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ent-flag { font-size: 0.74rem; color: #b3261e; white-space: nowrap; }
+.ent-card-flag { border-color: rgba(179, 38, 30, 0.4); }
+.ent-flag-banner { background: rgba(179, 38, 30, 0.1); border: 1px solid rgba(179, 38, 30, 0.4); color: #b3261e; border-radius: var(--radius); padding: 0.6rem 0.9rem; font-size: 0.9rem; margin: 0.5rem 0; }
 .ent-count { margin-left: auto; font-size: 0.8rem; color: var(--paper); background: var(--accent-soft); border-radius: 999px; padding: 0.05rem 0.5rem; min-width: 1.5rem; text-align: center; }
 .ent-back { border: none; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0.2rem 0; margin-bottom: 0.6rem; }
 .ent-profile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.2rem; display: flex; flex-direction: column; gap: 0.7rem; }

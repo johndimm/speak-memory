@@ -176,9 +176,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const sections = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => {
       const list = byKind.get(k).sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.canonical.localeCompare(b.canonical));
       const cards = list.map((e) => `
-        <button type="button" class="ent-card" data-open="${escapeHtml(e.id)}">
+        <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}" data-open="${escapeHtml(e.id)}">
           <span class="ent-name">${escapeHtml(e.canonical)}</span>
-          ${(e.aliases && e.aliases.length) ? `<span class="ent-aka">aka ${escapeHtml(e.aliases.join(", "))}</span>` : ""}
+          ${e.recognized === false ? `<span class="ent-flag">🕳 didn't recognize</span>` : (e.aliases && e.aliases.length) ? `<span class="ent-aka">aka ${escapeHtml(e.aliases.join(", "))}</span>` : ""}
           <span class="ent-count">${counts.get(e.id) || 0}</span>
         </button>`).join("");
       return `<h3 class="ent-kind">${KIND_LABEL[k] || k}s</h3><div class="ent-grid">${cards}</div>`;
@@ -237,6 +237,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         <button type="button" class="ent-back" id="ent-back">← All names</button>
         <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
         <p class="node-subtitle">${KIND_LABEL[ent.entityKind || "person"]}${(ent.aliases && ent.aliases.length) ? ` · also ${escapeHtml(ent.aliases.join(", "))}` : ""}</p>
+        ${ent.recognized === false ? `<p class="ent-flag-banner">🕳 You didn't recognize this name — a possible mistake or a memory hole. Add anything you can below, or it stays flagged.</p>` : ""}
 
         <!-- Profile paragraph at the top — written from the mentions PLUS your own notes below. -->
         <div class="node-summary ent-summary" id="ent-summary">
@@ -326,8 +327,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       pstatus("Saving & updating profile…", "working");
       const fresh = (await getEntity(id)) || ent;
       const note = (fresh.note ? fresh.note + "\n" : "") + text;
-      await putEntity({ ...fresh, note, updatedAt: Date.now() });
-      ent.note = note;
+      await putEntity({ ...fresh, note, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() }); // adding info clears a "didn't recognize" flag
+      ent.note = note; ent.recognized = true;
       ta.value = "";
       // Show the appended note immediately, then regenerate the profile from mentions + notes.
       const box = root.querySelector(".ent-note-existing");
@@ -524,23 +525,23 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     if (!IS_MOBILE && !SpeechRec) { alert("Voice interview needs speech recognition (try Chrome on desktop), or use it on your phone with the keyboard mic."); return; }
     const ents = await getAllEntities();
     if (!ents.length) return;
-    // Least-explained first: people/animals with no notes, then the rest.
-    const rank = (e) => (e.note ? 2 : 0) + (e.entityKind === "person" || e.entityKind === "animal" ? 0 : 1);
+    // Cover EVERY name: un-reviewed first (never seen in an interview), then no-notes, people first.
+    const rank = (e) => (e.reviewedAt ? 4 : 0) + (e.note ? 2 : 0) + (e.entityKind === "person" || e.entityKind === "animal" ? 0 : 1);
     const queue = [...ents].sort((a, b) => rank(a) - rank(b) || a.canonical.localeCompare(b.canonical));
     iv = { active: true, recog: null };
     renderInterview({ status: "Starting…" });
-    await speak("Let's quickly identify the people and animals in your journal. Just say who each one is. Say skip to move on, or stop to end.");
+    await speak("I'll go through the names one by one. Tell me who each one is, or say you don't know. Say stop to end.");
     const sources = await allSources();
+    // "I don't know / don't recognize this" — a short answer that's essentially not-knowing.
+    const isDontKnow = (t) => t.length < 60 && /\b(don'?t know|do not know|dont know|don'?t recognize|no idea|not sure|never heard|can'?t remember|cannot remember|doesn'?t ring|no clue|not a clue|who (is|are|'s)? ?(this|that|they|it))\b/i.test(t);
     for (const ent of queue) {
       if (!iv.active) break;
       const mentions = sources.filter((s) => Array.isArray(s.entityRefs) && s.entityRefs.includes(ent.id));
       const convo = [];
       renderInterview({ name: ent.canonical });
-      // Ask up to 2 turns per name: first an open free-talk invite, then at most one identifying
-      // follow-up if the model finds a basic fact still missing.
       for (let asked = 0; iv.active && asked < 2; asked++) {
         const q = asked === 0
-          ? `Tell me who ${ent.canonical} is.`
+          ? `Who is ${ent.canonical}?`
           : await getQuestion(ent, mentions, convo);
         if (!iv.active) break;
         if (!q || /^enough\b/i.test(q)) break;
@@ -550,15 +551,23 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         renderInterview({ name: ent.canonical, q, listening: true });
         const ans = await listenTurn();
         if (!iv.active || ans === "__stop__") { iv.active = false; break; }
-        if (ans === "__skip__" || !ans) { await speak("Okay — next."); break; }
+        if (ans === "__skip__" || !ans) { await speak("Okay — next."); break; } // skip: revisit later, no flag
+        // "Don't know" → FLAG this name (a mistake or a memory hole) for future reference; don't save as fact.
+        if (isDontKnow(ans)) {
+          const fresh = (await getEntity(ent.id)) || ent;
+          await putEntity({ ...fresh, recognized: false, reviewedAt: Date.now(), updatedAt: Date.now() });
+          renderInterview({ name: ent.canonical, q, a: "(didn't recognize — flagged)" });
+          await speak("Noted — I'll flag that one.");
+          break;
+        }
         convo.push({ q, a: ans });
         renderInterview({ name: ent.canonical, q, a: ans });
         const fresh = (await getEntity(ent.id)) || ent;
-        await putEntity({ ...fresh, note: (fresh.note ? fresh.note + "\n" : "") + ans, updatedAt: Date.now() });
+        await putEntity({ ...fresh, note: (fresh.note ? fresh.note + "\n" : "") + ans, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() });
       }
-      if (convo.length) { const box = document.getElementById("iv-saved"); if (box) box.textContent = `Saved ${convo.length} note${convo.length === 1 ? "" : "s"} to ${ent.canonical}.`; }
+      if (convo.length) { const box = document.getElementById("iv-saved"); if (box) box.textContent = `Saved to ${ent.canonical}.`; }
     }
-    if (iv.active) await speak("That's everyone for now. Thanks — I've saved your notes.");
+    if (iv.active) await speak("That's every name. Thanks — I've saved your notes and flagged the ones you didn't recognize.");
     endInterview();
   }
   function endInterview() {
