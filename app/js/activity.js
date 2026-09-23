@@ -36,19 +36,22 @@ export function initActivity(root, { onRetry } = {}) {
     // Active jobs first (running, then queued, then pending), then failures, then most-recent finished.
     const active = jobs.filter((j) => j.status === "running" || j.status === "queued" || j.status === "pending")
       .sort((a, b) => (ORDER[a.status] - ORDER[b.status]) || (a.addedAt - b.addedAt));
-    const finishedRows = jobs.filter((j) => j.status === "done" || j.status === "error" || j.status === "copy")
-      .slice(-60).reverse();
-
     const now = Date.now();
-    const row = (j) => {
+    // Finished items, MOST RECENTLY COMPLETED first (by end time, not add order).
+    const finishedRows = jobs.filter((j) => j.status === "done" || j.status === "error" || j.status === "copy")
+      .sort((a, b) => (b.endedAt || 0) - (a.endedAt || 0)).slice(0, 80);
+
+    const ago = (t) => { if (!t) return ""; const s = Math.round((now - t) / 1000); if (s < 5) return "just now"; if (s < 60) return `${s}s ago`; const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`; return `${Math.floor(m / 60)}h ago`; };
+    const row = (j, showAgo) => {
       const dur = j.status === "running" ? secs(now - (j.startedAt || now))
         : (j.status === "done" || j.status === "error" || j.status === "copy") ? secs(j.ms) : "";
+      const when = showAgo ? `<span class="act-ago">${ago(j.endedAt)}</span>` : "";
       return `<div class="act-row act-${j.status}">
         <span class="act-dot"></span>
         <span class="act-label">${escapeHtml(j.label || "(untitled)")}</span>
         <span class="act-kind">${escapeHtml(j.kind || "")}</span>
         <span class="act-state">${STATUS_LABEL[j.status] || j.status}${j.error ? ` — ${escapeHtml(j.error)}` : ""}</span>
-        <span class="act-dur">${dur}</span>
+        ${when}<span class="act-dur">${dur}</span>
       </div>`;
     };
 
@@ -77,8 +80,8 @@ export function initActivity(root, { onRetry } = {}) {
         ${total === 0
           ? `<p class="act-empty">Nothing summarizing right now. Open a journal or step into a future and the queue shows up here.</p>`
           : `
-            ${active.length ? `<h3 class="act-section">Now &amp; next</h3><div class="act-list">${active.map(row).join("")}</div>` : (anyActive ? "" : `<p class="act-empty">All caught up — nothing left to summarize.</p>`)}
-            ${finishedRows.length ? `<h3 class="act-section">Recently finished</h3><div class="act-list act-list-done">${finishedRows.map(row).join("")}</div>` : ""}
+            ${active.length ? `<h3 class="act-section">Now &amp; next</h3><div class="act-list">${active.map((j) => row(j, false)).join("")}</div>` : (anyActive ? "" : `<p class="act-empty">All caught up — nothing left to summarize.</p>`)}
+            ${finishedRows.length ? `<h3 class="act-section">Recently finished — newest first</h3><div class="act-list act-list-done">${finishedRows.map((j) => row(j, true)).join("")}</div>` : ""}
           `}
       </div>`;
 

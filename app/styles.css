@@ -799,9 +799,10 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .act-list { display: flex; flex-direction: column; gap: 2px; }
 .act-list-done { opacity: 0.85; }
 .act-row {
-  display: grid; grid-template-columns: 0.8rem 1fr auto auto auto; align-items: center; gap: 0.6rem;
+  display: grid; grid-template-columns: 0.8rem 1fr auto auto auto auto; align-items: center; gap: 0.6rem;
   padding: 0.5rem 0.75rem; border-radius: 10px; background: var(--card); border: 1px solid var(--line); font-size: 0.9rem;
 }
+.act-ago { font-size: 0.78rem; color: var(--ink-soft); white-space: nowrap; }
 .act-dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--line); }
 .act-running .act-dot { background: var(--accent); animation: act-pulse 1.1s ease-in-out infinite; }
 .act-queued .act-dot { background: var(--accent-soft); }
@@ -817,8 +818,8 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .act-dur { font-size: 0.78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 3rem; text-align: right; }
 .act-empty { color: var(--ink-soft); font-style: italic; margin-top: 1rem; }
 @media (max-width: 640px) {
-  .act-row { grid-template-columns: 0.7rem 1fr auto; }
-  .act-kind, .act-dur { display: none; }
+  .act-row { grid-template-columns: 0.7rem 1fr auto auto; }
+  .act-kind, .act-dur { display: none; } /* keep the state + "ago" columns */
 }
 
 /* ---- Unified node page (every level shares this) ---- */
