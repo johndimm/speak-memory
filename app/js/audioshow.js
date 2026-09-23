@@ -193,6 +193,8 @@ const CHARACTERS = [
     instructions: "Narrate as a relaxed, cool American movie star: unhurried easy drawl, understated charm, a little gravel, effortless." },
   { id: "horton", label: "Prim fairy-tale narrator (à la Edward Everett Horton)", voice: "fable",
     instructions: "Narrate as a prim, dry, amused elderly storyteller — precise and slightly fussy, gently arch, twinkling with mischief, savoring each word like a classic fractured-fairy-tale narrator." },
+  { id: "waits", label: "Gravel-and-whiskey growl (à la Tom Waits)", voice: "onyx",
+    instructions: "Narrate as a gravelly, growling, whiskey-and-cigarettes rasp: weathered and craggy, bluesy and low, gruff yet oddly tender and poetic, unhurried — a barroom storyteller at three in the morning." },
   { id: "narrator", label: "Cinematic documentary narrator", voice: "nova",
     instructions: "Narrate as a warm, cinematic documentary voice: intimate, resonant, and reflective, with graceful pacing." },
 ];
