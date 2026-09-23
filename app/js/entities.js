@@ -11,7 +11,7 @@
 import { getAllEntries, getAllMemories, putEntry, putMemory, getAllEntities, getEntity, putEntity, deleteEntity } from "./db.js";
 import { escapeHtml } from "./render.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
-import { setupDictation } from "./dictation.js";
+import { setupDictation, IS_MOBILE } from "./dictation.js";
 
 const SpeechRec = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 const KIND_LABEL = { person: "Person", animal: "Animal", place: "Place", org: "Organization", thing: "Thing" };
@@ -189,7 +189,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         <div class="ent-head">
           <h2 class="ent-title">People &amp; Animals</h2>
           <div class="act-actions">
-            ${(SpeechRec && entities.length) ? `<button type="button" class="ent-scan ent-interview-btn" id="ent-interview">🎙 Interview me</button>` : ""}
+            ${entities.length ? `<button type="button" class="ent-scan ent-interview-btn" id="ent-interview">🎙 Interview me</button>` : ""}
             <button type="button" class="ent-scan" id="ent-scan">${entities.length ? "Scan new entries" : "Scan entries"}</button>
           </div>
         </div>
@@ -463,9 +463,22 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   // browser's own silence cutoff, so pauses never end the turn. A turn ends only when: you go quiet
   // for a longer stretch after speaking (SIL_MS), or you tap Done / Skip / Stop.
   const SIL_MS = 7000;
-  function listenTurn() {
+  // Fallback when Web Speech isn't available (e.g. iOS Safari): a textarea you dictate into with the
+  // keyboard's own mic (or type), ended with Done. Web Speech (below) is used everywhere it exists.
+  function listenTurnMobile() {
     return new Promise((resolve) => {
-      if (!SpeechRec) return resolve("");
+      const box = document.getElementById("iv-input-wrap");
+      if (!box) return resolve("");
+      box.hidden = false;
+      box.innerHTML = `<textarea id="iv-input" class="node-comment-input" rows="3" placeholder="Tap here and use the mic on your keyboard, or type…"></textarea>`;
+      const ta = box.querySelector("#iv-input");
+      ta.focus();
+      iv.finishTurn = (result) => { iv.finishTurn = null; box.hidden = true; const v = box.querySelector("#iv-input"); resolve(result !== undefined ? result : (v ? v.value.trim() : "")); };
+    });
+  }
+  function listenTurn() {
+    if (!SpeechRec) return listenTurnMobile(); // no Web Speech at all → type/Gboard fallback
+    return new Promise((resolve) => {
       let full = "", stopped = false, r = null, silence = null;
       const done = (result) => {
         if (stopped) return; stopped = true;
@@ -487,9 +500,11 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           armSilence();
         };
         r.onerror = () => { /* no-speech/aborted → let onend restart */ };
-        r.onend = () => { if (!stopped) start(); }; // keep listening through the browser's silence cutoff
+        // Restart through the browser's silence cutoff (mobile ignores `continuous`, so this loop is
+        // what keeps it listening). A short delay avoids "already started" errors on rapid restarts.
+        r.onend = () => { if (!stopped) setTimeout(() => { if (!stopped) start(); }, 250); };
         iv.recog = r;
-        try { r.start(); } catch { done(full.trim()); }
+        try { r.start(); } catch { setTimeout(() => { if (!stopped) start(); }, 400); }
       };
       start();
     });
@@ -506,7 +521,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
   async function startInterview() {
     if (iv && iv.active) return;
-    if (!SpeechRec) { alert("Voice interview needs speech recognition (try Chrome on desktop)."); return; }
+    if (!IS_MOBILE && !SpeechRec) { alert("Voice interview needs speech recognition (try Chrome on desktop), or use it on your phone with the keyboard mic."); return; }
     const ents = await getAllEntities();
     if (!ents.length) return;
     // Least-explained first: people/animals with no notes, then the rest.
@@ -565,6 +580,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         <div class="iv-q" id="iv-q"></div>
         <div class="iv-interim" id="iv-interim"></div>
         <div class="iv-a" id="iv-a"></div>
+        <div class="iv-input-wrap" id="iv-input-wrap" hidden></div>
         <div class="iv-saved" id="iv-saved"></div>
         <div class="iv-actions">
           <button type="button" id="iv-done" class="iv-done">✓ Done</button>
@@ -572,7 +588,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           <button type="button" id="iv-stop">Stop</button>
         </div>
         <label class="iv-voice"><span>Voice</span> <select id="iv-voice-sel"></select></label>
-        <p class="iv-hint">Talk as long as you like — take pauses. Tap Done when finished, Skip for the next name, Stop to end.</p>
+        <p class="iv-hint">${SpeechRec
+          ? "Talk as long as you like — take pauses. Tap Done when finished, Skip for the next name, Stop to end."
+          : "Tap the answer box and use the mic on your keyboard, then tap Done. Skip for the next name, Stop to end."}</p>
       </div>`;
       document.body.appendChild(ov);
       // Done ends the current answer; Skip moves to the next name; Stop ends the interview.
