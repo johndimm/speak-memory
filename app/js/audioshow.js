@@ -109,7 +109,7 @@ export async function playFutureShow(meta = {}) {
   ov.querySelector("#show-close").addEventListener("click", cleanup);
   ov.addEventListener("click", (e) => { if (e.target === ov) cleanup(); });
 
-  const showText = (t) => { textEl.textContent = t; textEl.classList.remove("show-fade"); void textEl.offsetWidth; textEl.classList.add("show-fade"); };
+  const showText = (t) => { textEl.classList.remove("show-tap"); textEl.textContent = t; textEl.classList.remove("show-fade"); void textEl.offsetWidth; textEl.classList.add("show-fade"); };
 
   // ---- OpenAI voices (ChatGPT-quality), steered into characters ----------------------------
   const char = () => charById(savedChar());
@@ -169,6 +169,8 @@ export async function playFutureShow(meta = {}) {
     paused = !paused;
     if (paused) { pause(); toggle.textContent = "▶ Resume"; } else { toggle.textContent = "⏸ Pause"; resume(); }
   });
+  // Tapping the big text also starts it (the Play button can scroll out of view on a long paragraph).
+  textEl.addEventListener("click", () => { if (!started) startPlayback(); });
 
   // ---- Voice / character picker ------------------------------------------------------------
   function fillPicker() {
@@ -207,8 +209,9 @@ export async function playFutureShow(meta = {}) {
     // Probe/pre-fetch the first clip so the play tap can start it instantly and in-gesture.
     try { firstUrl = await getAudio(0); } catch { useBrowser = true; }
     fillPicker();
-    showText(paras[0]);
-    toggle.hidden = false; toggle.textContent = "▶ Play the reveal"; // a fresh tap starts audio (mobile-safe)
+    textEl.textContent = "▶  Tap here to play the reveal"; // a clear tap target; a fresh gesture starts audio (mobile-safe)
+    textEl.classList.add("show-tap");
+    toggle.hidden = false; toggle.textContent = "▶ Play the reveal";
   } catch (err) {
     if (!stopped) textEl.textContent = `Couldn't write the reveal: ${(err && err.message) || err}`;
   }
