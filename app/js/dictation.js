@@ -23,8 +23,12 @@ export function setupDictation(micBtn, textEl, status, refreshSave) {
 
   let recog = null; // the active recognition instance, or null when idle
 
-  const setIdle = () => { micBtn.classList.remove("listening"); micBtn.querySelector("span").textContent = "🎤 Dictate"; };
-  const setLive = () => { micBtn.classList.add("listening"); micBtn.querySelector("span").textContent = "⏹ Stop"; };
+  // Some mic buttons wrap their label in a <span> (Write); others are icon-only (the node comment
+  // and name-note boxes). Update the label only when there IS a span, so icon buttons don't crash —
+  // for those the .listening class alone signals the state.
+  const label = micBtn.querySelector("span");
+  const setIdle = () => { micBtn.classList.remove("listening"); if (label) label.textContent = "🎤 Dictate"; };
+  const setLive = () => { micBtn.classList.add("listening"); if (label) label.textContent = "⏹ Stop"; };
   const showError = (msg) => { if (status) { status.textContent = msg; status.className = "write-status error"; } };
 
   function beginSession() {

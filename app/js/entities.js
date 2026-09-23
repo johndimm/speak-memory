@@ -303,9 +303,12 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       box.innerHTML = `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>`;
       try {
         // Two inputs: MY notes about them (my own words) and the journal entries that mention them.
-        const sys = `Write a short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}. Draw on BOTH sources below: my own notes about them, and the journal entries that mention them. In 2–4 sentences, first person from my view: who they are, our relationship, and how it changed over time; mention years where useful. My notes are authoritative where they conflict with the entries. Don't invent anything the two sources don't support.`;
-        const notesBlock = ent.note ? `MY NOTES ABOUT ${ent.canonical}:\n${ent.note}\n\n` : "";
-        const { reply } = await postChat([{ role: "user", content: `${sys}\n\n${notesBlock}Write the profile now.` }], mentionEntries());
+        // The note is passed AS AN ENTRY so /api/chat treats it as source-of-truth (its system prompt
+        // forbids using anything not in the entries) — otherwise the note would be ignored.
+        const sys = `Write a short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}, using the entries below (they include "My notes about ${ent.canonical}" — my own authoritative words — and the journal entries that mention them). In 2–4 sentences, first person from my view: who they are, our relationship, and how it changed over time; mention years where useful. My notes win where they conflict with the journal.`;
+        const entries = mentionEntries();
+        if (ent.note) entries.unshift({ date: `My notes about ${ent.canonical}`, dayOfWeek: "", brief: "", full: ent.note });
+        const { reply } = await postChat([{ role: "user", content: `${sys}\n\nWrite the profile now.` }], entries);
         const fresh = (await getEntity(id)) || ent;
         await putEntity({ ...fresh, profile: reply, profileAt: Date.now(), updatedAt: Date.now() });
         ent.profile = reply;
@@ -354,7 +357,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           date: s.date || `${s.startYear || ""}`, dayOfWeek: s.dayOfWeek || "",
           brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "",
         }));
-        const sys = `Answer only about "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}${ent.note ? `. Known background: ${ent.note}` : ""}. Use only the entries below, which are the ones mentioning them. Be concise and cite dates.`;
+        if (ent.note) entries.unshift({ date: `My notes about ${ent.canonical}`, dayOfWeek: "", brief: "", full: ent.note });
+        const sys = `Answer only about "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}. Use only the entries below (they include "My notes about ${ent.canonical}", my own authoritative words, plus the journal entries mentioning them). Be concise and cite dates.`;
         const { reply } = await postChat([{ role: "user", content: `${sys}\n\n${q}` }], entries);
         ans.innerHTML = renderAnswerText(reply)
           + `<button type="button" class="ent-ask-save" id="ent-ask-save">Save as background</button>`;
