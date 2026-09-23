@@ -79,6 +79,18 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     return [...days, ...mems];
   }
 
+  // Remove a name entirely: drop its id from every entry's refs, then delete the entity record.
+  async function removeEntity(id) {
+    const sources = await allSources();
+    for (const s of sources) {
+      if (Array.isArray(s.entityRefs) && s.entityRefs.includes(id)) {
+        const refs = s.entityRefs.filter((x) => x !== id);
+        if (s.date) await putEntry({ ...s, entityRefs: refs }); else await putMemory({ ...s, entityRefs: refs });
+      }
+    }
+    await deleteEntity(id);
+  }
+
   // ---- Scan: tag every entry with the entities it names, resolving to the roster --------------
   async function scan(setStatus) {
     if (scanning) return;
@@ -176,11 +188,14 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const sections = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => {
       const list = byKind.get(k).sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.canonical.localeCompare(b.canonical));
       const cards = list.map((e) => `
-        <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}" data-open="${escapeHtml(e.id)}">
-          <span class="ent-name">${escapeHtml(e.canonical)}</span>
-          ${e.recognized === false ? `<span class="ent-flag">🕳 didn't recognize</span>` : (e.aliases && e.aliases.length) ? `<span class="ent-aka">aka ${escapeHtml(e.aliases.join(", "))}</span>` : ""}
-          <span class="ent-count">${counts.get(e.id) || 0}</span>
-        </button>`).join("");
+        <div class="ent-card-wrap">
+          <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}" data-open="${escapeHtml(e.id)}">
+            <span class="ent-name">${escapeHtml(e.canonical)}</span>
+            ${e.recognized === false ? `<span class="ent-flag">🕳 didn't recognize</span>` : (e.aliases && e.aliases.length) ? `<span class="ent-aka">aka ${escapeHtml(e.aliases.join(", "))}</span>` : ""}
+            <span class="ent-count">${counts.get(e.id) || 0}</span>
+          </button>
+          <button type="button" class="ent-card-del" data-del="${escapeHtml(e.id)}" title="Delete this name" aria-label="Delete">×</button>
+        </div>`).join("");
       return `<h3 class="ent-kind">${KIND_LABEL[k] || k}s</h3><div class="ent-grid">${cards}</div>`;
     }).join("");
 
@@ -386,13 +401,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       dstatus("Saved.", "ok");
     });
     root.querySelector("#ent-del")?.addEventListener("click", async () => {
-      if (!confirm(`Delete “${ent.canonical}”? Its mentions stay in the entries; only the identity is removed.`)) return;
-      // Drop this id from every entry's refs, then delete the entity.
-      for (const s of mentions) {
-        const refs = (s.entityRefs || []).filter((x) => x !== id);
-        if (s.date) await putEntry({ ...s, entityRefs: refs }); else await putMemory({ ...s, entityRefs: refs });
-      }
-      await deleteEntity(id);
+      if (!confirm(`Delete “${ent.canonical}”? Its mentions stay in the entries; only the name is removed.`)) return;
+      await removeEntity(id);
       openId = null; render();
     });
     root.querySelector("#ent-merge-btn")?.addEventListener("click", async () => {
@@ -625,7 +635,17 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   }
 
   // Delegated once on the stable root (survives re-renders): open an entity card, or jump to a mention.
-  root.addEventListener("click", (e) => {
+  root.addEventListener("click", async (e) => {
+    const del = e.target.closest(".ent-card-del[data-del]");
+    if (del) {
+      const idToDel = del.dataset.del;
+      const ent = await getEntity(idToDel);
+      if (ent && confirm(`Delete “${ent.canonical}”? Its mentions stay in the entries; only the name is removed.`)) {
+        await removeEntity(idToDel);
+        render();
+      }
+      return;
+    }
     const card = e.target.closest(".ent-card[data-open]");
     if (card) { openId = card.dataset.open; renderEntity(openId); return; }
     const m = e.target.closest(".ent-mention[data-goto]");

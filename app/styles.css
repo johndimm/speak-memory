@@ -1222,7 +1222,10 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-empty { color: var(--ink-soft); font-style: italic; margin-top: 1rem; }
 .ent-kind { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; color: var(--ink-soft); margin: 1.4rem 0 0.6rem; }
 .ent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; }
-.ent-card { display: flex; align-items: baseline; gap: 0.5rem; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 0.9rem; cursor: pointer; font: inherit; color: var(--ink); }
+.ent-card-wrap { position: relative; }
+.ent-card { display: flex; align-items: baseline; gap: 0.5rem; width: 100%; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 2rem 0.7rem 0.9rem; cursor: pointer; font: inherit; color: var(--ink); }
+.ent-card-del { position: absolute; top: 0.35rem; right: 0.35rem; width: 1.6rem; height: 1.6rem; line-height: 1; z-index: 2; border: none; border-radius: 50%; background: transparent; color: var(--ink-soft); font-size: 1.05rem; cursor: pointer; opacity: 0.45; }
+.ent-card-del:hover { opacity: 1; color: #b3261e; background: var(--paper-deep); }
 .ent-card:hover { border-color: var(--accent-soft); }
 .ent-name { font-weight: 600; }
 .ent-aka { font-size: 0.78rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
