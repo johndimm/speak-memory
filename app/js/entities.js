@@ -12,6 +12,7 @@ import { getAllEntries, getAllMemories, putEntry, putMemory, getAllEntities, get
 import { escapeHtml } from "./render.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
+import { resolveEntityNames, resetEntityIndex } from "./entityresolve.js";
 
 const SpeechRec = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 const KIND_LABEL = { person: "Person", animal: "Animal", place: "Place", org: "Organization", thing: "Thing" };
@@ -89,6 +90,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       }
     }
     await deleteEntity(id);
+    resetEntityIndex(); // roster changed — the pass's resolver cache must rebuild
   }
 
   // ---- Scan: tag every entry with the entities it names, resolving to the roster --------------
@@ -100,14 +102,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       let queue = sources.filter((s) => (s.raw || s.text) && !Array.isArray(s.entityRefs));
       if (!queue.length) { setStatus("Everything's already scanned. Re-scan anyway from an entry's page if a name looks off.", ""); return; }
 
-      // The client keeps the roster and resolves names by NORMALIZED match (no roster sent to the
-      // LLM — that wouldn't scale as the cast grows). A normalized index maps canonical + every alias
-      // to its entity; an extracted name that matches lands on that entity, otherwise a new one is
-      // created. Spelling variants that don't normalize-match become separate entities you can Merge.
-      let roster = await getAllEntities();
-      const byNorm = new Map();
-      const indexEnt = (e) => { for (const n of [e.canonical, ...(e.aliases || [])]) { const k = normName(n); if (k) byNorm.set(k, e); } };
-      roster.forEach(indexEnt);
+      // Resolution runs through the shared resolver (normalized name/alias match, new entities
+      // created as needed) — the same path the summarization pass uses, so no divergence or dupes.
+      resetEntityIndex();
+      const before = (await getAllEntities()).length;
       const total = queue.length;
       let found = 0;
 
@@ -117,19 +115,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         const jid = logAdd(label, "scan");
         logSet(jid, "running");
         const { mentions } = await postEntities(text); // LLM extracts names only
-        const refs = [];
-        for (const m of mentions) {
-          const key = normName(m.name);
-          if (!key) continue;
-          let ent = byNorm.get(key); // resolve in JS by normalized name/alias
-          if (!ent) {
-            ent = { id: uid(), entityKind: m.kind || "person", canonical: m.name.trim(), aliases: [], note: "", createdAt: Date.now(), updatedAt: Date.now() };
-            await putEntity(ent);
-            roster.push(ent); indexEnt(ent);
-            found++;
-          }
-          if (!refs.includes(ent.id)) refs.push(ent.id);
-        }
+        const refs = await resolveEntityNames(mentions);
         const next = { ...src, entityRefs: refs };
         if (src.date) await putEntry(next); else await putMemory(next);
         logSet(jid, "done");
@@ -139,7 +125,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       const btn = root.querySelector("#ent-scan");
       if (btn) btn.disabled = true;
       const tick = () => {
-        setStatus(`◷ Scanning… ${completed} of ${total} entries${found ? ` · ${found} new names` : ""} — watch it live in Activity`, "working");
+        setStatus(`◷ Scanning… ${completed} of ${total} entries — watch it live in Activity`, "working");
         if (btn) btn.textContent = `Scanning ${completed}/${total}…`;
       };
       tick();
@@ -161,6 +147,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker));
         queue = failures;
       }
+      found = (await getAllEntities()).length - before;
       if (queue.length) setStatus(`Scanned — ${queue.length} still failing (tap “Scan new entries” to retry). ${found} new name${found === 1 ? "" : "s"}.`, "error");
       else setStatus(`Done — ${found} new name${found === 1 ? "" : "s"} across ${total} entr${total === 1 ? "y" : "ies"}.`, "ok");
       render();
@@ -398,6 +385,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       };
       await putEntity(next);
       Object.assign(ent, next);
+      resetEntityIndex(); // name/aliases changed
       dstatus("Saved.", "ok");
     });
     root.querySelector("#ent-del")?.addEventListener("click", async () => {
@@ -427,6 +415,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       }
     }
     await deleteEntity(fromId);
+    resetEntityIndex(); // merged aliases/removed id
     openId = intoId;
     render();
   }

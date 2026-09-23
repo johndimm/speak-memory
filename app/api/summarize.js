@@ -63,9 +63,10 @@ CRITICAL for the "outline": do NOT explode one moment into a stack of short bull
   - The Seattle decision
     - We talked for a long time about whether she should take the Seattle offer. She's scared, mostly about leaving her mom, but I think she wants it — I told her she'd regret not trying more than trying.`;
 
-const LEVELS_SYSTEM = `You distill a piece of writing into a ladder of summaries — each level a little fuller than the one before — plus a nested outline, so a reader can zoom from a single word all the way down to the full text.
+const LEVELS_SYSTEM = `You distill a piece of writing into a ladder of summaries — each level a little fuller than the one before — plus a nested outline, so a reader can zoom from a single word all the way down to the full text. You ALSO extract the named individuals it refers to.
 Return ONLY valid JSON with these keys:
-{"word":"...","phrase":"...","sentence":"...","paragraph":"...","summary":"...","outline":"..."}
+{"word":"...","phrase":"...","sentence":"...","paragraph":"...","summary":"...","outline":"...","entities":[{"name":"...","kind":"person|animal|place|org|thing"}]}
+- entities: the named people and animals, and named places, organizations, or things that matter, mentioned in the text. Give each its clearest canonical name. Skip generic references ("my boss", "the dog") unless a name is given. Omit or use [] if none.
 - word: ONE evocative word for the whole.
 - phrase: 2–5 words.
 - sentence: a single sentence capturing the whole.
@@ -590,9 +591,13 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       // Full ladder (roll-ups): distilled rungs + complete summary + outline.
       const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + entitiesNote(body.entities) + PRESERVE_TOKENS_NOTE + styleDirective(style);
       const r = await callLLM(sys, user, style ? 0.8 : 0.4, ["word", "phrase", "sentence", "paragraph", "summary"], cfg);
+      const entities = Array.isArray(r.entities) ? r.entities.filter((x) => x && x.name).map((x) => ({
+        name: String(x.name).slice(0, 80),
+        kind: ["person", "animal", "place", "org", "thing"].includes(x.kind) ? x.kind : "person",
+      })) : [];
       res.status(200).json({
         word: s(r.word), phrase: s(r.phrase), sentence: s(r.sentence),
-        paragraph: s(r.paragraph), summary: structureFull(s(r.summary)), outline: s(r.outline),
+        paragraph: s(r.paragraph), summary: structureFull(s(r.summary)), outline: s(r.outline), entities,
       });
       return;
     }

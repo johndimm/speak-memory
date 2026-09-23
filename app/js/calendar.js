@@ -11,6 +11,7 @@ import { renderGraphSvg } from "./graph.js";
 import { jkey } from "./journal.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation } from "./dictation.js";
+import { resolveEntityNames } from "./entityresolve.js";
 
 const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -1616,15 +1617,18 @@ async function runAutoPass() {
   const processDay = async (id) => {
     const iso = node(id).iso, cd = journal.days[iso], e = entryByDate.get(iso);
     const lv = await sumDayLevels(iso, e.raw, e.correction || "", e.entityRefs);
-    const updated = withMode({ ...e, levels: lv, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline }, updatedAt: Date.now() }, "prose");
+    // NER rides along with the summary: resolve the named individuals to entity ids and tag the day.
+    const refs = (lv.entities && lv.entities.length) ? await resolveEntityNames(lv.entities) : (e.entityRefs || []);
+    const updated = withMode({ ...e, levels: lv, entityRefs: refs, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline }, updatedAt: Date.now() }, "prose");
     await putEntry(updated);
     entryByDate.set(iso, updated);
-    journal.days[iso] = { ...cd, brief: updated.brief, full: updated.full, mode: "prose", levels: lv, reps: repsOf(updated) };
+    journal.days[iso] = { ...cd, brief: updated.brief, full: updated.full, mode: "prose", levels: lv, reps: repsOf(updated), entityRefs: refs };
   };
   const processMemory = async (id) => {
     const m = memOf(id);
     const lv = await sumMemLevels(m);
-    const updated = { ...m, levels: lv, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline }, needsSummary: false };
+    const refs = (lv.entities && lv.entities.length) ? await resolveEntityNames(lv.entities) : (m.entityRefs || []);
+    const updated = { ...m, levels: lv, entityRefs: refs, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline }, needsSummary: false };
     await putMemory(updated);
     const i = allMemories.findIndex((x) => x.id === m.id);
     if (i >= 0) allMemories[i] = updated;
