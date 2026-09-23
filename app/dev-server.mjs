@@ -55,7 +55,7 @@ createServer(async (req, res) => {
 
   if (path.startsWith("/api/")) {
     const name = path.slice(5);
-    if (name === "summarize" || name === "chat" || name === "future") return runApi(name, req, res);
+    if (name === "summarize" || name === "chat" || name === "future" || name === "tts") return runApi(name, req, res);
     res.writeHead(404); return res.end("Not found");
   }
 

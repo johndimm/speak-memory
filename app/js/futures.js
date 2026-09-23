@@ -66,6 +66,7 @@ export function initFutures(root) {
             ${cardTag(f)}
           </span>
         </button>
+        ${statusOf(f) === "ready" ? `<button type="button" class="fut-card-reveal" data-reveal="${escapeHtml(f.id)}" title="Play the audio reveal">▶ Reveal</button>` : ""}
         <button type="button" class="fut-card-del" data-del="${escapeHtml(f.id)}" title="Delete this future" aria-label="Delete">×</button>
       </div>`).join("");
     return `
@@ -251,7 +252,21 @@ export function initFutures(root) {
   }
 
   // ---- clicks (delegated once on the stable root) ----------------------------------------
-  root.addEventListener("click", (e) => {
+  root.addEventListener("click", async (e) => {
+    const reveal = e.target.closest("[data-reveal]");
+    if (reveal) {
+      e.stopPropagation();
+      const id = reveal.dataset.reveal;
+      if (id === activeJournalId()) { // already inside it → play now
+        const { playFutureShow } = await import("./audioshow.js");
+        const f = getFuture(id) || {};
+        playFutureShow({ endYear: f.endYear, years: f.years, nudge: f.nudge });
+      } else { // step into it, then auto-play on load
+        try { sessionStorage.setItem("play-reveal", id); } catch { /* */ }
+        switchJournal(id);
+      }
+      return;
+    }
     const del = e.target.closest("[data-del]");
     if (del) {
       e.stopPropagation();

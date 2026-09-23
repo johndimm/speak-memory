@@ -198,6 +198,15 @@ let savedMode = (() => { try { return localStorage.getItem(LAST_MODE_KEY) || "";
 if (savedMode === "graph") { savedMode = "activity"; activitySub = "graph"; } // Graph moved inside Activity
 const VALID_MODES = new Set(["write", "browse", "timeline", "futures", "places", "people", "activity"]);
 
+// Stepping into a future via its "▶ Reveal" button asks to auto-play the audio show on load.
+try {
+  const playReveal = sessionStorage.getItem("play-reveal");
+  if (playReveal && playReveal === activeJournalId()) {
+    sessionStorage.removeItem("play-reveal");
+    import("./audioshow.js").then((m) => m.playFutureShow({})).catch(() => {});
+  }
+} catch { /* ignore */ }
+
 // A sample life is read-only: it never opens Write; the body class hides write/edit/delete (styles.css).
 if (isSampleJournal()) {
   document.body.classList.add("sample-journal");
