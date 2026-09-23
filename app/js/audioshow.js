@@ -3,6 +3,8 @@
 // browser's best voice, paragraph by paragraph, in a full-screen player. Fully hands-free once started.
 
 import { getAllEntries, getAllMemories } from "./db.js";
+import { jkey } from "./journal.js";
+import { IS_MOBILE } from "./dictation.js";
 
 function llmOverrides() {
   const provider = localStorage.getItem("llm-provider") || "";
@@ -68,6 +70,16 @@ Return ONLY the script text, paragraphs separated by blank lines.`;
   return String(reply || "").trim();
 }
 
+// The script is fixed once a future is generated, so write it once and cache it (per journal).
+const SCRIPT_KEY = () => jkey("reveal-script");
+async function getScript(meta, force) {
+  if (!force) { try { const c = JSON.parse(localStorage.getItem(SCRIPT_KEY()) || "null"); if (c && c.script) return c; } catch { /* */ } }
+  const script = await writeScript(meta); // writeScript fills meta.endYear from the days if absent
+  const out = { script, endYear: meta.endYear || "" };
+  try { localStorage.setItem(SCRIPT_KEY(), JSON.stringify(out)); } catch { /* */ }
+  return out;
+}
+
 export async function playFutureShow(meta = {}) {
   // Build the overlay immediately with a loading state.
   const ov = document.createElement("div");
@@ -87,9 +99,11 @@ export async function playFutureShow(meta = {}) {
   const voiceWrap = ov.querySelector(".show-voice");
   const voiceSel = ov.querySelector("#show-voice-sel");
 
-  let paras = [], idx = 0, stopped = false, paused = false;
+  let paras = [], idx = 0, stopped = false, paused = false, started = false;
   let useBrowser = false; // flips true if OpenAI TTS isn't available
+  let firstUrl = null;    // para-0 audio, pre-resolved so the play tap can start it synchronously (mobile)
   const audioEl = new Audio();
+  audioEl.setAttribute("playsinline", "");
   const objectUrls = [];
   const cleanup = () => { stopped = true; try { speechSynthesis.cancel(); } catch { /* */ } try { audioEl.pause(); } catch { /* */ } objectUrls.forEach((u) => URL.revokeObjectURL(u)); ov.remove(); };
   ov.querySelector("#show-close").addEventListener("click", cleanup);
@@ -135,8 +149,23 @@ export async function playFutureShow(meta = {}) {
   const resume = () => { if (useBrowser) { try { speechSynthesis.resume(); } catch { /* */ } } else audioEl.play().catch(() => {}); };
   const pause = () => { if (useBrowser) { try { speechSynthesis.pause(); } catch { /* */ } } else { try { audioEl.pause(); } catch { /* */ } } };
 
+  // Start from the top — called from the reader's PLAY TAP, so the first clip plays inside the
+  // gesture (mobile blocks audio started outside a tap → why it fell back to the bad browser voice).
+  async function startPlayback() {
+    started = true; paused = false; toggle.textContent = "⏸ Pause";
+    if (useBrowser) { speakBrowser(0); return; }
+    idx = 0; showText(paras[0]);
+    let url = firstUrl;
+    if (!url) { try { url = await getAudio(0); firstUrl = url; } catch { useBrowser = true; fillPicker(); speakBrowser(0); return; } }
+    objectUrls.push(url);
+    if (paras.length > 1) getAudio(1).catch(() => {});
+    audioEl.src = url;
+    audioEl.onended = () => { if (!stopped && !paused) playFrom(1); };
+    audioEl.play().catch(() => { useBrowser = true; fillPicker(); speakBrowser(0); });
+  }
+
   toggle.addEventListener("click", () => {
-    if (idx >= paras.length && !paused) { idx = 0; toggle.textContent = "⏸ Pause"; useBrowser ? speakBrowser(0) : playFrom(0); return; }
+    if (!started || (idx >= paras.length && !paused)) { startPlayback(); return; }
     paused = !paused;
     if (paused) { pause(); toggle.textContent = "▶ Resume"; } else { toggle.textContent = "⏸ Pause"; resume(); }
   });
@@ -154,24 +183,32 @@ export async function playFutureShow(meta = {}) {
   }
   voiceSel.addEventListener("change", () => {
     const val = voiceSel.value;
-    if (val.startsWith("c:")) { localStorage.setItem("tts-character", val.slice(2)); for (const k of Object.keys(prefetch)) delete prefetch[k]; } // new voice for upcoming paragraphs
-    else if (val.startsWith("b:")) localStorage.setItem("tts-voice", val.slice(2));
+    if (val.startsWith("c:")) {
+      localStorage.setItem("tts-character", val.slice(2));
+      for (const k of Object.keys(prefetch)) delete prefetch[k]; // drop clips fetched in the old voice
+      firstUrl = null;
+      if (started && !useBrowser) { paused = false; try { audioEl.pause(); } catch { /* */ } playFrom(idx); } // re-voice from the current paragraph NOW
+      else getAudio(0).then((u) => { firstUrl = u; }).catch(() => {}); // not playing yet → re-arm para 0
+    } else if (val.startsWith("b:")) {
+      localStorage.setItem("tts-voice", val.slice(2));
+      if (started && useBrowser) { paused = false; try { speechSynthesis.cancel(); } catch { /* */ } speakBrowser(idx); } // re-voice now
+    }
   });
   try { speechSynthesis.onvoiceschanged = () => { if (useBrowser) fillPicker(); }; } catch { /* */ }
 
   // ---- Go -----------------------------------------------------------------------------------
   try {
     await voicesReady().catch(() => {});
-    const script = await writeScript(meta);
+    const { script, endYear } = await getScript(meta); // written once, then cached per future
     if (stopped) return;
-    ov.querySelector(".show-year").textContent = meta.endYear || "";
+    ov.querySelector(".show-year").textContent = endYear || meta.endYear || "";
     paras = script.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
     if (!paras.length) { textEl.textContent = "Couldn't write the reveal — try again."; return; }
-    // Probe OpenAI TTS on the first paragraph; if unavailable, fall back to the browser voice.
-    try { await getAudio(0); } catch (e) { useBrowser = true; }
+    // Probe/pre-fetch the first clip so the play tap can start it instantly and in-gesture.
+    try { firstUrl = await getAudio(0); } catch { useBrowser = true; }
     fillPicker();
-    toggle.hidden = false; toggle.textContent = "⏸ Pause";
-    useBrowser ? speakBrowser(0) : playFrom(0);
+    showText(paras[0]);
+    toggle.hidden = false; toggle.textContent = "▶ Play the reveal"; // a fresh tap starts audio (mobile-safe)
   } catch (err) {
     if (!stopped) textEl.textContent = `Couldn't write the reveal: ${(err && err.message) || err}`;
   }
