@@ -459,28 +459,47 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       } catch { resolve(); }
     });
   }
-  function listenOnce() {
+  // Listen for a whole answer, however long. Recognition runs continuously and RESTARTS through the
+  // browser's own silence cutoff, so pauses never end the turn. A turn ends only when: you go quiet
+  // for a longer stretch after speaking (SIL_MS), or you tap Done / Skip / Stop.
+  const SIL_MS = 7000;
+  function listenTurn() {
     return new Promise((resolve) => {
       if (!SpeechRec) return resolve("");
-      const r = new SpeechRec(); r.lang = "en-US"; r.interimResults = true; r.maxAlternatives = 1;
-      let final = "", done = false;
-      const finish = () => { if (done) return; done = true; try { r.stop(); } catch { /* */ } resolve(final.trim()); };
-      r.onresult = (e) => {
-        final = "";
-        for (const res of e.results) if (res.isFinal) final += res[0].transcript;
-        const interim = [...e.results].map((x) => x[0].transcript).join(" ");
-        setInterview({ interim });
-        if ([...e.results].some((x) => x.isFinal)) finish();
+      let full = "", stopped = false, r = null, silence = null;
+      const done = (result) => {
+        if (stopped) return; stopped = true;
+        clearTimeout(silence); iv.finishTurn = null;
+        try { if (r) { r.onend = null; r.stop(); } } catch { /* */ }
+        resolve(result !== undefined ? result : full.trim());
       };
-      r.onerror = finish; r.onend = finish;
-      iv.recog = r;
-      try { r.start(); } catch { resolve(""); }
+      iv.finishTurn = done; // Done/Skip/Stop buttons call this
+      const armSilence = () => { clearTimeout(silence); silence = setTimeout(() => { if (full.trim()) done(full.trim()); }, SIL_MS); };
+      const start = () => {
+        r = new SpeechRec(); r.lang = "en-US"; r.interimResults = true; r.continuous = true;
+        r.onresult = (e) => {
+          let interim = "";
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const res = e.results[i];
+            if (res.isFinal) full += res[0].transcript + " "; else interim += res[0].transcript;
+          }
+          setInterview({ interim: (full + interim).trim() });
+          armSilence();
+        };
+        r.onerror = () => { /* no-speech/aborted → let onend restart */ };
+        r.onend = () => { if (!stopped) start(); }; // keep listening through the browser's silence cutoff
+        iv.recog = r;
+        try { r.start(); } catch { done(full.trim()); }
+      };
+      start();
     });
   }
   async function getQuestion(ent, mentions, convo) {
     const entries = mentions.map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
     const convoText = convo.map((c) => `Q: ${c.q}\nA: ${c.a}`).join("\n") || "(none yet)";
-    const sys = `You are interviewing me, by voice, to build a profile of "${ent.canonical}"${ent.note ? `. What I've said so far: ${ent.note}` : ""}. Below are the journal entries that mention them. Ask ONE short, warm, specific spoken question (one sentence) to learn the single most important thing still missing about who they are and our relationship. Do not repeat what's already known or asked. If the picture is already well-rounded, reply with exactly the word ENOUGH.\n\nConversation so far:\n${convoText}`;
+    // IDENTIFICATION only — who this is, how I know them, their role. NOT feelings or relationship
+    // depth (that richer interview can come later, from all input). Keep it factual and brief.
+    const sys = `You are helping me IDENTIFY "${ent.canonical}" — just establish who they are, plainly.${ent.note ? ` What I've said so far: ${ent.note}` : ""} Below are the journal entries that mention them. Ask ONE short spoken question (one sentence) to pin down a basic identifying fact still missing: who they are, how I know them, their role/relation, where they fit — NOT how I feel about them, not emotional or reflective questions. Don't repeat what's known or asked. If they're already identified, reply with exactly the word ENOUGH.\n\nConversation so far:\n${convoText}`;
     try { const { reply } = await postChat([{ role: "user", content: `${sys}\n\nYour next question (or ENOUGH):` }], entries); return (reply || "").trim(); }
     catch { return ""; }
   }
@@ -495,26 +514,28 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const queue = [...ents].sort((a, b) => rank(a) - rank(b) || a.canonical.localeCompare(b.canonical));
     iv = { active: true, recog: null };
     renderInterview({ status: "Starting…" });
-    await speak("Let's talk through the people and animals in your journal. Say skip to move on, or stop to end.");
+    await speak("Let's quickly identify the people and animals in your journal. Just say who each one is. Say skip to move on, or stop to end.");
     const sources = await allSources();
     for (const ent of queue) {
       if (!iv.active) break;
       const mentions = sources.filter((s) => Array.isArray(s.entityRefs) && s.entityRefs.includes(ent.id));
       const convo = [];
       renderInterview({ name: ent.canonical });
-      for (let asked = 0; iv.active && asked < 4; asked++) {
-        const q = await getQuestion(ent, mentions, convo);
+      // Ask up to 2 turns per name: first an open free-talk invite, then at most one identifying
+      // follow-up if the model finds a basic fact still missing.
+      for (let asked = 0; iv.active && asked < 2; asked++) {
+        const q = asked === 0
+          ? `Tell me who ${ent.canonical} is.`
+          : await getQuestion(ent, mentions, convo);
         if (!iv.active) break;
         if (!q || /^enough\b/i.test(q)) break;
         renderInterview({ name: ent.canonical, q });
         await speak(q);
         if (!iv.active) break;
         renderInterview({ name: ent.canonical, q, listening: true });
-        const ans = await listenOnce();
-        if (!iv.active) break;
-        const cmd = ans.toLowerCase();
-        if (/\b(stop|end|quit|i'm done|that's all)\b/.test(cmd)) { iv.active = false; break; }
-        if (!ans || /\b(skip|next|pass|move on|don't know|no idea)\b/.test(cmd)) { await speak("Okay — next."); break; }
+        const ans = await listenTurn();
+        if (!iv.active || ans === "__stop__") { iv.active = false; break; }
+        if (ans === "__skip__" || !ans) { await speak("Okay — next."); break; }
         convo.push({ q, a: ans });
         renderInterview({ name: ent.canonical, q, a: ans });
         const fresh = (await getEntity(ent.id)) || ent;
@@ -546,15 +567,18 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         <div class="iv-a" id="iv-a"></div>
         <div class="iv-saved" id="iv-saved"></div>
         <div class="iv-actions">
+          <button type="button" id="iv-done" class="iv-done">✓ Done</button>
           <button type="button" id="iv-skip">Skip ›</button>
           <button type="button" id="iv-stop">Stop</button>
         </div>
         <label class="iv-voice"><span>Voice</span> <select id="iv-voice-sel"></select></label>
-        <p class="iv-hint">Answer out loud. Say “skip” for the next name, “stop” to end.</p>
+        <p class="iv-hint">Talk as long as you like — take pauses. Tap Done when finished, Skip for the next name, Stop to end.</p>
       </div>`;
       document.body.appendChild(ov);
-      ov.querySelector("#iv-stop").addEventListener("click", () => { if (iv) iv.active = false; if (iv && iv.recog) { try { iv.recog.stop(); } catch { /* */ } } endInterview(); });
-      ov.querySelector("#iv-skip").addEventListener("click", () => { if (iv && iv.recog) { try { iv.recog.stop(); } catch { /* */ } } });
+      // Done ends the current answer; Skip moves to the next name; Stop ends the interview.
+      ov.querySelector("#iv-done").addEventListener("click", () => { if (iv && iv.finishTurn) iv.finishTurn(); });
+      ov.querySelector("#iv-skip").addEventListener("click", () => { if (iv && iv.finishTurn) iv.finishTurn("__skip__"); });
+      ov.querySelector("#iv-stop").addEventListener("click", () => { if (iv) { iv.active = false; if (iv.finishTurn) iv.finishTurn("__stop__"); else endInterview(); } });
       // Voice picker — populate from available English voices; remember the choice and preview it.
       const sel = ov.querySelector("#iv-voice-sel");
       const fill = () => {
