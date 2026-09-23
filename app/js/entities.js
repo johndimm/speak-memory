@@ -96,7 +96,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       const indexEnt = (e) => { for (const n of [e.canonical, ...(e.aliases || [])]) { const k = normName(n); if (k) byNorm.set(k, e); } };
       roster.forEach(indexEnt);
       const total = queue.length;
-      let done = 0, found = 0;
+      let found = 0;
 
       const scanOne = async (src) => {
         const text = src.raw || src.text || "";
@@ -122,22 +122,34 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         logSet(jid, "done");
       };
 
-      // Up to 3 passes: flaky calls (occasional malformed JSON) are retried automatically so a scan
-      // finishes clean instead of leaving a handful failed. A source that fails all passes is left
-      // untagged, so a later "Scan new entries" still picks it up.
+      let completed = 0;
+      const btn = root.querySelector("#ent-scan");
+      if (btn) btn.disabled = true;
+      const tick = () => {
+        setStatus(`◷ Scanning… ${completed} of ${total} entries${found ? ` · ${found} new names` : ""} — watch it live in Activity`, "working");
+        if (btn) btn.textContent = `Scanning ${completed}/${total}…`;
+      };
+      tick();
+
+      // Run several at once (the calls are slow), retrying flaky failures up to 3 passes. A source
+      // that fails every pass stays untagged so a later "Scan new entries" picks it up.
+      const CONCURRENCY = 4;
       for (let pass = 0; pass < 3 && queue.length; pass++) {
         const failures = [];
-        for (const src of queue) {
-          try { await scanOne(src); }
-          catch { failures.push(src); }
-          done++;
-          setStatus(`Scanning… ${Math.min(done, total)} of ${total}${found ? ` · ${found} new` : ""}${failures.length ? ` · retrying ${failures.length}` : ""}`, "working");
-        }
+        let i = 0;
+        const worker = async () => {
+          while (i < queue.length) {
+            const src = queue[i++];
+            try { await scanOne(src); } catch { failures.push(src); }
+            completed++;
+            tick();
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker));
         queue = failures;
-        done = total - queue.length; // reflect what's actually landed before a retry pass
       }
-      if (queue.length) setStatus(`Scanned with ${queue.length} still failing — tap “Scan new entries” to retry them.`, "error");
-      else setStatus(`Done — ${found} new individual${found === 1 ? "" : "s"} across ${total} entr${total === 1 ? "y" : "ies"}.`, "ok");
+      if (queue.length) setStatus(`Scanned — ${queue.length} still failing (tap “Scan new entries” to retry). ${found} new name${found === 1 ? "" : "s"}.`, "error");
+      else setStatus(`Done — ${found} new name${found === 1 ? "" : "s"} across ${total} entr${total === 1 ? "y" : "ies"}.`, "ok");
       render();
     } finally { scanning = false; }
   }
