@@ -11,7 +11,7 @@
 // and status live on the journals registry (journal.js); nothing is copied into localStorage and
 // nothing lands in your real journal's store.
 
-import { getAllEntries, seedJournal } from "./db.js";
+import { getAllEntries, getAllEntities, seedJournal } from "./db.js";
 import { escapeHtml } from "./render.js";
 import {
   dbNameFor, switchJournal, listJournals, registerJournal, journalExists,
@@ -218,7 +218,10 @@ export function initFutures(root) {
         category: s.category || "Life", subject: s.subject || "", label: s.subject || "",
         startYear: s.startYear, endYear: s.endYear, text: s.text || s.subject || "",
       })) : [];
-      await seedJournal(dbNameFor(id), { entries: data.days.map((d) => ({ date: d.date, text: d.raw })), memories });
+      // Start the future knowing your real cast; imagined new names stay in the future's own DB.
+      let entities = [];
+      try { entities = await getAllEntities(); } catch { entities = []; }
+      await seedJournal(dbNameFor(id), { entries: data.days.map((d) => ({ date: d.date, text: d.raw })), memories, entities });
       localStorage.setItem(jkey("journal-title", id), (getFuture(id) || {}).title || `${data.endYear}`);
       localStorage.setItem(jkey("year-grouping", id), "calendar");
       finish({ status: "ready", days: data.days.length });

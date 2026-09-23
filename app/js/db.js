@@ -77,7 +77,7 @@ function migrateToItems(db) {
 // Populate a DIFFERENT journal's database (a freshly-generated sample life) without switching to
 // it. Opens the named database, creates the same stores, and writes generated entries + memories
 // straight into `items`; the normal background pass summarizes them once that journal is opened.
-export function seedJournal(dbName, { entries = [], memories = [] }) {
+export function seedJournal(dbName, { entries = [], memories = [], entities = [] }) {
   const DOW = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "m" + Date.now() + Math.random().toString(36).slice(2));
   return new Promise((resolve, reject) => {
@@ -104,6 +104,12 @@ export function seedJournal(dbName, { entries = [], memories = [] }) {
       for (const m of memories) {
         if (!m || !m.text) continue;
         s.put({ ...m, id: uid(), kind: "memory", needsSummary: true, createdAt: now, updatedAt: now });
+      }
+      // Seed the base cast (people/animals/places) so a future starts knowing them; imagined new
+      // names get created into this future's own DB only, never back into the base (separate DBs).
+      for (const en of entities) {
+        if (!en || !en.id || !en.canonical) continue;
+        s.put({ ...en, kind: "entity" });
       }
       t.oncomplete = () => { db.close(); resolve(); };
       t.onerror = () => reject(t.error);
