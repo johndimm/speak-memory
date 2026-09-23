@@ -526,10 +526,21 @@ function navDown(zoom, focusDate) {
   render();
 }
 
+// True while the reader is typing in an editable field on the node page — so a background
+// re-render (from the summarization pass) can't wipe the box out from under them.
+function isEditingNodeField() {
+  const a = document.activeElement;
+  return a && els.root.contains(a) && a.matches(".node-comment-input, .verbatim-input, .correct-input");
+}
+let pendingRender = false;
+
 // Image URLs already shown on the current page — reset each render so no picture repeats within
 // one page (e.g. several memories that fall back to the same portrait).
 let shownImages = new Set();
 function render() {
+  // Don't rebuild the page while the reader is mid-edit — defer until they leave the field.
+  if (isEditingNodeField()) { pendingRender = true; return; }
+  pendingRender = false;
   shownImages = new Set();
   savePos(); // remember this page so a reload returns here
   renderBreadcrumb();
@@ -1768,6 +1779,10 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
     if (d.classList && d.classList.contains("ol-node") && els.root.contains(d)) scheduleSaveOutline();
   }, true);
   setupFixSelection(); // select text on a node page → "Fix this" → correct it at the source
+  // When the reader leaves an edit field, run any render that the summarization pass deferred.
+  els.root.addEventListener("focusout", () => {
+    setTimeout(() => { if (pendingRender && !isEditingNodeField()) render(); }, 0);
+  });
   els.root.addEventListener("click", async (e) => {
     // Timeline bar → jump to that memory (works on decade/category/subject pages).
     const bar = e.target.closest(".mtl-bar[data-mem-id], .mtl-bar-label[data-mem-id]");
