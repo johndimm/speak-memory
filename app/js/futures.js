@@ -91,7 +91,10 @@ export function initFutures(root) {
         ${inFuture ? `
           <div class="fut-inbanner">
             <span>You're living in an imagined future. This isn't your real journal.</span>
-            <button type="button" class="fut-back" id="fut-back">← Back to your real journal</button>
+            <span class="fut-inbanner-btns">
+              <button type="button" class="fut-reveal" id="fut-reveal">▶ Play the reveal</button>
+              <button type="button" class="fut-back" id="fut-back">← Back to your real journal</button>
+            </span>
           </div>` : ""}
 
         <div class="fut-compose">
@@ -137,6 +140,11 @@ export function initFutures(root) {
     });
     root.querySelector("#fut-go")?.addEventListener("click", () => startFuture(nudge.value, composeYears, composeCount));
     root.querySelector("#fut-back")?.addEventListener("click", () => switchJournal(""));
+    root.querySelector("#fut-reveal")?.addEventListener("click", async () => {
+      const f = getFuture(activeJournalId()) || {};
+      const { playFutureShow } = await import("./audioshow.js");
+      playFutureShow({ endYear: f.endYear, years: f.years, nudge: f.nudge });
+    });
   }
 
   function setStatus(cls, msg) {

@@ -1181,10 +1181,30 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
   background: var(--paper-deep); border: 1px solid var(--accent-soft); border-radius: var(--radius);
   padding: 0.7rem 1rem; margin-bottom: 1.4rem; color: var(--ink-soft); font-size: 0.9rem;
 }
+.fut-inbanner-btns { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; }
 .fut-back {
   border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600;
   padding: 0.45rem 1rem; border-radius: 999px; cursor: pointer; flex-shrink: 0;
 }
+.fut-reveal {
+  border: 1px solid var(--accent); background: var(--card); color: var(--accent); font: inherit; font-weight: 600;
+  padding: 0.45rem 1rem; border-radius: 999px; cursor: pointer; flex-shrink: 0;
+}
+.fut-reveal:hover { background: var(--accent); color: #fff; }
+
+/* The reveal — a full-screen audio-show player */
+.show-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+  background: radial-gradient(120% 120% at 50% 0%, #2a2119 0%, #17120d 70%); }
+.show-stage { max-width: 40rem; width: 100%; text-align: center; color: #f4efe6; }
+.show-year { font-family: var(--font-display); font-size: clamp(3rem, 12vw, 6rem); line-height: 1; color: var(--accent-soft); opacity: 0.9; }
+.show-text { font-family: var(--font-display); font-size: clamp(1.4rem, 4.5vw, 2.1rem); line-height: 1.4; margin: 1.6rem auto 2rem; min-height: 6em; max-width: 34rem; }
+.show-fade { animation: show-in 0.6s ease; }
+@keyframes show-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.show-controls { display: flex; gap: 0.8rem; justify-content: center; }
+.show-controls button { font: inherit; border-radius: 999px; padding: 0.55rem 1.4rem; cursor: pointer; border: 1px solid rgba(244,239,230,0.35); background: transparent; color: #f4efe6; }
+.show-controls #show-toggle { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.show-voice { display: inline-flex; align-items: center; gap: 0.5rem; justify-content: center; margin-top: 1.2rem; font-size: 0.8rem; color: rgba(244,239,230,0.7); }
+.show-voice select { font: inherit; font-size: 0.8rem; color: #f4efe6; background: rgba(255,255,255,0.08); border: 1px solid rgba(244,239,230,0.25); border-radius: 8px; padding: 0.3rem 0.5rem; max-width: 12rem; }
 
 /* Composer */
 .fut-title { font-family: var(--font-display); font-size: 2rem; font-weight: 400; margin: 0 0 0.3rem; }
