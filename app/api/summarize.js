@@ -167,6 +167,9 @@ function outlineDirective() {
 
 const FIRST_PERSON_NOTE = `\n\nPERSON — Write the prose ("brief" and "full") in the FIRST PERSON, as the person whose journal this is ("I went…", "I felt…", "I decided…"). Never refer to them as "the speaker", "the writer", or "the author".`;
 
+// Roll-ups summarize their children's summaries, which already carry {{e:id|Name}} tokens — keep them.
+const PRESERVE_TOKENS_NOTE = `\n\nENTITY TOKENS — The input may contain references of the form {{e:<id>|<Name>}}. Keep any such token EXACTLY as written wherever you refer to that individual (in every output field); never rewrite it to a plain name or change its id.`;
+
 // When known entities are supplied, tell the model to write references to them as {{e:id|Name}}
 // tokens (so a later rename/merge updates every summary at render time, with no re-summarization).
 function entitiesNote(entities) {
@@ -585,7 +588,7 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
         return;
       }
       // Full ladder (roll-ups): distilled rungs + complete summary + outline.
-      const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + entitiesNote(body.entities) + styleDirective(style);
+      const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + entitiesNote(body.entities) + PRESERVE_TOKENS_NOTE + styleDirective(style);
       const r = await callLLM(sys, user, style ? 0.8 : 0.4, ["word", "phrase", "sentence", "paragraph", "summary"], cfg);
       res.status(200).json({
         word: s(r.word), phrase: s(r.phrase), sentence: s(r.sentence),
@@ -605,7 +608,7 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       const correctionNote = correction
         ? `\n\nCORRECTION — The reader flagged a previous summary as wrong. Apply and honor this correction: ${String(correction).slice(0, 1000)}`
         : "";
-      const sys = DETAIL_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + entitiesNote(body.entities) + styleDirective(style);
+      const sys = DETAIL_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + entitiesNote(body.entities) + PRESERVE_TOKENS_NOTE + styleDirective(style);
       const ctx = `Context: ${type}${label ? ` — ${label}` : ""}${date ? `, ${date}` : ""}${localTime ? ` (written ${localTime})` : ""}.`;
       const r = await callLLM(sys, `${ctx}\n\nText:\n\n${String(text).slice(0, 16000)}`, style ? 0.8 : 0.4, ["summary", "outline"], cfg);
       const s = (v) => (typeof v === "string" ? v.trim() : "");
@@ -619,21 +622,15 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
     if (mode === "entities") {
       const text = String(body.text || "").trim();
       if (!text) { res.status(200).json({ mentions: [] }); return; }
-      const known = Array.isArray(body.known) ? body.known.slice(0, 400) : [];
-      const roster = known.length
-        ? known.map((e) => `- id=${e.id} [${e.kind || "person"}] ${e.canonical}${(e.aliases && e.aliases.length) ? " (aka " + e.aliases.join(", ") + ")" : ""}`).join("\n")
-        : "(none yet)";
+      // Constant-size prompt — NO roster (that doesn't scale as the cast grows). Just extract the
+      // named individuals; the client resolves them to existing entities by normalized match.
       const sys = `You extract the named INDIVIDUALS a journal entry refers to: people and animals by name, and named places, organizations, or things that matter to this life. Skip generic references ("my boss", "the dog") unless a name is given. Resolve pronouns only when the name is unambiguous in the entry.
-For EACH distinct individual mentioned, decide if it matches one already known (below), tolerating spelling variants and transcription errors (e.g. "Zay"/"Zey" = "Ze"), nicknames, and aka names. Return the matching id if so; otherwise mark it new.
-KNOWN ENTITIES:
-${roster}
-Return ONLY valid JSON: {"mentions":[{"id":"<known id or empty>","name":"<name as best canonicalized>","kind":"person|animal|place|org|thing","isNew":true|false}]}. Use the KNOWN id and its exact canonical spelling when it matches; set isNew=true and id="" only when it is genuinely not in the list. Do not invent ids. Escape double quotes with a backslash.`;
+Give each individual its clearest canonical name as written in the entry.
+Return ONLY valid JSON: {"mentions":[{"name":"<name>","kind":"person|animal|place|org|thing"}]}. Escape double quotes with a backslash.`;
       const r = await callJsonObject(sys, `Entry:\n\n${text.slice(0, 12000)}`, 0.2, cfg);
       const mentions = Array.isArray(r.mentions) ? r.mentions.filter((m) => m && m.name).map((m) => ({
-        id: typeof m.id === "string" ? m.id : "",
         name: String(m.name).slice(0, 80),
         kind: ["person", "animal", "place", "org", "thing"].includes(m.kind) ? m.kind : "person",
-        isNew: !!m.isNew && !m.id,
       })) : [];
       res.status(200).json({ mentions });
       return;

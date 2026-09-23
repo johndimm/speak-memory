@@ -31,7 +31,13 @@ export function restoreJournalPos() {
   return false;
 }
 let journal = { days: {}, dateRange: null };
-let entityRoster = []; // [{id, canonical, aliases, kind}] — passed to summarization so it emits tokens
+let entityRoster = []; // [{id, canonical, aliases, kind, note}] — full cast (kept in memory)
+let entityById = new Map(); // id → roster entry, for scoping a leaf's summary to just its own names
+// The entities a specific leaf mentions (from its entityRefs) — a small, bounded set, so the
+// summarization prompt never carries the whole (growing) cast.
+function rosterFor(refs) {
+  return (Array.isArray(refs) ? refs : []).map((id) => entityById.get(id)).filter(Boolean);
+}
 let objectUrls = [];
 let els = {};
 let detailIso = null;        // day currently open in the panel
@@ -109,7 +115,8 @@ async function load() {
     const ents = await getAllEntities();
     setEntityMap(new Map(ents.map((e) => [e.id, e.canonical])));
     entityRoster = ents.map((e) => ({ id: e.id, canonical: e.canonical, aliases: e.aliases || [], kind: e.entityKind || "person", note: e.note || "" }));
-  } catch { entityRoster = []; }
+    entityById = new Map(entityRoster.map((e) => [e.id, e]));
+  } catch { entityRoster = []; entityById = new Map(); }
   const entries = await getAllEntries();
   const days = {};
   for (const e of entries) {
@@ -124,7 +131,7 @@ async function load() {
     const mode = e.mode || (e.summarized === false ? "verbatim" : (isOutlineText(e.full || "") ? "outline" : "prose"));
     days[e.date] = {
       brief: e.brief, full: e.full, dayOfWeek: e.dayOfWeek, summarized: e.summarized !== false,
-      mode, modes: availableModes(e), reps: repsOf(e), images, levels: e.levels,
+      mode, modes: availableModes(e), reps: repsOf(e), images, levels: e.levels, entityRefs: e.entityRefs || [],
     };
   }
   const dates = Object.keys(days).sort();
@@ -811,6 +818,7 @@ let lazyBusy = false;
 function makeDayLeaf(day, iso) {
   return {
     ctx: { type: "day", label: iso, date: iso },
+    refs: day.entityRefs || [],
     correction: day.correction || "",
     getRaw: async () => (day.reps && day.reps.verbatim) || (await getEntry(iso))?.raw || "",
     applyLevels: async (patch, correction) => {
@@ -830,6 +838,7 @@ function makeDayLeaf(day, iso) {
 function makeMemoryLeaf(m) {
   return {
     ctx: { type: "memory", label: m.label || String(m.startYear || ""), subject: m.subject || "", date: `${m.startYear || 2000}-01-01` },
+    refs: m.entityRefs || [],
     correction: m.correction || "",
     getRaw: async () => m.text || "",
     applyLevels: async (patch, correction) => {
@@ -869,7 +878,7 @@ async function generateLeafDetail() {
       return;
     }
     const style = localStorage.getItem("summary-style") || "";
-    const d = await postSummarize({ mode: "detail", text: raw, style, correction: lazyLeaf.correction, entities: entityRoster, ...lazyLeaf.ctx });
+    const d = await postSummarize({ mode: "detail", text: raw, style, correction: lazyLeaf.correction, entities: rosterFor(lazyLeaf.refs), ...lazyLeaf.ctx });
     await lazyLeaf.applyLevels({ summary: d.summary || "", outline: d.outline || "" });
     if (sBody) sBody.innerHTML = renderFull(d.summary || "");
     if (oBody) oBody.innerHTML = renderOutlineTree(d.outline || ""); // collapsed tree at the bottom
@@ -1595,7 +1604,7 @@ async function runAutoPass() {
   // ---- Process one node --------------------------------------------------------------------
   const processDay = async (id) => {
     const iso = node(id).iso, cd = journal.days[iso], e = entryByDate.get(iso);
-    const lv = await sumDayLevels(iso, e.raw, e.correction || "");
+    const lv = await sumDayLevels(iso, e.raw, e.correction || "", e.entityRefs);
     const updated = withMode({ ...e, levels: lv, prose: { brief: lv.sentence, full: lv.summary }, outline: { brief: "", full: lv.outline }, updatedAt: Date.now() }, "prose");
     await putEntry(updated);
     entryByDate.set(iso, updated);
@@ -1672,8 +1681,9 @@ async function reloadAndRender() {
 // plus a no-condense "rewrite" for leaf nodes). Voice/subject handled server-side.
 async function nodeLevels(text, opts) {
   const style = localStorage.getItem("summary-style") || "";
-  // Pass the entity roster so the summary refers to known individuals as {{e:id|Name}} tokens.
-  return postSummarize({ mode: "levels", text, style, entities: entityRoster, ...opts });
+  // `entities` (a small, per-leaf set) comes from opts; roll-ups pass none and let the children's
+  // existing {{e:id|Name}} tokens flow through unchanged (see PRESERVE_TOKENS_NOTE on the server).
+  return postSummarize({ mode: "levels", text, style, ...opts });
 }
 // Legacy fields kept in sync with levels so the existing rendering keeps working.
 function legacyFromLevels(v) {
@@ -1695,11 +1705,11 @@ function childPara(c) { const v = childLevels(c); return v.paragraph || v.summar
 // Leaves get the FULL ladder (summary + outline included) in the pass, so a day is ready to read
 // the moment you reach it — no separate lazy "detail" call, no waiting after a click. (distilled:false
 // uses LEVELS_SYSTEM, which returns word→paragraph PLUS the complete summary and outline in one call.)
-async function sumDayLevels(date, text, correction = "") {
-  return nodeLevels(text, { type: "day", label: date, isLeaf: true, date, distilled: false, correction });
+async function sumDayLevels(date, text, correction = "", refs = []) {
+  return nodeLevels(text, { type: "day", label: date, isLeaf: true, date, distilled: false, correction, entities: rosterFor(refs) });
 }
 async function sumMemLevels(m) {
-  return nodeLevels(m.text, { type: "memory", label: m.label || String(m.startYear || ""), isLeaf: true, subject: m.subject || "", date: `${m.startYear || 2000}-01-01`, distilled: false, correction: m.correction || "" });
+  return nodeLevels(m.text, { type: "memory", label: m.label || String(m.startYear || ""), isLeaf: true, subject: m.subject || "", date: `${m.startYear || 2000}-01-01`, distilled: false, correction: m.correction || "", entities: rosterFor(m.entityRefs) });
 }
 
 // Roll-up input: prefer each child's FULL summary; step down to paragraph, then sentence,

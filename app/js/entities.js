@@ -21,17 +21,21 @@ function llmOverrides() {
   if (!provider) return {};
   return { provider, apiKey: localStorage.getItem("llm-api-key") || "", model: localStorage.getItem("llm-model") || "", baseUrl: localStorage.getItem("llm-base-url") || "" };
 }
-async function postEntities(text, known) {
+async function postEntities(text) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 120000);
   try {
     const r = await fetch("/api/summarize", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...llmOverrides(), mode: "entities", text, known }), signal: ctrl.signal,
+      body: JSON.stringify({ ...llmOverrides(), mode: "entities", text }), signal: ctrl.signal,
     });
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `Server ${r.status}`); }
     return await r.json();
   } finally { clearTimeout(timer); }
+}
+// Normalize a name for matching: lowercase, drop possessives/punctuation, collapse spaces.
+function normName(s) {
+  return String(s || "").toLowerCase().replace(/['’]s\b/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 // Ask a scoped question about one entity, answered only from the entries that mention it.
@@ -82,9 +86,14 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       let queue = sources.filter((s) => (s.raw || s.text) && !Array.isArray(s.entityRefs));
       if (!queue.length) { setStatus("Everything's already scanned. Re-scan anyway from an entry's page if a name looks off.", ""); return; }
 
-      // Load the current roster; grow it as new names appear (so later entries resolve to earlier ones).
+      // The client keeps the roster and resolves names by NORMALIZED match (no roster sent to the
+      // LLM — that wouldn't scale as the cast grows). A normalized index maps canonical + every alias
+      // to its entity; an extracted name that matches lands on that entity, otherwise a new one is
+      // created. Spelling variants that don't normalize-match become separate entities you can Merge.
       let roster = await getAllEntities();
-      const byId = new Map(roster.map((e) => [e.id, e]));
+      const byNorm = new Map();
+      const indexEnt = (e) => { for (const n of [e.canonical, ...(e.aliases || [])]) { const k = normName(n); if (k) byNorm.set(k, e); } };
+      roster.forEach(indexEnt);
       const total = queue.length;
       let done = 0, found = 0;
 
@@ -93,17 +102,16 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         const label = src.date ? src.date : (src.subject || src.label || "memory");
         const jid = logAdd(label, "scan");
         logSet(jid, "running");
-        const known = roster.map((e) => ({ id: e.id, canonical: e.canonical, aliases: e.aliases || [], kind: e.entityKind }));
-        const { mentions } = await postEntities(text, known);
+        const { mentions } = await postEntities(text); // LLM extracts names only
         const refs = [];
         for (const m of mentions) {
-          // The LLM is the resolver: it returns a known id when this mention matches an existing
-          // entity (spelling variants and all), else marks it new. We only create when it says new.
-          let ent = m.id && byId.get(m.id);
+          const key = normName(m.name);
+          if (!key) continue;
+          let ent = byNorm.get(key); // resolve in JS by normalized name/alias
           if (!ent) {
             ent = { id: uid(), entityKind: m.kind || "person", canonical: m.name.trim(), aliases: [], note: "", createdAt: Date.now(), updatedAt: Date.now() };
             await putEntity(ent);
-            roster.push(ent); byId.set(ent.id, ent);
+            roster.push(ent); indexEnt(ent);
             found++;
           }
           if (!refs.includes(ent.id)) refs.push(ent.id);

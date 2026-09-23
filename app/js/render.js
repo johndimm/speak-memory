@@ -21,11 +21,19 @@ export function setEntityMap(idToName) {
 // Match {{e:<id>|<Name>}} — and tolerate the model dropping the "e:" prefix ({{<id>|<Name>}}).
 // The id is restricted to token-safe chars so this never swallows ordinary braces in prose.
 const ENTITY_TOKEN = /\{\{(?:e:)?([A-Za-z0-9_:-]+)(?:\|([^{}]*))?\}\}/g;
+// Resolve one token's id to {id, name} from the registry, tolerating the model splitting an "e"-
+// prefixed id (writing {{e:1|…}} for id "e1"): try the id as-is, then with an "e" restored.
+function lookupEntity(id) {
+  const k = String(id).trim();
+  if (entityMap.has(k)) return { id: k, name: entityMap.get(k) };
+  if (entityMap.has("e" + k)) return { id: "e" + k, name: entityMap.get("e" + k) };
+  return null;
+}
 // Plain-text resolution (for textContent, tooltips): token → canonical name (or the fallback name).
 export function resolveEntityTokens(text) {
   const s = String(text ?? "");
   if (s.indexOf("{{") === -1) return s;
-  return s.replace(ENTITY_TOKEN, (_, id, name) => entityMap.get(String(id).trim()) || (name || "").trim() || "");
+  return s.replace(ENTITY_TOKEN, (_, id, name) => (lookupEntity(id)?.name) || (name || "").trim() || "");
 }
 // Link resolution (for rendered HTML): token → a tappable name that opens the entity's page. The
 // tokens survive escapeHtml (they contain no &<>"), so call this on already-escaped HTML. A known id
@@ -34,12 +42,11 @@ export function resolveEntityLinks(html) {
   const s = String(html ?? "");
   if (s.indexOf("{{") === -1) return s;
   return s.replace(ENTITY_TOKEN, (_, id, name) => {
-    const key = String(id).trim();
-    const canonical = entityMap.get(key);
-    const label = escapeHtml(canonical || (name || "").trim() || "");
+    const hit = lookupEntity(id);
+    const label = escapeHtml((hit && hit.name) || (name || "").trim() || "");
     if (!label) return "";
-    return canonical
-      ? `<button type="button" class="ent-link" data-eid="${escapeHtml(key)}">${label}</button>`
+    return hit
+      ? `<button type="button" class="ent-link" data-eid="${escapeHtml(hit.id)}">${label}</button>`
       : label;
   });
 }
