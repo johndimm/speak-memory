@@ -243,10 +243,19 @@ export function initFutures(root) {
   root.addEventListener("click", (e) => {
     const del = e.target.closest("[data-del]");
     if (del) {
+      e.stopPropagation();
       const id = del.dataset.del;
-      if (id === activeJournalId()) { setStatus("error", "Switch back to your real journal before deleting the one you're in."); return; }
       const f = getFuture(id);
-      if (f && confirm("Delete this future? It can be imagined again later.")) { deleteJournal(id); renderGallery(); }
+      if (!f) return;
+      if (!confirm("Delete this future? It can be imagined again later.")) return;
+      if (id === activeJournalId()) {
+        // Can't sit inside a journal we're deleting — leave to the real journal, then remove it.
+        deleteJournal(id);
+        switchJournal(""); // reloads into your own journal
+      } else {
+        deleteJournal(id);
+        renderGallery();
+      }
       return;
     }
     const open = e.target.closest("[data-open]");

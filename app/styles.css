@@ -1262,7 +1262,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-snip { color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 640px) { .ent-mention { grid-template-columns: 4.5rem 1fr; } }
 .fut-card-del {
-  position: absolute; top: 0.4rem; right: 0.4rem; width: 1.5rem; height: 1.5rem; line-height: 1;
+  position: absolute; top: 0.4rem; right: 0.4rem; width: 1.75rem; height: 1.75rem; line-height: 1; z-index: 2;
   border: none; border-radius: 50%; background: transparent; color: var(--ink-soft);
   font-size: 1.1rem; cursor: pointer; opacity: 0.5;
 }
