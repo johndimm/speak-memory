@@ -908,7 +908,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .node-fold-body { color: var(--ink-soft); line-height: 1.65; padding: 0.2rem 0 0.6rem; }
 /* Verbatim transcript — the raw spoken words, styled alike everywhere and clearly unlike the
    polished summary prose: a quieter, monospace-leaning face with a left rule. */
-.verbatim, .node-verbatim {
+.verbatim, .node-verbatim, .ent-note-existing {
   white-space: pre-wrap;
   font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.86rem;
@@ -917,8 +917,8 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
   border-left: 3px solid var(--accent-soft);
   padding-left: 0.9rem;
 }
-.verbatim p { margin: 0 0 0.6rem; }
-.verbatim p:last-child { margin-bottom: 0; }
+.verbatim p, .ent-note-existing p { margin: 0 0 0.6rem; }
+.verbatim p:last-child, .ent-note-existing p:last-child { margin-bottom: 0; }
 .verbatim-tools { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; flex-wrap: wrap; }
 .verbatim-edit, .verbatim-cancel { border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 0.82rem; padding: 0.35rem 0.85rem; border-radius: 999px; cursor: pointer; }
 .verbatim-edit:hover, .verbatim-cancel:hover { border-color: var(--accent-soft); color: var(--ink); }
@@ -1294,9 +1294,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .iv-voice { display: flex; align-items: center; gap: 0.5rem; justify-content: center; margin-top: 0.9rem; font-size: 0.82rem; color: var(--ink-soft); }
 .iv-voice select { font: inherit; font-size: 0.82rem; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 0.3rem 0.5rem; max-width: 14rem; }
 .iv-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.8rem; }
-.ent-note-existing { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.85rem; margin-bottom: 0.5rem; line-height: 1.5; color: var(--ink); font-size: 0.92rem; }
-.ent-note-existing p { margin: 0 0 0.5rem; }
-.ent-note-existing p:last-child { margin-bottom: 0; }
+.ent-note-existing { margin-bottom: 0.6rem; }
 .ent-detail-body { display: flex; flex-direction: column; gap: 0.6rem; }
 .ent-summary { margin: 1rem 0; }
 .ent-summary-body { background: var(--paper-deep); border-radius: var(--radius); padding: 0.9rem 1.1rem; line-height: 1.6; color: var(--ink); }
