@@ -216,8 +216,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           </select>
           <label class="ent-field"><span>Also known as (comma-separated)</span>
             <input type="text" id="ent-aliases" value="${escapeHtml((ent.aliases || []).join(", "))}" placeholder="Baby Kitty, Zay…"></label>
-          <label class="ent-field"><span>Note</span>
-            <input type="text" id="ent-note" value="${escapeHtml(ent.note || "")}" placeholder="who they are…"></label>
+          <label class="ent-field"><span>Note — background &amp; corrections about this name (folds into summaries as they’re rewritten)</span>
+            <textarea id="ent-note" class="ent-note-input" rows="4" placeholder="Who they are, how you're connected, anything the journal gets wrong about them…">${escapeHtml(ent.note || "")}</textarea></label>
           <div class="ent-profile-actions">
             <button type="button" class="ent-save" id="ent-save">Save</button>
             ${others.length ? `<span class="ent-merge"><span>Merge into</span><select id="ent-merge-sel"><option value="">choose…</option>${mergeOpts}</select><button type="button" id="ent-merge-btn">Merge</button></span>` : ""}

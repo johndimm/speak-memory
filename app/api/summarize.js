@@ -172,8 +172,8 @@ const FIRST_PERSON_NOTE = `\n\nPERSON — Write the prose ("brief" and "full") i
 function entitiesNote(entities) {
   const list = Array.isArray(entities) ? entities.slice(0, 200) : [];
   if (!list.length) return "";
-  const roster = list.map((e) => `- ${e.id} = ${e.canonical}${(e.aliases && e.aliases.length) ? " (also: " + e.aliases.join(", ") + ")" : ""}`).join("\n");
-  return `\n\nENTITY TOKENS — These individuals are known. Whenever you refer to one of them in ANY output field (word, phrase, sentence, paragraph, summary, outline), write a token of the form {{e:<id>|<CanonicalName>}} instead of the plain name — even if the source text used a different spelling, nickname, or alias. Use the id and canonical name EXACTLY as listed. For anyone or anything NOT in this list, write the name normally (do not invent ids).
+  const roster = list.map((e) => `- ${e.id} = ${e.canonical}${(e.aliases && e.aliases.length) ? " (also: " + e.aliases.join(", ") + ")" : ""}${e.note ? ` — ${String(e.note).slice(0, 200)}` : ""}`).join("\n");
+  return `\n\nENTITY TOKENS — These individuals are known. Whenever you refer to one of them in ANY output field (word, phrase, sentence, paragraph, summary, outline), write a token of the form {{e:<id>|<CanonicalName>}} instead of the plain name — even if the source text used a different spelling, nickname, or alias. Use the id and canonical name EXACTLY as listed. For anyone or anything NOT in this list, write the name normally (do not invent ids). Any note after a name is known background — honor it and correct the text accordingly.
 KNOWN:
 ${roster}`;
 }
@@ -318,21 +318,16 @@ async function callLLMOnce(system, user, temperature = 0.3, keys = ["brief", "fu
 }
 
 async function callLLM(system, user, temperature = 0.3, keys = ["brief", "full"], cfg = {}) {
-  try {
-    return await callLLMOnce(system, user, temperature, keys, cfg);
-  } catch (firstErr) {
-    try {
-      return await callLLMOnce(
-        `${system}\n\nIMPORTANT: Return compact valid JSON only with exactly these keys: ${keys.map((k) => `"${k}"`).join(", ")}. No markdown fences.`,
-        `${user}\n\nPrevious attempt failed JSON parsing. Return valid JSON.`,
-        temperature,
-        keys,
-        cfg,
-      );
-    } catch {
-      throw firstErr;
-    }
+  let firstErr;
+  try { return await callLLMOnce(system, user, temperature, keys, cfg); }
+  catch (e) { firstErr = e; }
+  // Two more attempts with a stricter instruction — intermittent malformed JSON usually clears on a retry.
+  const strictSys = `${system}\n\nIMPORTANT: Return compact valid JSON only with exactly these keys: ${keys.map((k) => `"${k}"`).join(", ")}. No markdown fences.`;
+  for (let i = 0; i < 2; i++) {
+    try { return await callLLMOnce(strictSys, `${user}\n\nPrevious attempt failed JSON parsing. Return valid JSON.`, temperature, keys, cfg); }
+    catch { /* try again */ }
   }
+  throw firstErr;
 }
 
 // Parse a JSON object out of a model reply, tolerating markdown fences, surrounding text,
@@ -387,18 +382,15 @@ async function listModels(body) {
 }
 
 async function callJsonObject(system, user, temperature = 0.2, cfg = {}) {
-  try {
-    return await callJsonObjectOnce(system, user, temperature, cfg);
-  } catch (firstErr) {
-    try {
-      return await callJsonObjectOnce(
-        `${system}\n\nIMPORTANT: Reply with ONE strictly valid JSON object and nothing else — no markdown fences, no text before or after, and escape every newline inside a string as \\n.`,
-        `${user}\n\nThe previous reply was not valid JSON. Return only the JSON object.`,
-        temperature,
-        cfg,
-      );
-    } catch { throw firstErr; }
+  let firstErr;
+  try { return await callJsonObjectOnce(system, user, temperature, cfg); }
+  catch (e) { firstErr = e; }
+  const strictSys = `${system}\n\nIMPORTANT: Reply with ONE strictly valid JSON object and nothing else — no markdown fences, no text before or after, and escape every newline inside a string as \\n.`;
+  for (let i = 0; i < 2; i++) {
+    try { return await callJsonObjectOnce(strictSys, `${user}\n\nThe previous reply was not valid JSON. Return only the JSON object.`, temperature, cfg); }
+    catch { /* try again */ }
   }
+  throw firstErr;
 }
 
 export default async function handler(req, res) {

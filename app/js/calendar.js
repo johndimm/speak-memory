@@ -108,7 +108,7 @@ async function load() {
   try {
     const ents = await getAllEntities();
     setEntityMap(new Map(ents.map((e) => [e.id, e.canonical])));
-    entityRoster = ents.map((e) => ({ id: e.id, canonical: e.canonical, aliases: e.aliases || [], kind: e.entityKind || "person" }));
+    entityRoster = ents.map((e) => ({ id: e.id, canonical: e.canonical, aliases: e.aliases || [], kind: e.entityKind || "person", note: e.note || "" }));
   } catch { entityRoster = []; }
   const entries = await getAllEntries();
   const days = {};

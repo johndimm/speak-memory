@@ -1231,6 +1231,8 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-canon { font-family: var(--font-display); font-size: 1.8rem; color: var(--ink); background: transparent; border: none; border-bottom: 1px solid var(--line); padding: 0.2rem 0; }
 .ent-canon:focus { outline: none; border-bottom-color: var(--accent); }
 .ent-kindsel, .ent-field input, #ent-merge-sel { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 0.4rem 0.6rem; }
+.ent-note-input { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 0.5rem 0.7rem; resize: vertical; line-height: 1.5; width: 100%; }
+.ent-note-input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
 .ent-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; color: var(--ink-soft); }
 .ent-profile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.2rem; }
 .ent-save { border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600; padding: 0.45rem 1rem; border-radius: 999px; cursor: pointer; }
