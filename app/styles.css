@@ -906,12 +906,24 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .node-fold > summary::before { content: "▸  "; }
 .node-fold[open] > summary::before { content: "▾  "; }
 .node-fold-body { color: var(--ink-soft); line-height: 1.65; padding: 0.2rem 0 0.6rem; }
-.node-verbatim { white-space: pre-wrap; font-size: 0.92rem; }
+/* Verbatim transcript — the raw spoken words, styled alike everywhere and clearly unlike the
+   polished summary prose: a quieter, monospace-leaning face with a left rule. */
+.verbatim, .node-verbatim {
+  white-space: pre-wrap;
+  font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.86rem;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  border-left: 3px solid var(--accent-soft);
+  padding-left: 0.9rem;
+}
+.verbatim p { margin: 0 0 0.6rem; }
+.verbatim p:last-child { margin-bottom: 0; }
 .verbatim-tools { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.5rem; flex-wrap: wrap; }
 .verbatim-edit, .verbatim-cancel { border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 0.82rem; padding: 0.35rem 0.85rem; border-radius: 999px; cursor: pointer; }
 .verbatim-edit:hover, .verbatim-cancel:hover { border-color: var(--accent-soft); color: var(--ink); }
 .verbatim-save { border: none; background: var(--accent); color: #fff; font: inherit; font-size: 0.82rem; font-weight: 600; padding: 0.4rem 0.95rem; border-radius: 999px; cursor: pointer; }
-.verbatim-input { width: 100%; font: inherit; font-size: 0.92rem; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.8rem; resize: vertical; line-height: 1.6; }
+.verbatim-input { width: 100%; font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace; font-size: 0.86rem; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.8rem; resize: vertical; line-height: 1.65; }
 .verbatim-input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
 .verbatim-status { font-size: 0.82rem; color: var(--ink-soft); }
 

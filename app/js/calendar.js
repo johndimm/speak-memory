@@ -759,7 +759,7 @@ function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", ele
   const verbatimHtml = (isLeaf && verbatim)
     ? `<details class="node-fold node-verbatim-fold" open><summary>Verbatim transcript</summary>`
       + `<div class="node-fold-body">`
-      + `<div class="node-verbatim" data-verbatim>${escapeHtml(verbatim)}</div>`
+      + `<div class="node-verbatim verbatim" data-verbatim>${escapeHtml(verbatim)}</div>`
       + `<div class="verbatim-tools"><button type="button" class="verbatim-edit">✎ Edit transcript</button></div>`
       + `</div></details>`
     : "";

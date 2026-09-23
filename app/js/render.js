@@ -112,12 +112,21 @@ function renderOutlineLinked(text, proseParas) {
   return resolveEntityLinks(out + "</div>");
 }
 
+// Verbatim (raw spoken words): its own consistent look, never parsed as an outline. Plain text with
+// line breaks, wrapped in .verbatim so every place it appears is styled alike (and unlike summaries).
+export function renderVerbatim(text) {
+  return `<div class="verbatim">${escapeHtml(String(text ?? "")).replace(/\r/g, "").replace(/\n/g, "<br>")}</div>`;
+}
+
 // Render an entry's representations: the first is shown, the rest fold away (on demand).
 // Shared by the Journal detail and the Write edit view.
 export function renderReps(reps, leadingHtml = "") {
   const order = ["outline", "prose", "verbatim"]; // outline is the starting point (detail on its leaves)
   const present = order.filter((m) => reps?.[m]);
-  if (present.length <= 1) return leadingHtml + renderFull(present.length ? reps[present[0]] : "");
+  if (present.length <= 1) {
+    if (present[0] === "verbatim") return leadingHtml + renderVerbatim(reps.verbatim);
+    return leadingHtml + renderFull(present.length ? reps[present[0]] : "");
+  }
 
   const proseParas = proseParagraphs(reps.prose);
   // Render each rep the same whether it's shown open or folded, so the outline→prose
@@ -125,7 +134,7 @@ export function renderReps(reps, leadingHtml = "") {
   const bodyFor = (m) => {
     if (m === "prose") return resolveEntityLinks(proseParas.map((p, idx) => `<p data-p="${idx}">${escapeHtml(p)}</p>`).join(""));
     if (m === "outline") return renderOutlineLinked(reps.outline, proseParas);
-    return renderFull(reps[m]); // verbatim has no tokens; renderFull passes it through
+    return renderVerbatim(reps[m]); // verbatim: the distinct raw-transcript look
   };
   let html = leadingHtml;
   present.forEach((m, i) => {
