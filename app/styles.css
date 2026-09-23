@@ -1241,6 +1241,19 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-merge button, .ent-del { border: 1px solid var(--line); background: none; color: var(--ink-soft); font: inherit; font-size: 0.82rem; padding: 0.4rem 0.85rem; border-radius: 999px; cursor: pointer; }
 .ent-del { margin-left: auto; }
 .ent-del:hover { border-color: var(--accent-soft); color: #b3261e; }
+.ent-interview-btn { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
+/* Hands-free interview overlay */
+.iv-overlay { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; background: rgba(26,22,18,0.55); padding: 1rem; }
+.iv-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.5rem; width: min(30rem, 100%); text-align: center; }
+.iv-name { font-family: var(--font-display); font-size: 2rem; color: var(--accent); margin-bottom: 0.5rem; }
+.iv-q { font-size: 1.15rem; line-height: 1.5; color: var(--ink); min-height: 2.5em; }
+.iv-interim { color: var(--ink-soft); font-style: italic; margin-top: 0.6rem; min-height: 1.2em; }
+.iv-a { color: var(--ink); margin-top: 0.4rem; font-weight: 600; }
+.iv-saved { color: #3a7d44; font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.1em; }
+.iv-actions { display: flex; justify-content: center; gap: 0.8rem; margin-top: 1.2rem; }
+.iv-actions button { font: inherit; border-radius: 999px; padding: 0.5rem 1.3rem; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+.iv-actions #iv-stop { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.iv-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.8rem; }
 .ent-note-existing { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.85rem; margin-bottom: 0.5rem; line-height: 1.5; color: var(--ink); font-size: 0.92rem; }
 .ent-note-existing p { margin: 0 0 0.5rem; }
 .ent-note-existing p:last-child { margin-bottom: 0; }

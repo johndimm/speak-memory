@@ -13,6 +13,7 @@ import { escapeHtml } from "./render.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation } from "./dictation.js";
 
+const SpeechRec = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 const KIND_LABEL = { person: "Person", animal: "Animal", place: "Place", org: "Organization", thing: "Thing" };
 const KIND_ORDER = ["person", "animal", "place", "org", "thing"];
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "e" + Date.now() + Math.random().toString(36).slice(2));
@@ -187,7 +188,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       <div class="entities">
         <div class="ent-head">
           <h2 class="ent-title">People &amp; Animals</h2>
-          <button type="button" class="ent-scan" id="ent-scan">${entities.length ? "Scan new entries" : "Scan entries"}</button>
+          <div class="act-actions">
+            ${(SpeechRec && entities.length) ? `<button type="button" class="ent-scan ent-interview-btn" id="ent-interview">🎙 Interview me</button>` : ""}
+            <button type="button" class="ent-scan" id="ent-scan">${entities.length ? "Scan new entries" : "Scan entries"}</button>
+          </div>
         </div>
         <p class="field-hint">Everyone and everything your journal names, each with every mention in time order. Merge two cards if they're the same individual under different names.</p>
         <div id="ent-status" class="ent-status" hidden></div>
@@ -199,6 +203,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       </div>`;
 
     root.querySelector("#ent-scan")?.addEventListener("click", () => scan(setStatus));
+    root.querySelector("#ent-interview")?.addEventListener("click", () => startInterview());
   }
 
   function setStatus(msg, cls) {
@@ -415,6 +420,117 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     render();
   }
 
+  // ---- Hands-free interview: go name after name, the app asks, you answer aloud --------------
+  let iv = null; // { active, recog }
+  function speak(text) {
+    return new Promise((resolve) => {
+      try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1; u.onend = resolve; u.onerror = resolve; speechSynthesis.speak(u); }
+      catch { resolve(); }
+    });
+  }
+  function listenOnce() {
+    return new Promise((resolve) => {
+      if (!SpeechRec) return resolve("");
+      const r = new SpeechRec(); r.lang = "en-US"; r.interimResults = true; r.maxAlternatives = 1;
+      let final = "", done = false;
+      const finish = () => { if (done) return; done = true; try { r.stop(); } catch { /* */ } resolve(final.trim()); };
+      r.onresult = (e) => {
+        final = "";
+        for (const res of e.results) if (res.isFinal) final += res[0].transcript;
+        const interim = [...e.results].map((x) => x[0].transcript).join(" ");
+        setInterview({ interim });
+        if ([...e.results].some((x) => x.isFinal)) finish();
+      };
+      r.onerror = finish; r.onend = finish;
+      iv.recog = r;
+      try { r.start(); } catch { resolve(""); }
+    });
+  }
+  async function getQuestion(ent, mentions, convo) {
+    const entries = mentions.map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
+    const convoText = convo.map((c) => `Q: ${c.q}\nA: ${c.a}`).join("\n") || "(none yet)";
+    const sys = `You are interviewing me, by voice, to build a profile of "${ent.canonical}"${ent.note ? `. What I've said so far: ${ent.note}` : ""}. Below are the journal entries that mention them. Ask ONE short, warm, specific spoken question (one sentence) to learn the single most important thing still missing about who they are and our relationship. Do not repeat what's already known or asked. If the picture is already well-rounded, reply with exactly the word ENOUGH.\n\nConversation so far:\n${convoText}`;
+    try { const { reply } = await postChat([{ role: "user", content: `${sys}\n\nYour next question (or ENOUGH):` }], entries); return (reply || "").trim(); }
+    catch { return ""; }
+  }
+
+  async function startInterview() {
+    if (iv && iv.active) return;
+    if (!SpeechRec) { alert("Voice interview needs speech recognition (try Chrome on desktop)."); return; }
+    const ents = await getAllEntities();
+    if (!ents.length) return;
+    // Least-explained first: people/animals with no notes, then the rest.
+    const rank = (e) => (e.note ? 2 : 0) + (e.entityKind === "person" || e.entityKind === "animal" ? 0 : 1);
+    const queue = [...ents].sort((a, b) => rank(a) - rank(b) || a.canonical.localeCompare(b.canonical));
+    iv = { active: true, recog: null };
+    renderInterview({ status: "Starting…" });
+    await speak("Let's talk through the people and animals in your journal. Say skip to move on, or stop to end.");
+    const sources = await allSources();
+    for (const ent of queue) {
+      if (!iv.active) break;
+      const mentions = sources.filter((s) => Array.isArray(s.entityRefs) && s.entityRefs.includes(ent.id));
+      const convo = [];
+      renderInterview({ name: ent.canonical });
+      for (let asked = 0; iv.active && asked < 4; asked++) {
+        const q = await getQuestion(ent, mentions, convo);
+        if (!iv.active) break;
+        if (!q || /^enough\b/i.test(q)) break;
+        renderInterview({ name: ent.canonical, q });
+        await speak(q);
+        if (!iv.active) break;
+        renderInterview({ name: ent.canonical, q, listening: true });
+        const ans = await listenOnce();
+        if (!iv.active) break;
+        const cmd = ans.toLowerCase();
+        if (/\b(stop|end|quit|i'm done|that's all)\b/.test(cmd)) { iv.active = false; break; }
+        if (!ans || /\b(skip|next|pass|move on|don't know|no idea)\b/.test(cmd)) { await speak("Okay — next."); break; }
+        convo.push({ q, a: ans });
+        renderInterview({ name: ent.canonical, q, a: ans });
+        const fresh = (await getEntity(ent.id)) || ent;
+        await putEntity({ ...fresh, note: (fresh.note ? fresh.note + "\n" : "") + ans, updatedAt: Date.now() });
+      }
+      if (convo.length) { const box = document.getElementById("iv-saved"); if (box) box.textContent = `Saved ${convo.length} note${convo.length === 1 ? "" : "s"} to ${ent.canonical}.`; }
+    }
+    if (iv.active) await speak("That's everyone for now. Thanks — I've saved your notes.");
+    endInterview();
+  }
+  function endInterview() {
+    if (iv && iv.recog) { try { iv.recog.stop(); } catch { /* */ } }
+    try { speechSynthesis.cancel(); } catch { /* */ }
+    iv = null;
+    const ov = document.getElementById("iv-overlay"); if (ov) ov.remove();
+    render(); // refresh the roster (notes/counts changed)
+  }
+  function setInterview(patch) {
+    const el = document.getElementById("iv-interim"); if (el && patch.interim != null) el.textContent = patch.interim;
+  }
+  function renderInterview(s = {}) {
+    let ov = document.getElementById("iv-overlay");
+    if (!ov) {
+      ov = document.createElement("div"); ov.id = "iv-overlay"; ov.className = "iv-overlay";
+      ov.innerHTML = `<div class="iv-card">
+        <div class="iv-name" id="iv-name"></div>
+        <div class="iv-q" id="iv-q"></div>
+        <div class="iv-interim" id="iv-interim"></div>
+        <div class="iv-a" id="iv-a"></div>
+        <div class="iv-saved" id="iv-saved"></div>
+        <div class="iv-actions">
+          <button type="button" id="iv-skip">Skip ›</button>
+          <button type="button" id="iv-stop">Stop</button>
+        </div>
+        <p class="iv-hint">Answer out loud. Say “skip” for the next name, “stop” to end.</p>
+      </div>`;
+      document.body.appendChild(ov);
+      ov.querySelector("#iv-stop").addEventListener("click", () => { if (iv) iv.active = false; if (iv && iv.recog) { try { iv.recog.stop(); } catch { /* */ } } endInterview(); });
+      ov.querySelector("#iv-skip").addEventListener("click", () => { if (iv && iv.recog) { try { iv.recog.stop(); } catch { /* */ } } });
+    }
+    if (s.name != null) ov.querySelector("#iv-name").textContent = s.name;
+    if (s.q != null) ov.querySelector("#iv-q").textContent = s.q;
+    if (s.status != null) ov.querySelector("#iv-q").textContent = s.status;
+    if (s.a != null) { ov.querySelector("#iv-a").textContent = s.a ? `“${s.a}”` : ""; ov.querySelector("#iv-interim").textContent = ""; }
+    if (s.listening) { ov.querySelector("#iv-interim").textContent = "…listening"; ov.querySelector("#iv-a").textContent = ""; }
+  }
+
   // Delegated once on the stable root (survives re-renders): open an entity card, or jump to a mention.
   root.addEventListener("click", (e) => {
     const card = e.target.closest(".ent-card[data-open]");
@@ -428,6 +544,6 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   return {
     open() { render(); },
     openEntity(id) { openId = id; renderEntity(id); }, // jump straight to one entity (from a name-link)
-    close() { /* nothing to tear down */ },
+    close() { if (iv) { iv.active = false; endInterview(); } },
   };
 }
