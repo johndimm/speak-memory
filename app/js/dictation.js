@@ -101,3 +101,42 @@ export function setupDictation(micBtn, textEl, status, refreshSave) {
     beginSession();
   });
 }
+
+// HANDS-FREE mode: tap once, then talk for as long as you like — pauses don't end it (recognition
+// restarts through the browser's silence cutoff), so your speech keeps flowing into `textEl` until
+// you tap Stop. Works on desktop and Android; iOS Safari has no Web Speech (button hidden there).
+export function setupHandsFree(btn, textEl, onChange = () => {}) {
+  if (!btn) return;
+  if (!SpeechRec) { btn.hidden = true; return; }
+  btn.hidden = false;
+  const label = btn.querySelector("span");
+  let active = false, recog = null, base = "";
+  const paint = () => { btn.classList.toggle("listening", active); if (label) label.textContent = active ? "⏹ Stop" : "🎙 Hands-free"; };
+
+  function loop() {
+    const r = new SpeechRec();
+    r.lang = navigator.language || "en-US";
+    r.interimResults = true;
+    r.continuous = true;
+    r.onresult = (e) => {
+      let finalText = "", interim = "";
+      for (let i = 0; i < e.results.length; i++) { const c = e.results[i][0].transcript; if (e.results[i].isFinal) finalText += c; else interim += c; }
+      const sep = base && !/\s$/.test(base) ? " " : "";
+      textEl.value = base + sep + (finalText + interim).replace(/^\s+/, "");
+      onChange();
+    };
+    r.onerror = () => { /* no-speech/aborted → onend restarts */ };
+    r.onend = () => {
+      base = textEl.value.trimEnd();           // commit what was said this burst
+      if (active) setTimeout(() => { if (active) loop(); }, 250); // keep listening through the pause
+      else paint();
+    };
+    recog = r;
+    try { r.start(); } catch { setTimeout(() => { if (active) loop(); }, 400); }
+  }
+
+  btn.addEventListener("click", () => {
+    if (active) { active = false; paint(); try { recog && recog.stop(); } catch { /* */ } textEl.focus(); return; }
+    active = true; paint(); base = textEl.value; loop(); textEl.focus();
+  });
+}

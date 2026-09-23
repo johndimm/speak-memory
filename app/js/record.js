@@ -6,7 +6,7 @@
 import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, deleteEntry, deleteMemory, photoToStored, storedToBlob } from "./db.js";
 import { renderReps, wireReps, isOutlineText, escapeHtml } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
-import { setupDictation, IS_MOBILE } from "./dictation.js";
+import { setupDictation, setupHandsFree, IS_MOBILE } from "./dictation.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -104,9 +104,10 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <label class="field write-main">
         <span class="field-label write-prompt" id="entry-label">What happened today?</span>
         <textarea id="entry-text" rows="8"
-          placeholder="${IS_MOBILE ? "Just talk — tap your keyboard’s mic — or type…" : "Just talk — tap 🎤 Dictate — or type…"}"></textarea>
+          placeholder="Just talk — tap 🎙 Hands-free and speak as long as you like — or type…"></textarea>
       </label>
       <div class="write-actions">
+        <button type="button" class="mic-btn handsfree-btn" id="handsfree-btn" hidden><span>🎙 Hands-free</span></button>
         <button type="button" class="mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button>
         <button type="submit" class="save-btn" id="save-btn" disabled>Save entry</button>
       </div>
@@ -542,6 +543,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // In-app dictation (for devices whose keyboard has no mic). See dictation.js for the
   // Android-robust handling of auto-restart and de-duplication.
   setupDictation(micBtn, textEl, statusEl, refreshSaveState);
+  setupHandsFree(root.querySelector("#handsfree-btn"), textEl, refreshSaveState); // tap once, talk for a long time
 
   // Generate BOTH a prose and an outline summary of the same text (voice applies to prose only).
   async function summarizeBoth(date, text) {

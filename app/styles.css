@@ -349,6 +349,8 @@ body { position: relative; }
   animation: mic-pulse 1.3s ease-in-out infinite;
 }
 @keyframes mic-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.62; } }
+/* Hands-free is the primary voice CTA — filled, so it stands out from the dashed Dictate button. */
+.handsfree-btn:not(.listening) { background: var(--accent); border: 1px solid var(--accent); color: #fff; }
 .photo-thumbs { display: flex; gap: 0.6rem; flex-wrap: wrap; }
 
 /* In-app camera */
