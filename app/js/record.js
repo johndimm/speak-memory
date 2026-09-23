@@ -97,21 +97,48 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   root.innerHTML = `
     <aside class="app-intro" id="app-intro" hidden>
       <button type="button" class="app-intro-dismiss" id="app-intro-dismiss" aria-label="Dismiss">×</button>
-      <p class="app-intro-lead"><strong>Speak, Memory</strong> turns talk into a life story.</p>
-      <p>Just talk — dictate a journal entry, or add a past memory (a place you lived, a job, a
-      relationship). It writes compact summaries that zoom from a single day out to your whole life.</p>
-      <p>Completely free — no account, no login, no ads, no tracking. Everything stays in your
-      browser, private to this device.</p>
+      <p class="app-intro-lead"><strong>Speak, Memory</strong> — just talk, and it becomes your life story. Private to this device; no account.</p>
     </aside>
     <form class="write-form" id="write-form">
-      <h2 class="view-intro">Write</h2>
-      <label class="field">
-        <span class="field-label">Date</span>
-        <input type="date" id="entry-date" value="${todayISO()}" max="${todayISO()}">
+      <!-- The input leads: a big prompt + box, with Dictate right there. Everything else folds below. -->
+      <label class="field write-main">
+        <span class="field-label write-prompt" id="entry-label">What happened today?</span>
+        <textarea id="entry-text" rows="8"
+          placeholder="${IS_MOBILE ? "Just talk — tap your keyboard’s mic — or type…" : "Just talk — tap 🎤 Dictate — or type…"}"></textarea>
+      </label>
+      <div class="write-actions">
+        <button type="button" class="mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button>
+        <button type="submit" class="save-btn" id="save-btn" disabled>Save entry</button>
+      </div>
+
+      <label class="field" id="headline-field" hidden>
+        <span class="field-label">Headline</span>
+        <input type="text" id="entry-brief">
       </label>
 
+      <div class="entry-view" id="entry-view" hidden></div>
+      <button type="button" class="detail-nav-btn edit-text-btn" id="edit-text-toggle" hidden>✎ Edit text</button>
+
+      <div class="edit-tools" id="write-edit-tools" hidden>
+        <button type="button" class="detail-nav-btn" id="write-resummarize">↻ Re-summarize into prose</button>
+        <span class="edit-hint">Dictated something rough? This rewrites the whole entry into clean prose.</span>
+      </div>
+
+      <div class="photo-row">
+        <button type="button" class="photo-add" id="entry-camera-btn"><span>📷 Camera</span></button>
+        <label class="photo-add">
+          <input type="file" id="entry-photo" accept="image/*,video/*" multiple hidden>
+          <span>🖼 Photo / video</span>
+        </label>
+        <div class="photo-thumbs" id="photo-thumbs"></div>
+      </div>
+
       <details class="write-more" id="write-more">
-        <summary>A past memory? Give it a category, subject, or year</summary>
+        <summary>Date, or file as a past memory</summary>
+        <label class="field">
+          <span class="field-label">Date</span>
+          <input type="date" id="entry-date" value="${todayISO()}" max="${todayISO()}">
+        </label>
         <div class="field">
           <span class="field-label">Category</span>
           <input type="text" id="entry-category" autocomplete="off" placeholder="childhood, girlfriends…  (blank = journal)">
@@ -143,36 +170,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
         <span class="field-hint">Fill in a category to file this as a memory instead of a dated journal entry.</span>
       </details>
 
-      <label class="field" id="headline-field" hidden>
-        <span class="field-label">Headline</span>
-        <input type="text" id="entry-brief">
-      </label>
-
-      <label class="field">
-        <span class="field-label" id="entry-label">What happened?</span>
-        <textarea id="entry-text" rows="10"
-          placeholder="${IS_MOBILE ? "Just talk — tap your keyboard’s mic — or type…" : "Just talk — tap 🎤 Dictate below — or type…"}"></textarea>
-      </label>
-      <button type="button" class="photo-add mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button>
-
-      <div class="entry-view" id="entry-view" hidden></div>
-      <button type="button" class="detail-nav-btn edit-text-btn" id="edit-text-toggle" hidden>✎ Edit text</button>
-
-      <div class="edit-tools" id="write-edit-tools" hidden>
-        <button type="button" class="detail-nav-btn" id="write-resummarize">↻ Re-summarize into prose</button>
-        <span class="edit-hint">Dictated something rough? This rewrites the whole entry into clean prose.</span>
-      </div>
-
-      <div class="photo-row">
-        <button type="button" class="photo-add" id="entry-camera-btn"><span>📷 Camera</span></button>
-        <label class="photo-add">
-          <input type="file" id="entry-photo" accept="image/*,video/*" multiple hidden>
-          <span>🖼 Photo / video</span>
-        </label>
-        <div class="photo-thumbs" id="photo-thumbs"></div>
-      </div>
-
-      <button type="submit" class="save-btn" id="save-btn" disabled>Save entry</button>
       <button type="button" class="delete-entry-btn" id="delete-entry-btn" hidden>Delete entry</button>
       <p class="write-status" id="write-status"></p>
     </form>
