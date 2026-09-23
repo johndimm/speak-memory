@@ -11,6 +11,7 @@
 import { getAllEntries, getAllMemories, putEntry, putMemory, getAllEntities, getEntity, putEntity, deleteEntity } from "./db.js";
 import { escapeHtml } from "./render.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
+import { setupDictation } from "./dictation.js";
 
 const KIND_LABEL = { person: "Person", animal: "Animal", place: "Place", org: "Organization", thing: "Thing" };
 const KIND_ORDER = ["person", "animal", "place", "org", "thing"];
@@ -216,29 +217,27 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
     root.innerHTML = `
       <div class="entities">
-        <button type="button" class="ent-back" id="ent-back">← All people &amp; animals</button>
-        <div class="ent-profile">
-          <input type="text" class="ent-canon" id="ent-canon" value="${escapeHtml(ent.canonical)}" aria-label="Name">
-          <select id="ent-kind" class="ent-kindsel" aria-label="Kind">
-            ${KIND_ORDER.map((k) => `<option value="${k}"${(ent.entityKind || "person") === k ? " selected" : ""}>${KIND_LABEL[k]}</option>`).join("")}
-          </select>
-          <label class="ent-field"><span>Also known as (comma-separated)</span>
-            <input type="text" id="ent-aliases" value="${escapeHtml((ent.aliases || []).join(", "))}" placeholder="Baby Kitty, Zay…"></label>
-          <label class="ent-field"><span>Note — background &amp; corrections about this name (folds into summaries as they’re rewritten)</span>
-            <textarea id="ent-note" class="ent-note-input" rows="4" placeholder="Who they are, how you're connected, anything the journal gets wrong about them…">${escapeHtml(ent.note || "")}</textarea></label>
-          <div class="ent-profile-actions">
-            <button type="button" class="ent-save" id="ent-save">Save</button>
-            ${others.length ? `<span class="ent-merge"><span>Merge into</span><select id="ent-merge-sel"><option value="">choose…</option>${mergeOpts}</select><button type="button" id="ent-merge-btn">Merge</button></span>` : ""}
-            <button type="button" class="ent-del" id="ent-del">Delete</button>
-          </div>
-          <div id="ent-pstatus" class="ent-status" hidden></div>
+        <button type="button" class="ent-back" id="ent-back">← All names</button>
+        <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
+        <p class="node-subtitle">${KIND_LABEL[ent.entityKind || "person"]}${(ent.aliases && ent.aliases.length) ? ` · also ${escapeHtml(ent.aliases.join(", "))}` : ""}</p>
+
+        <!-- Profile paragraph at the top — written from the mentions PLUS your own notes below. -->
+        <div class="node-summary ent-summary" id="ent-summary">
+          ${ent.profile
+            ? `${renderAnswerText(ent.profile)}<button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`
+            : mentions.length ? `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>` : `<p class="ent-empty">No mentions yet — add a note below to start a profile.</p>`}
         </div>
 
-        <div class="ent-summary" id="ent-summary">
-          ${ent.profile
-            ? `<div class="ent-summary-body">${renderAnswerText(ent.profile)}</div><button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`
-            : mentions.length ? `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>` : ""}
-        </div>
+        <!-- Your notes: a running transcript in your words, folded into the profile (like Write). -->
+        <section class="node-comment">
+          <p class="nav-hint">Your notes about ${escapeHtml(ent.canonical)} — added to the profile and to summaries that mention them.</p>
+          ${ent.note ? `<div class="ent-note-existing">${renderAnswerText(ent.note)}</div>` : ""}
+          <div class="node-comment-row">
+            <textarea id="ent-note-input" class="node-comment-input" rows="2" placeholder="Speak or type — who they are, how you're connected, anything the journal gets wrong…"></textarea>
+            <button type="button" class="node-comment-mic" id="ent-note-mic" hidden aria-label="Dictate">🎙</button>
+          </div>
+          <div class="node-comment-actions"><button type="button" class="node-comment-add" id="ent-note-add">Add &amp; update profile</button><span class="node-comment-status" id="ent-pstatus"></span></div>
+        </section>
 
         <div class="ent-ask">
           <form class="ent-ask-form" id="ent-ask-form">
@@ -250,9 +249,28 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
         <h3 class="ent-kind">${mentions.length} mention${mentions.length === 1 ? "" : "s"}, in time order</h3>
         <div class="ent-mentions">${rows || '<p class="ent-empty">No mentions tagged yet.</p>'}</div>
+
+        <details class="node-fold ent-details">
+          <summary>Name, kind &amp; aliases</summary>
+          <div class="node-fold-body ent-detail-body">
+            <label class="ent-field"><span>Name</span>
+              <input type="text" id="ent-canon" value="${escapeHtml(ent.canonical)}"></label>
+            <label class="ent-field"><span>Kind</span>
+              <select id="ent-kind" class="ent-kindsel">${KIND_ORDER.map((k) => `<option value="${k}"${(ent.entityKind || "person") === k ? " selected" : ""}>${KIND_LABEL[k]}</option>`).join("")}</select></label>
+            <label class="ent-field"><span>Also known as (comma-separated)</span>
+              <input type="text" id="ent-aliases" value="${escapeHtml((ent.aliases || []).join(", "))}" placeholder="Baby Kitty, Zay…"></label>
+            <div class="ent-profile-actions">
+              <button type="button" class="ent-save" id="ent-save">Save</button>
+              ${others.length ? `<span class="ent-merge"><span>Merge into</span><select id="ent-merge-sel"><option value="">choose…</option>${mergeOpts}</select><button type="button" id="ent-merge-btn">Merge</button></span>` : ""}
+              <button type="button" class="ent-del" id="ent-del">Delete</button>
+            </div>
+            <div id="ent-dstatus" class="ent-status" hidden></div>
+          </div>
+        </details>
       </div>`;
 
-    const pstatus = (msg, cls) => { const el = root.querySelector("#ent-pstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
+    const pstatus = (msg, cls) => { const el = root.querySelector("#ent-pstatus"); if (!el) return; el.textContent = msg; el.className = "node-comment-status" + (cls ? " " + cls : ""); };
+    const dstatus = (msg, cls) => { const el = root.querySelector("#ent-dstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
 
     // Each name gets an LLM-written profile, generated from its mentions and cached on the entity.
     const mentionEntries = () => mentions.map((s) => ({
@@ -261,15 +279,17 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     }));
     async function genProfile() {
       const box = root.querySelector("#ent-summary");
-      if (!box || !mentions.length) return;
+      if (!box || (!mentions.length && !ent.note)) return; // need mentions or your notes to write from
       box.innerHTML = `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>`;
       try {
-        const sys = `Write a short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}${ent.note ? `. Known background: ${ent.note}` : ""}, based ONLY on the journal entries below that mention them. In 2–4 sentences, first person from the journal-keeper's view: who they are, the relationship, and how it changed over time. Mention years where useful. Don't invent anything not supported by the entries.`;
-        const { reply } = await postChat([{ role: "user", content: `${sys}\n\nWrite the profile now.` }], mentionEntries());
+        // Two inputs: MY notes about them (my own words) and the journal entries that mention them.
+        const sys = `Write a short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}. Draw on BOTH sources below: my own notes about them, and the journal entries that mention them. In 2–4 sentences, first person from my view: who they are, our relationship, and how it changed over time; mention years where useful. My notes are authoritative where they conflict with the entries. Don't invent anything the two sources don't support.`;
+        const notesBlock = ent.note ? `MY NOTES ABOUT ${ent.canonical}:\n${ent.note}\n\n` : "";
+        const { reply } = await postChat([{ role: "user", content: `${sys}\n\n${notesBlock}Write the profile now.` }], mentionEntries());
         const fresh = (await getEntity(id)) || ent;
         await putEntity({ ...fresh, profile: reply, profileAt: Date.now(), updatedAt: Date.now() });
         ent.profile = reply;
-        box.innerHTML = `<div class="ent-summary-body">${renderAnswerText(reply)}</div><button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`;
+        box.innerHTML = `${renderAnswerText(reply)}<button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`;
         root.querySelector("#ent-summary-refresh")?.addEventListener("click", genProfile);
       } catch (err) {
         box.innerHTML = `<p class="ent-ask-err">Couldn't write a profile: ${escapeHtml((err && err.message) || String(err))}</p><button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Try again</button>`;
@@ -277,7 +297,28 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       }
     }
     root.querySelector("#ent-summary-refresh")?.addEventListener("click", genProfile);
-    if (!ent.profile && mentions.length) genProfile(); // auto-write on first open
+    if (!ent.profile && (mentions.length || ent.note)) genProfile(); // auto-write on first open
+
+    // Your notes — a growing transcript in your words. Adding appends to the note and rewrites the
+    // profile (and, via the roster, folds into summaries that mention this name as they're rewritten).
+    setupDictation(root.querySelector("#ent-note-mic"), root.querySelector("#ent-note-input"), root.querySelector("#ent-pstatus"), () => {});
+    root.querySelector("#ent-note-add")?.addEventListener("click", async () => {
+      const ta = root.querySelector("#ent-note-input");
+      const text = (ta && ta.value || "").trim();
+      if (!text) return;
+      pstatus("Saving & updating profile…", "working");
+      const fresh = (await getEntity(id)) || ent;
+      const note = (fresh.note ? fresh.note + "\n" : "") + text;
+      await putEntity({ ...fresh, note, updatedAt: Date.now() });
+      ent.note = note;
+      ta.value = "";
+      // Show the appended note immediately, then regenerate the profile from mentions + notes.
+      const box = root.querySelector(".ent-note-existing");
+      if (box) box.innerHTML = renderAnswerText(note);
+      else ta.closest(".node-comment-row")?.insertAdjacentHTML("beforebegin", `<div class="ent-note-existing">${renderAnswerText(note)}</div>`);
+      pstatus("", "");
+      genProfile();
+    });
 
     // Ask about this entity — answered only from the entries that mention it.
     root.querySelector("#ent-ask-form")?.addEventListener("submit", async (e) => {
@@ -299,9 +340,13 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           + `<button type="button" class="ent-ask-save" id="ent-ask-save">Save as background</button>`;
         root.querySelector("#ent-ask-save")?.addEventListener("click", async () => {
           const fresh = (await getEntity(id)) || ent;
-          await putEntity({ ...fresh, note: reply.slice(0, 2000), updatedAt: Date.now() });
-          const noteInput = root.querySelector("#ent-note"); if (noteInput) noteInput.value = reply.slice(0, 2000);
-          pstatus("Saved as background.", "ok");
+          const note = (fresh.note ? fresh.note + "\n" : "") + reply.trim();
+          await putEntity({ ...fresh, note, updatedAt: Date.now() });
+          ent.note = note;
+          const box = root.querySelector(".ent-note-existing");
+          if (box) box.innerHTML = renderAnswerText(note);
+          else root.querySelector("#ent-note-input")?.closest(".node-comment-row")?.insertAdjacentHTML("beforebegin", `<div class="ent-note-existing">${renderAnswerText(note)}</div>`);
+          genProfile();
         });
       } catch (err) {
         ans.innerHTML = `<p class="ent-ask-err">Couldn't answer: ${escapeHtml((err && err.message) || String(err))}</p>`;
@@ -310,16 +355,17 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
     root.querySelector("#ent-back").addEventListener("click", () => { openId = null; render(); });
     root.querySelector("#ent-save").addEventListener("click", async () => {
+      const fresh = (await getEntity(id)) || ent;
       const next = {
-        ...ent,
-        canonical: root.querySelector("#ent-canon").value.trim() || ent.canonical,
+        ...fresh,
+        canonical: root.querySelector("#ent-canon").value.trim() || fresh.canonical,
         entityKind: root.querySelector("#ent-kind").value,
         aliases: root.querySelector("#ent-aliases").value.split(",").map((s) => s.trim()).filter(Boolean),
-        note: root.querySelector("#ent-note").value.trim(),
         updatedAt: Date.now(),
       };
       await putEntity(next);
-      pstatus("Saved.", "ok");
+      Object.assign(ent, next);
+      dstatus("Saved.", "ok");
     });
     root.querySelector("#ent-del")?.addEventListener("click", async () => {
       if (!confirm(`Delete “${ent.canonical}”? Its mentions stay in the entries; only the identity is removed.`)) return;
@@ -334,7 +380,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     root.querySelector("#ent-merge-btn")?.addEventListener("click", async () => {
       const targetId = root.querySelector("#ent-merge-sel").value;
       if (!targetId || targetId === id) return;
-      await mergeInto(id, targetId, pstatus);
+      await mergeInto(id, targetId, dstatus);
     });
   }
 
