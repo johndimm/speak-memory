@@ -422,10 +422,41 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
   // ---- Hands-free interview: go name after name, the app asks, you answer aloud --------------
   let iv = null; // { active, recog }
+
+  // Pick a natural-sounding voice. Browsers ship robotic defaults alongside much better ones
+  // ("… Natural", Google, Apple's Samantha/Ava, Microsoft Online Natural); prefer those. The
+  // reader's saved choice (localStorage) wins.
+  function englishVoices() { try { return (speechSynthesis.getVoices() || []).filter((v) => /^en(-|_|$)/i.test(v.lang)); } catch { return []; } }
+  function pickVoice() {
+    const voices = englishVoices();
+    if (!voices.length) return null;
+    const saved = localStorage.getItem("tts-voice");
+    if (saved) { const m = voices.find((v) => v.voiceURI === saved || v.name === saved); if (m) return m; }
+    const score = (v) => {
+      const n = v.name.toLowerCase();
+      let s = 0;
+      if (/natural|neural|premium|enhanced/.test(n)) s += 50;
+      if (/google/.test(n)) s += 30;
+      if (/\b(samantha|ava|allison|serena|zoe|jenny|aria|libby|sonia)\b/.test(n)) s += 25;
+      if (/\ben-us\b|en_us/i.test(v.lang)) s += 5;
+      if (v.localService) s += 3;
+      return s;
+    };
+    return voices.slice().sort((a, b) => score(b) - score(a))[0];
+  }
+  // Voices can load asynchronously; nudge them.
+  try { if (!speechSynthesis.getVoices().length) speechSynthesis.onvoiceschanged = () => {}; } catch { /* */ }
+
   function speak(text) {
     return new Promise((resolve) => {
-      try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.rate = 1; u.onend = resolve; u.onerror = resolve; speechSynthesis.speak(u); }
-      catch { resolve(); }
+      try {
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        const v = pickVoice(); if (v) u.voice = v;
+        u.rate = 1.0; u.pitch = 1.0;
+        u.onend = resolve; u.onerror = resolve;
+        speechSynthesis.speak(u);
+      } catch { resolve(); }
     });
   }
   function listenOnce() {
@@ -518,11 +549,22 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           <button type="button" id="iv-skip">Skip ›</button>
           <button type="button" id="iv-stop">Stop</button>
         </div>
+        <label class="iv-voice"><span>Voice</span> <select id="iv-voice-sel"></select></label>
         <p class="iv-hint">Answer out loud. Say “skip” for the next name, “stop” to end.</p>
       </div>`;
       document.body.appendChild(ov);
       ov.querySelector("#iv-stop").addEventListener("click", () => { if (iv) iv.active = false; if (iv && iv.recog) { try { iv.recog.stop(); } catch { /* */ } } endInterview(); });
       ov.querySelector("#iv-skip").addEventListener("click", () => { if (iv && iv.recog) { try { iv.recog.stop(); } catch { /* */ } } });
+      // Voice picker — populate from available English voices; remember the choice and preview it.
+      const sel = ov.querySelector("#iv-voice-sel");
+      const fill = () => {
+        const voices = englishVoices(); if (!voices.length) return;
+        const cur = pickVoice();
+        sel.innerHTML = voices.map((v) => `<option value="${v.voiceURI}"${cur && v.voiceURI === cur.voiceURI ? " selected" : ""}>${v.name}</option>`).join("");
+      };
+      fill();
+      try { speechSynthesis.onvoiceschanged = fill; } catch { /* */ }
+      sel.addEventListener("change", () => { localStorage.setItem("tts-voice", sel.value); speak("Okay, I'll use this voice."); });
     }
     if (s.name != null) ov.querySelector("#iv-name").textContent = s.name;
     if (s.q != null) ov.querySelector("#iv-q").textContent = s.q;
