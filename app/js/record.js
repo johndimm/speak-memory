@@ -93,12 +93,24 @@ function nowContext() {
   };
 }
 
-export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory } = {}) {
+export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate } = {}) {
   root.innerHTML = `
     <aside class="app-intro" id="app-intro" hidden>
       <button type="button" class="app-intro-dismiss" id="app-intro-dismiss" aria-label="Dismiss">×</button>
       <p class="app-intro-lead"><strong>Speak, Memory</strong> — just talk, and it becomes your life story. Private to this device; no account.</p>
     </aside>
+    <!-- The arc of the app: past · present · future. The present (this diary) is where you are. -->
+    <div class="triptych" id="triptych">
+      <button type="button" class="tri tri-past" data-phase="past">
+        <span class="tri-when">Past</span><span class="tri-what">Memoir</span><span class="tri-do">speak your story ›</span>
+      </button>
+      <div class="tri tri-present" aria-current="true">
+        <span class="tri-when">Present</span><span class="tri-what">Diary</span><span class="tri-do">today, below</span>
+      </div>
+      <button type="button" class="tri tri-future" data-phase="future">
+        <span class="tri-when">Future</span><span class="tri-what">Fortune</span><span class="tri-do">imagine ahead ›</span>
+      </button>
+    </div>
     <form class="write-form" id="write-form">
       <!-- The input leads: a big prompt + box, with Dictate right there. Everything else folds below. -->
       <label class="field write-main">
@@ -544,6 +556,12 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // Android-robust handling of auto-restart and de-duplication.
   setupDictation(micBtn, textEl, statusEl, refreshSaveState);
   setupHandsFree(root.querySelector("#handsfree-btn"), textEl, refreshSaveState); // tap once, talk for a long time
+  // Triptych: Past → the memoir (voice life-interview); Future → the fortune (Futures).
+  root.querySelector(".tri-past")?.addEventListener("click", async () => {
+    const { startLifeInterview } = await import("./lifeinterview.js");
+    startLifeInterview();
+  });
+  root.querySelector(".tri-future")?.addEventListener("click", () => onNavigate && onNavigate("futures"));
 
   // Generate BOTH a prose and an outline summary of the same text (voice applies to prose only).
   async function summarizeBoth(date, text) {

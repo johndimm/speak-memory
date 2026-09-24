@@ -122,12 +122,32 @@ export function initFutures(root) {
           <div id="fut-status" class="fut-status" hidden></div>
         </div>
 
+        <div class="fut-bucket" id="fut-bucket">${bucketHtml()}</div>
+
         <div class="fut-gallery">${galleryHtml()}</div>
       </div>`;
 
     wire();
     updateGenLabels();
   }
+
+  // ---- Bucket list (per journal) — things you want to do; a Future can weave them all in ----------
+  function getBucket() { try { return JSON.parse(localStorage.getItem(jkey("bucket-list")) || "[]").filter((x) => typeof x === "string"); } catch { return []; } }
+  function setBucket(items) { try { localStorage.setItem(jkey("bucket-list"), JSON.stringify(items)); } catch { /* */ } }
+  function bucketHtml() {
+    const items = getBucket();
+    const rows = items.map((it, i) => `<li class="bucket-item"><span>${escapeHtml(it)}</span><button type="button" class="bucket-del" data-bucket-del="${i}" aria-label="Remove">×</button></li>`).join("");
+    return `
+      <h2 class="fut-title">Bucket list</h2>
+      <p class="fut-lead">Things you want to do while there's time. Add them here, then let the fortune imagine a life that gets to them all.</p>
+      <ul class="bucket-list">${rows || `<li class="bucket-empty">Nothing yet — what do you want to do before it's too late?</li>`}</ul>
+      <form class="bucket-add" id="bucket-add-form">
+        <input type="text" id="bucket-input" autocomplete="off" placeholder="e.g. see the northern lights, learn piano, mend things with Dad…">
+        <button type="submit" class="bucket-addbtn">Add</button>
+      </form>
+      ${items.length ? `<button type="button" class="fut-go bucket-fulfill" id="bucket-fulfill">🔮 Imagine a future that does them all ›</button>` : ""}`;
+  }
+  function refreshBucket() { const el = root.querySelector("#fut-bucket"); if (el) { el.innerHTML = bucketHtml(); wireBucket(); } }
 
   function wire() {
     const nudge = root.querySelector("#fut-nudge");
@@ -151,6 +171,28 @@ export function initFutures(root) {
       const f = getFuture(activeJournalId()) || {};
       const { playFutureShow } = await import("./audioshow.js");
       playFutureShow({ endYear: f.endYear, years: f.years, nudge: f.nudge });
+    });
+    wireBucket();
+  }
+
+  function wireBucket() {
+    root.querySelector("#bucket-add-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const input = root.querySelector("#bucket-input");
+      const v = (input && input.value || "").trim();
+      if (!v) return;
+      setBucket([...getBucket(), v]);
+      refreshBucket();
+    });
+    root.querySelectorAll("[data-bucket-del]").forEach((b) => b.addEventListener("click", () => {
+      const i = Number(b.dataset.bucketDel);
+      const items = getBucket(); items.splice(i, 1); setBucket(items); refreshBucket();
+    }));
+    root.querySelector("#bucket-fulfill")?.addEventListener("click", () => {
+      const items = getBucket();
+      if (!items.length) return;
+      const nudge = `Over these years I take on and fulfill my bucket list — I find a way to do each of these, and the diary shows how: ${items.join("; ")}.`;
+      startFuture(nudge, composeYears, composeCount);
     });
   }
 

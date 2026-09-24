@@ -173,6 +173,7 @@ const recorder = initRecord(writeView, {
   onSavedMemory: (mem) => openMemoryInJournal(mem),   // a memory → its category/subject page
   onDeleted: (date) => setMode("browse", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
+  onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode
 });
 const graph = initGraphView(graphView, {
   // "Open ›" in the graph's node preview → jump to that node's page in the Journal.

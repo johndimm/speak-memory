@@ -173,6 +173,20 @@ body { position: relative; }
 }
 .app-intro-dismiss:hover { opacity: 1; }
 
+/* Past · Present · Future — the arc of the app, present highlighted. A reusable theme. */
+.triptych { display: grid; grid-template-columns: 1fr 1.15fr 1fr; gap: 0.4rem; margin-bottom: 1.25rem; align-items: stretch; }
+.tri { display: flex; flex-direction: column; gap: 0.15rem; text-align: center; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 0.5rem; background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
+.tri-when { font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); }
+.tri-what { font-family: var(--font-display); font-size: 1.35rem; line-height: 1.1; }
+.tri-do { font-size: 0.72rem; color: var(--accent); }
+.tri-present { background: var(--accent); border-color: var(--accent); color: #fff; cursor: default; }
+.tri-present .tri-when { color: rgba(255,255,255,0.8); }
+.tri-present .tri-do { color: rgba(255,255,255,0.85); }
+button.tri:hover { border-color: var(--accent); }
+button.tri:active { transform: translateY(1px); }
+@media (max-width: 520px) { .tri-what { font-size: 1.1rem; } .tri-do { font-size: 0.66rem; } .tri { padding: 0.6rem 0.3rem; } }
+
 .write-form { display: flex; flex-direction: column; gap: 1.1rem; }
 /* The input leads: big prompt, tall box, prominent actions right under it. */
 .write-main { gap: 0.6rem; }
@@ -1208,6 +1222,20 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .show-controls #show-toggle { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
 .show-voice { display: inline-flex; align-items: center; gap: 0.5rem; justify-content: center; margin-top: 1.2rem; font-size: 0.8rem; color: rgba(244,239,230,0.7); }
 .show-voice select { font: inherit; font-size: 0.8rem; color: #f4efe6; background: rgba(255,255,255,0.08); border: 1px solid rgba(244,239,230,0.25); border-radius: 8px; padding: 0.3rem 0.5rem; max-width: 12rem; }
+
+/* Bucket list */
+.fut-bucket { margin: 1.75rem 0; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.bucket-list { list-style: none; margin: 0 0 0.8rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.bucket-item { display: flex; align-items: center; gap: 0.6rem; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0.55rem 0.5rem 0.55rem 0.85rem; }
+.bucket-item span { flex: 1; line-height: 1.4; }
+.bucket-del { border: none; background: transparent; color: var(--ink-soft); font-size: 1.1rem; cursor: pointer; width: 1.7rem; height: 1.7rem; border-radius: 50%; flex-shrink: 0; }
+.bucket-del:hover { color: #b3261e; background: var(--paper-deep); }
+.bucket-empty { color: var(--ink-soft); font-style: italic; }
+.bucket-add { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; }
+.bucket-add input { flex: 1; font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 999px; padding: 0.55rem 1rem; }
+.bucket-add input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+.bucket-addbtn { border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-weight: 600; padding: 0.55rem 1.1rem; border-radius: 999px; cursor: pointer; }
+.bucket-fulfill { display: inline-block; }
 
 /* Composer */
 .fut-title { font-family: var(--font-display); font-size: 2rem; font-weight: 400; margin: 0 0 0.3rem; }
