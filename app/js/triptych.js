@@ -10,7 +10,7 @@ export function triptychHtml(active) {
     return `<button type="button" class="tri tri-${phase}" data-phase="${phase}"><span class="tri-when">${when}</span><span class="tri-what">${what}</span><span class="tri-do">${doIdle}</span></button>`;
   };
   return `<div class="triptych">
-    ${cell("past", "Past", "Memoir", "your story", "speak your story ›")}
+    ${cell("past", "Past", "Memoir", "your story", "recall & record ›")}
     ${cell("present", "Present", "Diary", "today, below", "write today ›")}
     ${cell("future", "Future", "Fortune", "here", "imagine ahead ›")}
   </div>`;

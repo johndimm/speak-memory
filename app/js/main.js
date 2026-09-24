@@ -174,7 +174,7 @@ const browseTriptych = document.getElementById("browse-triptych");
 if (browseTriptych) {
   browseTriptych.innerHTML = triptychHtml();
   wireTriptych(browseTriptych, {
-    past: async () => { const { startLifeInterview } = await import("./lifeinterview.js"); startLifeInterview(); },
+    past: () => setMode("write", {}),   // open Write in silent new-memory mode (hands-free is opt-in there)
     present: () => setMode("write"),
     future: () => setMode("futures"),
   });

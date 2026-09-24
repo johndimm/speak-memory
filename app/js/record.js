@@ -139,6 +139,10 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
 
       <details class="write-more" id="write-more">
         <summary>Date, or file as a past memory</summary>
+        <div class="memoir-handsfree-row">
+          <button type="button" class="fut-interview" id="memoir-handsfree">🎙 Talk it through, hands-free</button>
+          <span class="field-hint">Or just type below — I won't interrupt.</span>
+        </div>
         <label class="field">
           <span class="field-label">Date</span>
           <input type="date" id="entry-date" value="${todayISO()}" max="${todayISO()}">
@@ -557,10 +561,15 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // Android-robust handling of auto-restart and de-duplication.
   setupDictation(micBtn, textEl, statusEl, refreshSaveState);
   setupHandsFree(root.querySelector("#handsfree-btn"), textEl, refreshSaveState); // tap once, talk for a long time
-  // Triptych: Past → the memoir (voice life-interview); Future → the fortune (Futures).
+  // Triptych: Past → the memoir, opened for MANUAL entry (no talking). Hands-free is an explicit
+  // choice — the "🎙 Talk it through" button inside. Future → the fortune (Futures).
   wireTriptych(root, {
-    past: async () => { const { startLifeInterview } = await import("./lifeinterview.js"); startLifeInterview(); },
+    past: () => newMemory({}),
     future: () => onNavigate && onNavigate("futures"),
+  });
+  root.querySelector("#memoir-handsfree")?.addEventListener("click", async () => {
+    const { startLifeInterview } = await import("./lifeinterview.js");
+    startLifeInterview(() => loadMemLists());
   });
 
   // Generate BOTH a prose and an outline summary of the same text (voice applies to prose only).

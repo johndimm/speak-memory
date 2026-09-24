@@ -1261,6 +1261,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 }
 .fut-interview { border: 1px solid var(--accent); background: var(--card); color: var(--accent); font: inherit; font-weight: 600; font-size: 0.85rem; padding: 0.35rem 0.9rem; border-radius: 999px; cursor: pointer; margin-left: 0.3rem; }
 .fut-interview:hover { background: var(--accent); color: #fff; }
+.memoir-handsfree-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
 .fut-go:disabled { opacity: 0.5; cursor: default; }
 .fut-status { margin-top: 1rem; color: var(--ink-soft); font-size: 0.9rem; }
 .fut-status.working::before { content: "◷ "; }
