@@ -8,6 +8,7 @@ import { renderReps, wireReps, isOutlineText, escapeHtml } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
 import { setupDictation, setupHandsFree, IS_MOBILE } from "./dictation.js";
 import { triptychHtml, wireTriptych } from "./triptych.js";
+import { primeAudio } from "./voicetts.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -568,6 +569,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     future: () => onNavigate && onNavigate("futures"),
   });
   root.querySelector("#memoir-handsfree")?.addEventListener("click", async () => {
+    primeAudio(); // unlock audio IN this tap, before the async import (mobile blocks post-gesture play)
     const { startLifeInterview } = await import("./lifeinterview.js");
     startLifeInterview(() => loadMemLists());
   });

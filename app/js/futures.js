@@ -13,6 +13,7 @@
 
 import { getAllEntries, getAllEntities, getAllMemories, seedJournal } from "./db.js";
 import { escapeHtml } from "./render.js";
+import { primeAudio } from "./voicetts.js";
 import {
   dbNameFor, switchJournal, listJournals, registerJournal, journalExists,
   deleteJournal, slugify, activeJournalId, isSampleJournal, jkey,
@@ -163,6 +164,7 @@ export function initFutures(root) {
     });
     root.querySelector("#fut-go")?.addEventListener("click", () => startFuture(nudge.value, composeYears, composeCount));
     root.querySelector("#fut-interview")?.addEventListener("click", async () => {
+      primeAudio(); // unlock audio IN this tap, before the async import
       const { startLifeInterview } = await import("./lifeinterview.js");
       startLifeInterview((saved) => { if (saved) setStatus("ok", `Added ${saved} memor${saved === 1 ? "y" : "ies"} — imagine a future to see them shape it.`); });
     });
