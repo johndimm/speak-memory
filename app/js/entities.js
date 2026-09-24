@@ -13,6 +13,7 @@ import { escapeHtml } from "./render.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { resolveEntityNames, resetEntityIndex } from "./entityresolve.js";
+import { createSpeaker, CHARACTERS, savedCharacter } from "./voicetts.js";
 
 const SpeechRec = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 const KIND_LABEL = { person: "Person", animal: "Animal", place: "Place", org: "Organization", thing: "Thing" };
@@ -456,18 +457,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   // Voices can load asynchronously; nudge them.
   try { if (!speechSynthesis.getVoices().length) speechSynthesis.onvoiceschanged = () => {}; } catch { /* */ }
 
-  function speak(text) {
-    return new Promise((resolve) => {
-      try {
-        speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(text);
-        const v = pickVoice(); if (v) u.voice = v;
-        u.rate = 1.0; u.pitch = 1.0;
-        u.onend = resolve; u.onerror = resolve;
-        speechSynthesis.speak(u);
-      } catch { resolve(); }
-    });
-  }
+  // ChatGPT-quality OpenAI voice (character-steered), with browser fallback — the same speaker the
+  // reveal and life interview use. unlock() is called on the interview's start tap (mobile audio).
+  const ivSpeaker = createSpeaker();
+  const speak = (text) => ivSpeaker.speak(text);
   // Listen for a whole answer, however long. Recognition runs continuously and RESTARTS through the
   // browser's own silence cutoff, so pauses never end the turn. A turn ends only when: you go quiet
   // for a longer stretch after speaking (SIL_MS), or you tap Done / Skip / Stop.
@@ -531,6 +524,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   async function startInterview() {
     if (iv && iv.active) return;
     if (!IS_MOBILE && !SpeechRec) { alert("Voice interview needs speech recognition (try Chrome on desktop), or use it on your phone with the keyboard mic."); return; }
+    ivSpeaker.unlock(); // inside the start-tap gesture → let mobile play the OpenAI voice afterward
     const ents = await getAllEntities();
     if (!ents.length) return;
     // Cover EVERY name: un-reviewed first (never seen in an interview), then no-notes, people first.
@@ -583,7 +577,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   }
   function endInterview() {
     if (iv && iv.recog) { try { iv.recog.stop(); } catch { /* */ } }
-    try { speechSynthesis.cancel(); } catch { /* */ }
+    ivSpeaker.cancel();
     iv = null;
     const ov = document.getElementById("iv-overlay"); if (ov) ov.remove();
     render(); // refresh the roster (notes/counts changed)
@@ -608,7 +602,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           <button type="button" id="iv-skip">Skip ›</button>
           <button type="button" id="iv-stop">Stop</button>
         </div>
-        <label class="iv-voice"><span>Voice</span> <select id="iv-voice-sel"></select></label>
+        <label class="iv-voice"><span>Voice</span> <select id="iv-voice-sel">${CHARACTERS.map((c) => `<option value="${c.id}"${c.id === savedCharacter() ? " selected" : ""}>${c.label}</option>`).join("")}</select></label>
         <p class="iv-hint">${SpeechRec
           ? "Talk as long as you like — pause about 5 seconds and it moves on. Skip for the next name, Stop to end."
           : "Tap the answer box and use the mic on your keyboard, then tap Done. Skip for the next name, Stop to end."}</p>
@@ -618,16 +612,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       ov.querySelector("#iv-done").addEventListener("click", () => { if (iv && iv.finishTurn) iv.finishTurn(); });
       ov.querySelector("#iv-skip").addEventListener("click", () => { if (iv && iv.finishTurn) iv.finishTurn("__skip__"); });
       ov.querySelector("#iv-stop").addEventListener("click", () => { if (iv) { iv.active = false; if (iv.finishTurn) iv.finishTurn("__stop__"); else endInterview(); } });
-      // Voice picker — populate from available English voices; remember the choice and preview it.
-      const sel = ov.querySelector("#iv-voice-sel");
-      const fill = () => {
-        const voices = englishVoices(); if (!voices.length) return;
-        const cur = pickVoice();
-        sel.innerHTML = voices.map((v) => `<option value="${v.voiceURI}"${cur && v.voiceURI === cur.voiceURI ? " selected" : ""}>${v.name}</option>`).join("");
-      };
-      fill();
-      try { speechSynthesis.onvoiceschanged = fill; } catch { /* */ }
-      sel.addEventListener("change", () => { localStorage.setItem("tts-voice", sel.value); speak("Okay, I'll use this voice."); });
+      ov.querySelector("#iv-voice-sel").addEventListener("change", (e) => localStorage.setItem("tts-character", e.target.value));
     }
     if (s.name != null) { ov.querySelector("#iv-name").textContent = s.name; ov.querySelector("#iv-profile").innerHTML = ""; } // new name → clear old profile
     if (s.q != null) ov.querySelector("#iv-q").textContent = s.q;

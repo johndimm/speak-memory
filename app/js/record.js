@@ -7,6 +7,7 @@ import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMe
 import { renderReps, wireReps, isOutlineText, escapeHtml } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
 import { setupDictation, setupHandsFree, IS_MOBILE } from "./dictation.js";
+import { triptychHtml, wireTriptych } from "./triptych.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -100,17 +101,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <p class="app-intro-lead"><strong>Speak, Memory</strong> — just talk, and it becomes your life story. Private to this device; no account.</p>
     </aside>
     <!-- The arc of the app: past · present · future. The present (this diary) is where you are. -->
-    <div class="triptych" id="triptych">
-      <button type="button" class="tri tri-past" data-phase="past">
-        <span class="tri-when">Past</span><span class="tri-what">Memoir</span><span class="tri-do">speak your story ›</span>
-      </button>
-      <div class="tri tri-present" aria-current="true">
-        <span class="tri-when">Present</span><span class="tri-what">Diary</span><span class="tri-do">today, below</span>
-      </div>
-      <button type="button" class="tri tri-future" data-phase="future">
-        <span class="tri-when">Future</span><span class="tri-what">Fortune</span><span class="tri-do">imagine ahead ›</span>
-      </button>
-    </div>
+    ${triptychHtml("present")}
     <form class="write-form" id="write-form">
       <!-- The input leads: a big prompt + box, with Dictate right there. Everything else folds below. -->
       <label class="field write-main">
@@ -398,6 +389,16 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     saveBtn.disabled = !(textEl.value.trim() || pendingPhotos.length);
   }
 
+  // The prompt reflects the selected date: "What happened today?" for today, else the date itself.
+  function promptForDate(date, editMode) {
+    const iso = date || todayISO();
+    if (iso === todayISO()) return editMode ? "Today" : "What happened today?";
+    const d = new Date(iso + "T12:00:00");
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    const pretty = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+    return editMode ? pretty : `What happened — ${pretty}?`;
+  }
+
   // Show the selected day's saved entry in the box, cursor at the end, ready to continue.
   async function loadDraft({ focus = false } = {}) {
     const date = dateEl.value || todayISO();
@@ -417,7 +418,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     inEditMode = editMode;
     editingText = false;
     headlineField.hidden = !editMode;
-    entryLabel.textContent = editMode ? "Entry" : "What happened?";
+    entryLabel.textContent = promptForDate(date, editMode); // show the selected date (normally today)
     briefEl.value = entry?.brief ?? "";
     currentSummarized = entry ? entry.summarized !== false : true;
     saveBtn.textContent = editMode ? "Update entry" : "Save entry";
@@ -557,11 +558,10 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   setupDictation(micBtn, textEl, statusEl, refreshSaveState);
   setupHandsFree(root.querySelector("#handsfree-btn"), textEl, refreshSaveState); // tap once, talk for a long time
   // Triptych: Past → the memoir (voice life-interview); Future → the fortune (Futures).
-  root.querySelector(".tri-past")?.addEventListener("click", async () => {
-    const { startLifeInterview } = await import("./lifeinterview.js");
-    startLifeInterview();
+  wireTriptych(root, {
+    past: async () => { const { startLifeInterview } = await import("./lifeinterview.js"); startLifeInterview(); },
+    future: () => onNavigate && onNavigate("futures"),
   });
-  root.querySelector(".tri-future")?.addEventListener("click", () => onNavigate && onNavigate("futures"));
 
   // Generate BOTH a prose and an outline summary of the same text (voice applies to prose only).
   async function summarizeBoth(date, text) {

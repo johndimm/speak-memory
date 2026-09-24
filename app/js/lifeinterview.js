@@ -5,6 +5,7 @@
 // you like — a ~5s pause ingests your answer (no tap). Skip changes topic; Stop ends.
 
 import { getAllEntries, getAllMemories, getAllEntities, putMemory } from "./db.js";
+import { createSpeaker, CHARACTERS, savedCharacter } from "./voicetts.js";
 
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "m" + Date.now() + Math.random().toString(36).slice(2));
@@ -13,22 +14,6 @@ function llmOverrides() {
   const provider = localStorage.getItem("llm-provider") || "";
   if (!provider) return {};
   return { provider, apiKey: localStorage.getItem("llm-api-key") || "", model: localStorage.getItem("llm-model") || "", baseUrl: localStorage.getItem("llm-base-url") || "" };
-}
-function pickVoice() {
-  try {
-    const vs = (speechSynthesis.getVoices() || []).filter((v) => /^en(-|_|$)/i.test(v.lang));
-    if (!vs.length) return null;
-    const saved = localStorage.getItem("tts-voice");
-    if (saved) { const m = vs.find((v) => v.voiceURI === saved || v.name === saved); if (m) return m; }
-    const score = (v) => { const n = v.name.toLowerCase(); let s = 0; if (/natural|neural|google|samantha|ava|serena/.test(n)) s += 30; if (/en-us/i.test(v.lang)) s += 5; return s; };
-    return vs.slice().sort((a, b) => score(b) - score(a))[0];
-  } catch { return null; }
-}
-function speak(text) {
-  return new Promise((resolve) => {
-    try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); const v = pickVoice(); if (v) u.voice = v; u.onend = resolve; u.onerror = resolve; speechSynthesis.speak(u); }
-    catch { resolve(); }
-  });
 }
 
 async function buildContext() {
@@ -50,6 +35,8 @@ async function postInterview(context, convo, lastAnswer) {
 
 export async function startLifeInterview(onDone) {
   if (!SpeechRec) { alert("The voice interview needs speech recognition — try Chrome on desktop or Android."); return; }
+  const speaker = createSpeaker();
+  speaker.unlock(); // we're inside the start-tap gesture → let mobile play audio afterward
 
   const ov = document.createElement("div");
   ov.className = "iv-overlay";
@@ -62,13 +49,16 @@ export async function startLifeInterview(onDone) {
         <button type="button" id="li-skip">Skip ›</button>
         <button type="button" id="li-stop">Stop</button>
       </div>
+      <label class="iv-voice"><span>Voice</span> <select id="li-voice">${CHARACTERS.map((c) => `<option value="${c.id}"${c.id === savedCharacter() ? " selected" : ""}>${c.label}</option>`).join("")}</select></label>
       <p class="iv-hint">Talk as long as you like — pause about 5 seconds and I'll move on. Skip to change the subject, Stop to end. The more you tell me, the sharper your Future.</p>
     </div>`;
   document.body.appendChild(ov);
   const qEl = ov.querySelector("#li-q"), interimEl = ov.querySelector("#li-interim"), savedEl = ov.querySelector("#li-saved");
+  ov.querySelector("#li-voice").addEventListener("change", (e) => localStorage.setItem("tts-character", e.target.value));
+  const speak = (t) => speaker.speak(t);
 
   let active = true, recog = null, finishTurn = null, saved = 0;
-  const cleanup = () => { active = false; try { speechSynthesis.cancel(); } catch { /* */ } try { recog && recog.stop(); } catch { /* */ } ov.remove(); onDone && onDone(saved); };
+  const cleanup = () => { active = false; speaker.cancel(); try { recog && recog.stop(); } catch { /* */ } ov.remove(); onDone && onDone(saved); };
   ov.querySelector("#li-stop").addEventListener("click", () => { active = false; if (finishTurn) finishTurn("__stop__"); else cleanup(); });
   ov.querySelector("#li-skip").addEventListener("click", () => { if (finishTurn) finishTurn("__skip__"); });
 

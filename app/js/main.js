@@ -9,6 +9,7 @@ import { initActivity } from "./activity.js";
 import { initEntities } from "./entities.js";
 import { purgeRaw, getAllMemories } from "./db.js";
 import { jkey, isSampleJournal, activeJournalId } from "./journal.js";
+import { triptychHtml, wireTriptych } from "./triptych.js";
 
 // Keep raw text for the most recent entries only; drop older raw (summaries are kept).
 purgeRaw().catch(() => {});
@@ -167,6 +168,17 @@ if (activitySubnav) activitySubnav.addEventListener("click", (e) => {
 });
 
 modeBtns.forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
+
+// The past·present·future band on the Journal — here none is "active"; all three navigate.
+const browseTriptych = document.getElementById("browse-triptych");
+if (browseTriptych) {
+  browseTriptych.innerHTML = triptychHtml();
+  wireTriptych(browseTriptych, {
+    past: async () => { const { startLifeInterview } = await import("./lifeinterview.js"); startLifeInterview(); },
+    present: () => setMode("write"),
+    future: () => setMode("futures"),
+  });
+}
 
 const recorder = initRecord(writeView, {
   onSaved: (date) => setMode("browse", date, "day"), // a dated entry → its own day page

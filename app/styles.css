@@ -180,9 +180,9 @@ body { position: relative; }
 .tri-when { font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); }
 .tri-what { font-family: var(--font-display); font-size: 1.35rem; line-height: 1.1; }
 .tri-do { font-size: 0.72rem; color: var(--accent); }
-.tri-present { background: var(--accent); border-color: var(--accent); color: #fff; cursor: default; }
-.tri-present .tri-when { color: rgba(255,255,255,0.8); }
-.tri-present .tri-do { color: rgba(255,255,255,0.85); }
+.tri-active { background: var(--accent); border-color: var(--accent); color: #fff; cursor: default; }
+.tri-active .tri-when { color: rgba(255,255,255,0.8); }
+.tri-active .tri-do { color: rgba(255,255,255,0.85); }
 button.tri:hover { border-color: var(--accent); }
 button.tri:active { transform: translateY(1px); }
 @media (max-width: 520px) { .tri-what { font-size: 1.1rem; } .tri-do { font-size: 0.66rem; } .tri { padding: 0.6rem 0.3rem; } }
