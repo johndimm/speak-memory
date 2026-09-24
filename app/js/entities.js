@@ -88,6 +88,7 @@ function itemSortKey(it) {
 export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   let openId = null; // entity being viewed, or null = the roster
   let scanning = false;
+  let showSingles = false; // one-off names (mentioned only once) are hidden until you ask for them
 
   async function allSources() {
     const [days, mems] = await Promise.all([getAllEntries(), getAllMemories()]);
@@ -180,8 +181,14 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     }
     const total = sources.filter((s) => s.raw || s.text).length;
 
+    // A name mentioned only ONCE across all entries is usually noise (a one-off or a mishear). Hide
+    // those by default — but always keep ones you've engaged with (a note, a flag, or a profile).
+    const keep = (e) => (counts.get(e.id) || 0) >= 2 || !!e.note || e.recognized === false || !!e.profile;
+    const singles = entities.filter((e) => !keep(e));
+    const visible = showSingles ? entities : entities.filter(keep);
+
     const byKind = new Map();
-    for (const e of entities) {
+    for (const e of visible) {
       const k = e.entityKind || "person";
       if (!byKind.has(k)) byKind.set(k, []);
       byKind.get(k).push(e);
@@ -215,11 +222,14 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           ? `<p class="ent-empty">No entries yet — write or imagine some days first.</p>`
           : entities.length === 0
             ? `<p class="ent-empty">Nothing scanned yet. Tap “Scan entries” to find the people and animals in your journal.</p>`
-            : sections + (taggedCount < total ? `<p class="field-hint" style="margin-top:1rem">${total - taggedCount} entr${total - taggedCount === 1 ? "y" : "ies"} not yet scanned — tap “Scan new entries”.</p>` : "")}
+            : sections
+              + (singles.length ? `<button type="button" class="ent-singles-toggle" id="ent-singles">${showSingles ? "Hide" : "Show"} ${singles.length} name${singles.length === 1 ? "" : "s"} mentioned once</button>` : "")
+              + (taggedCount < total ? `<p class="field-hint" style="margin-top:1rem">${total - taggedCount} entr${total - taggedCount === 1 ? "y" : "ies"} not yet scanned — tap “Scan new entries”.</p>` : "")}
       </div>`;
 
     root.querySelector("#ent-scan")?.addEventListener("click", () => scan(setStatus));
     root.querySelector("#ent-interview")?.addEventListener("click", () => startInterview());
+    root.querySelector("#ent-singles")?.addEventListener("click", () => { showSingles = !showSingles; render(); });
   }
 
   function setStatus(msg, cls) {
