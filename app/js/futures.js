@@ -288,7 +288,10 @@ export function initFutures(root) {
       // Start the future knowing your real cast; imagined new names stay in the future's own DB.
       let entities = [];
       try { entities = await getAllEntities(); } catch { entities = []; }
-      await seedJournal(dbNameFor(id), { entries: data.days.map((d) => ({ date: d.date, text: d.raw })), memories, entities });
+      // Carry your real PAST into the future (read-only), so it reads as a continuation of your life.
+      let pastEntries = [];
+      try { pastEntries = await getAllEntries(); } catch { pastEntries = []; }
+      await seedJournal(dbNameFor(id), { entries: data.days.map((d) => ({ date: d.date, text: d.raw })), memories, entities, pastEntries });
       localStorage.setItem(jkey("journal-title", id), (getFuture(id) || {}).title || `${data.endYear}`);
       localStorage.setItem(jkey("year-grouping", id), "calendar");
       finish({ status: "ready", days: data.days.length });
