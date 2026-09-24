@@ -6,6 +6,38 @@
 
 A running log of what we changed and when — the moves forward, and the sideways ones.
 
+## 2026-09-24 — past · present · future: futures you can hear, a cast that knows itself, and a memoir you talk into
+
+A long arc that grew the app from a diary into three linked worlds — **Memoir (past)**, **Diary
+(present)**, and **Fortune (future)** — tied together by a shared voice and a cast of named people.
+
+**Forward**
+- **Alternative futures** (`futures.js`, `api/future.js`). "Imagine forward" writes raw future diary days across the coming years, grounded in your real people and threads, then **takes over** as an isolated journal (its own IndexedDB) you browse in Journal/Timeline. Optional nudge steers it; you pick the horizon and entry count. Futures now **inherit your real cast** and **carry your real past in, read-only**, so a future reads as a continuation of your life, and its states feed the projection.
+- **Activity tab** (`activity.js`, `llmlog.js`) — a live view of every summarization/LLM job (waiting → summarizing → done → failed), with Retry and, folded in, the node Graph. "Recently finished" sorts newest-first with "ago" times.
+- **Named entities, end to end.** NER now **rides along with summarization** (the levels call returns `entities`), resolved client-side by **normalized name/alias match** (`entityresolve.js`) — no roster sent to the LLM, so it scales. Summaries carry **`{{e:id|Name}}` tokens** rendered as **clickable names**; each name has a page with an **LLM profile**, aliases/merge, notes, "Ask about X", and every mention in time order. Names tab, per-card delete, mobile-tidy rows.
+- **Two hands-free interviews.** The **Names interview** walks the cast name by name (5-second-silence auto-ingest, flags the ones you don't recognize, shows the revised summary live). The **Life interview** (`lifeinterview.js`) is an agent-driven memoir: it asks probing questions, saves each answer as a **memory** (verbatim = your words), and those memories feed richer Futures. Memoir opens for **manual entry** by default — hands-free is opt-in.
+- **The Reveal** (`audioshow.js`) — a future narrated as a produced audio show, in **ChatGPT-quality OpenAI voices** (`api/tts.js`, `gpt-4o-mini-tts` steered by `instructions`) as **characters**: James Mason, Bogart, Tom Waits, Sterling Holloway, Edward Everett Horton, Jon Stewart, John Oliver, Brad Pitt. Script cached per future; tap-to-play.
+- **Shared voice** (`voicetts.js`) — one speaker for the interviews and reveal, OpenAI with browser fallback, played via the **Web Audio API**.
+- **Hands-free journaling** on Write (`dictation.js setupHandsFree`) — tap once, talk for as long as you like (recognition restarts through pauses).
+- **Bucket list** on Futures — add things you want to do; "🔮 Imagine a future that does them all" builds a future whose nudge weaves each one in.
+- **The triptych** (`triptych.js`) — a Past · Present · Future band (Memoir · Diary · Fortune). On **Write** it guides input; on the **Journal** it guides browsing (Memoir → categories only, Diary → recent days, Fortune → the AI future section, inert when there is none). Help explains the three areas.
+- **Verbatim everywhere** — one consistent monospace/left-rule style for raw transcripts (leaf pages, detail panel, Write edit, name notes), distinct from summary prose.
+
+**Sideways**
+- **The mobile-voice saga.** Symptom: interviews spoke in the robotic browser voice on a Samsung S21 while desktop was fine. Chased three wrong theories — `<audio>`+blob unreliable on Android (switched to Web Audio), then a dynamic `import()` eating the tap gesture so the audio never unlocked (added `primeAudio()` called synchronously in the tap). The **actual** cause, found only after adding an on-screen "which voice + why" diagnostic: a **typo when the key was saved** (`OPEANAI_API_KEY`) meant `vercel env add` grabbed the *old, rejected* key (`…2kcA`) instead of the good one (`…hdUA`). Desktop worked because it ran the **local** dev server (good key in `app/.env.local`); mobile hit **Vercel** (bad key). Lesson: add the diagnostic first, stop guessing.
+- **Stale key, second flavor.** A leftover `llm-api-key` in localStorage was being sent even under the Built-in provider → 401s; `llmOverrides()` now returns `{}` when no provider is chosen.
+- **Notes ignored by the profile.** The name's note was sent in the prompt text, but `/api/chat`'s system prompt forbids anything "not in the entries" — so the model dropped it. Fix: pass the note **as an entry** ("My notes about X").
+- **Comment box wiped mid-type** — the background pass re-rendered the node page under you; now a re-render is deferred while a field is focused.
+- **Desktop mic crash** — icon-only mic buttons had no inner `<span>`, so `setupDictation` threw; guarded it.
+- **Entity extraction "invalid JSON"** — `callLLM`'s key check rejects arrays; switched to `callJsonObject`. Serverless timeouts → `maxDuration: 300`.
+
+**Open threads**
+- **iOS Safari** has no Web Speech, so interviews there fall back to the keyboard mic; true hands-free on iOS would need cloud STT.
+- **Export doesn't include** entities or the bucket list yet — not portable across devices.
+- Futures **copy the whole past** into each future DB (storage + first-open summarizing grows with history); could carry summaries only, or cap the range. Past **states** aren't carried onto the future Timeline yet — only days.
+- The reveal could gain **music beds**; the interviews could offer the character voices more prominently.
+- Remove or quiet the "🔊 OpenAI ✓" interview diagnostic now that the key is fixed.
+
 ## 2026-08-25 — Places: a map of a life
 
 Built the **Places** tab from `docs/places-feature.md` — a Leaflet/OSM map of where a life was
