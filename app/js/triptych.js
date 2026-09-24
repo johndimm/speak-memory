@@ -3,13 +3,18 @@
 // actions: past → the voice memoir, present → Write, future → Futures.
 
 // context: "write" (the trio guides your INPUT) or "browse" (the trio guides your BROWSING).
-export function triptychHtml(active, context = "write") {
+// opts.disabled: phases to render inert (e.g. ["future"] on a journal with no imagined future).
+export function triptychHtml(active, context = "write", opts = {}) {
+  const disabled = new Set(opts.disabled || []);
   const idle = context === "browse"
     ? { past: "browse memoir ›", present: "recent days ›", future: "the future ›" }
     : { past: "recall & record ›", present: "write today ›", future: "imagine ahead ›" };
   const cell = (phase, when, what, doActive) => {
     if (phase === active) {
       return `<div class="tri tri-${phase} tri-active" aria-current="true"><span class="tri-when">${when}</span><span class="tri-what">${what}</span><span class="tri-do">${doActive}</span></div>`;
+    }
+    if (disabled.has(phase)) {
+      return `<div class="tri tri-${phase} tri-disabled" aria-disabled="true"><span class="tri-when">${when}</span><span class="tri-what">${what}</span><span class="tri-do">— none yet</span></div>`;
     }
     return `<button type="button" class="tri tri-${phase}" data-phase="${phase}"><span class="tri-when">${when}</span><span class="tri-what">${what}</span><span class="tri-do">${idle[phase]}</span></button>`;
   };

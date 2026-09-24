@@ -17,6 +17,7 @@ const DOW_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Initial zoom = the "Opens on" setting (Settings › Journal); defaults to the latest week.
 const state = { zoom: localStorage.getItem("journal-landing") || "week", focusDate: null, category: null, subject: null, memoryId: null };
+let memoirOnly = false; // "Browse memoir" shows the Life view as CATEGORIES ONLY (no decades/diary)
 
 // Remember where in the Journal you were, so a reload (or re-opening the tab) lands you back on the
 // same page instead of resetting. Saved per journal.
@@ -811,6 +812,13 @@ async function renderLife() {
   const catRecs = await Promise.all(cats.map((c) => getPeriod(catKey(c))));
   const decadeLinks = nodeLinksHtml(decades.map((dd, i) => ({ label: bucketLabel(dd), sentence: levelsOf(decRecs[i]).sentence, attrs: { decade: dd }, thumb: repImage(Object.keys(journal.days).filter((x) => bucketStart(+x.slice(0, 4)) === dd), memoriesInDecade(dd), bucketEnd(dd)) })));
   const categoryLinks = nodeLinksHtml(cats.map((c, i) => ({ label: c, sentence: levelsOf(catRecs[i]).sentence, attrs: { category: c }, thumb: repImage([], memoriesInCategory(c)) })));
+
+  // "Browse memoir" → just the categories (your past, organized by category), nothing else.
+  if (memoirOnly) {
+    els.root.innerHTML = `<h2 class="node-name">Memoir</h2><p class="node-subtitle">your past, by category</p>`
+      + (cats.length ? categoryLinks : `<p class="nav-hint">No memories yet — add some in Write › Memoir.</p>`);
+    return;
+  }
 
   els.root.innerHTML = nodeScaffold({
     name: "Life",
@@ -1850,6 +1858,7 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
   if (els.breadcrumb) els.breadcrumb.addEventListener("click", (e) => {
     const crumb = e.target.closest(".crumb[data-zoom]");
     if (!crumb) return;
+    memoirOnly = false; // clicking "Life" in the crumb shows the full Life view again
     state.zoom = crumb.dataset.zoom; // go UP; focusDate stays (it's within every ancestor)
     render();
   });
@@ -1875,6 +1884,7 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
 
   return {
     async reload(focusDate, zoom) {
+      memoirOnly = false;
       if (zoom) state.zoom = zoom;
       if (focusDate) state.focusDate = focusDate;
       await reloadAndRender();
@@ -1885,6 +1895,7 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
     // Open the Journal on any graph node (from the graph's "Open ›" preview link).
     async showNode(nav) {
       if (!nav) return;
+      memoirOnly = false;
       if (nav.zoom === "memory") {
         const m = allMemories.find((x) => x.id === nav.memId);
         if (m) { state.category = catOf(m); state.subject = subjOf(m); state.zoom = "memory"; state.memoryId = nav.memId; }
@@ -1903,11 +1914,13 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
     //   Fortune → the start of the AI-added future section, if this journal has one
     async goMemoir() {
       if (!Object.keys(journal.days).length && !allMemories.length) await load();
+      memoirOnly = true;
       Object.assign(state, { zoom: "life", focusDate: null, category: null, subject: null, memoryId: null });
       await reloadAndRender();
     },
     async goPresent() {
       if (!Object.keys(journal.days).length) await load();
+      memoirOnly = false;
       const yr = new Date().getFullYear();
       const real = Object.keys(journal.days).filter((iso) => +iso.slice(0, 4) <= yr).sort();
       const d = real[real.length - 1] || Object.keys(journal.days).sort().pop() || null;
@@ -1916,6 +1929,7 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
     },
     async goFuture() {
       if (!Object.keys(journal.days).length) await load();
+      memoirOnly = false;
       const yr = new Date().getFullYear();
       const future = Object.keys(journal.days).filter((iso) => +iso.slice(0, 4) > yr).sort();
       const d = future[0] || Object.keys(journal.days).sort().pop() || null; // first future day, else the latest
@@ -1925,6 +1939,7 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
     },
     // Open the Journal on a memory's category/subject page and flash its card.
     async showMemory(mem) {
+      memoirOnly = false;
       state.category = catOf(mem);
       state.subject = subjOf(mem);
       state.zoom = state.subject ? "subject" : "category";

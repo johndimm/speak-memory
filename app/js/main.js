@@ -172,7 +172,9 @@ modeBtns.forEach((btn) => btn.addEventListener("click", () => setMode(btn.datase
 // The past·present·future band on the Journal — here none is "active"; all three navigate.
 const browseTriptych = document.getElementById("browse-triptych");
 if (browseTriptych) {
-  browseTriptych.innerHTML = triptychHtml(undefined, "browse");
+  // Fortune is only meaningful once a future is selected (you're inside a future). On your real
+  // journal there's no imagined future to browse, so it's inert.
+  browseTriptych.innerHTML = triptychHtml(undefined, "browse", { disabled: isSampleJournal() ? [] : ["future"] });
   // On the Journal the trio BROWSES the journal: Memoir → categories, Diary → recent days,
   // Fortune → the AI-added future section (if this journal has one).
   wireTriptych(browseTriptych, {
