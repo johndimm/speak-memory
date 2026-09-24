@@ -116,21 +116,21 @@ export async function playFutureShow(meta = {}) {
   const prefetch = {}; // idx → Promise<objectURL>
   const getAudio = (i) => { if (!prefetch[i]) prefetch[i] = ttsFetch(paras[i], char()); return prefetch[i]; };
 
+  let gen = 0; // bumped on every jump (voice change / replay) so stale onended callbacks are ignored
   async function playFrom(i) {
     if (stopped) return;
     if (i >= paras.length) { toggle.textContent = "↺ Replay"; return; }
+    const myGen = ++gen; // this run owns playback until the next jump
     idx = i; showText(paras[i]);
     let url;
-    try { url = await getAudio(i); } catch (e) {
-      if (String(e && e.message).includes("no-openai-key")) { useBrowser = true; speakBrowser(i); return; }
-      useBrowser = true; speakBrowser(i); return; // any TTS failure → browser voice
-    }
-    if (stopped) return;
+    try { url = await getAudio(i); } catch (e) { useBrowser = true; fillPicker(); speakBrowser(i); return; } // only a FETCH failure falls back to the browser voice
+    if (stopped || myGen !== gen) return; // a newer jump superseded this one
     objectUrls.push(url);
     if (i + 1 < paras.length) getAudio(i + 1).catch(() => {}); // prefetch next while this plays
+    try { audioEl.pause(); } catch { /* */ }
     audioEl.src = url;
-    audioEl.onended = () => { if (!stopped && !paused) playFrom(i + 1); };
-    audioEl.play().catch(() => { useBrowser = true; speakBrowser(i); });
+    audioEl.onended = () => { if (myGen === gen && !stopped && !paused) playFrom(i + 1); };
+    audioEl.play().catch(() => { /* interrupted by a new load (e.g. a voice change) — ignore */ });
   }
 
   // ---- Browser fallback --------------------------------------------------------------------

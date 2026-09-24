@@ -1303,6 +1303,9 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .iv-overlay { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; background: rgba(26,22,18,0.55); padding: 1rem; }
 .iv-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.5rem; width: min(30rem, 100%); text-align: center; }
 .iv-name { font-family: var(--font-display); font-size: 2rem; color: var(--accent); margin-bottom: 0.5rem; }
+.iv-profile { color: var(--ink-soft); font-size: 0.92rem; line-height: 1.5; margin: 0.2rem 0 0.6rem; text-align: left; max-height: 30vh; overflow-y: auto; }
+.iv-profile p { margin: 0 0 0.5rem; }
+.iv-profile-working { color: var(--ink-soft); font-style: italic; }
 .iv-q { font-size: 1.15rem; line-height: 1.5; color: var(--ink); min-height: 2.5em; }
 .iv-interim { color: var(--ink-soft); font-style: italic; margin-top: 0.6rem; min-height: 1.2em; }
 .iv-a { color: var(--ink); margin-top: 0.4rem; font-weight: 600; }

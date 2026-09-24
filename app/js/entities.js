@@ -59,6 +59,19 @@ function renderAnswerText(t) {
   return "<p>" + esc.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>") + "</p>";
 }
 
+// Write (and save) an entity's profile from MY notes + the journal entries that mention it. The note
+// is passed AS AN ENTRY so /api/chat treats it as source-of-truth. Shared by the name page and the
+// hands-free interview. Returns the profile text.
+async function writeProfile(ent, mentions) {
+  const entries = (mentions || []).map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
+  if (ent.note) entries.unshift({ date: `My notes about ${ent.canonical}`, full: ent.note });
+  const sys = `Write a short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}, using the entries below (they include "My notes about ${ent.canonical}" — my own authoritative words — and the journal entries that mention them). In 2–4 sentences, first person from my view: who they are, our relationship, and how it changed over time; mention years where useful. My notes win where they conflict with the journal.`;
+  const { reply } = await postChat([{ role: "user", content: `${sys}\n\nWrite the profile now.` }], entries);
+  const fresh = (await getEntity(ent.id)) || ent;
+  await putEntity({ ...fresh, profile: reply, profileAt: Date.now(), updatedAt: Date.now() });
+  return reply;
+}
+
 // A short date for a source item (day = its date; memory = its year range or label).
 function itemWhen(it) {
   if (it.kind === "journal" || it.date) return it.date;
@@ -302,15 +315,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       if (!box || (!mentions.length && !ent.note)) return; // need mentions or your notes to write from
       box.innerHTML = `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>`;
       try {
-        // Two inputs: MY notes about them (my own words) and the journal entries that mention them.
-        // The note is passed AS AN ENTRY so /api/chat treats it as source-of-truth (its system prompt
-        // forbids using anything not in the entries) — otherwise the note would be ignored.
-        const sys = `Write a short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}, using the entries below (they include "My notes about ${ent.canonical}" — my own authoritative words — and the journal entries that mention them). In 2–4 sentences, first person from my view: who they are, our relationship, and how it changed over time; mention years where useful. My notes win where they conflict with the journal.`;
-        const entries = mentionEntries();
-        if (ent.note) entries.unshift({ date: `My notes about ${ent.canonical}`, dayOfWeek: "", brief: "", full: ent.note });
-        const { reply } = await postChat([{ role: "user", content: `${sys}\n\nWrite the profile now.` }], entries);
-        const fresh = (await getEntity(id)) || ent;
-        await putEntity({ ...fresh, profile: reply, profileAt: Date.now(), updatedAt: Date.now() });
+        const reply = await writeProfile(ent, mentions);
         ent.profile = reply;
         box.innerHTML = `${renderAnswerText(reply)}<button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`;
         root.querySelector("#ent-summary-refresh")?.addEventListener("click", genProfile);
@@ -466,7 +471,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   // Listen for a whole answer, however long. Recognition runs continuously and RESTARTS through the
   // browser's own silence cutoff, so pauses never end the turn. A turn ends only when: you go quiet
   // for a longer stretch after speaking (SIL_MS), or you tap Done / Skip / Stop.
-  const SIL_MS = 7000;
+  const SIL_MS = 5000; // 5s of silence ends your answer automatically — no tap needed
   // Fallback when Web Speech isn't available (e.g. iOS Safari): a textarea you dictate into with the
   // keyboard's own mic (or type), ended with Done. Web Speech (below) is used everywhere it exists.
   function listenTurnMobile() {
@@ -566,9 +571,12 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         convo.push({ q, a: ans });
         renderInterview({ name: ent.canonical, q, a: ans });
         const fresh = (await getEntity(ent.id)) || ent;
-        await putEntity({ ...fresh, note: (fresh.note ? fresh.note + "\n" : "") + ans, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() });
+        const merged = { ...fresh, note: (fresh.note ? fresh.note + "\n" : "") + ans, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() };
+        await putEntity(merged);
+        // Revise the visible name's summary at the top from the new note (+ its mentions), live.
+        renderInterview({ name: ent.canonical, profileWorking: true });
+        try { const p = await writeProfile(merged, mentions); renderInterview({ name: ent.canonical, profile: p }); } catch { /* keep going */ }
       }
-      if (convo.length) { const box = document.getElementById("iv-saved"); if (box) box.textContent = `Saved to ${ent.canonical}.`; }
     }
     if (iv.active) await speak("That's every name. Thanks — I've saved your notes and flagged the ones you didn't recognize.");
     endInterview();
@@ -589,6 +597,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       ov = document.createElement("div"); ov.id = "iv-overlay"; ov.className = "iv-overlay";
       ov.innerHTML = `<div class="iv-card">
         <div class="iv-name" id="iv-name"></div>
+        <div class="iv-profile" id="iv-profile"></div>
         <div class="iv-q" id="iv-q"></div>
         <div class="iv-interim" id="iv-interim"></div>
         <div class="iv-a" id="iv-a"></div>
@@ -601,7 +610,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         </div>
         <label class="iv-voice"><span>Voice</span> <select id="iv-voice-sel"></select></label>
         <p class="iv-hint">${SpeechRec
-          ? "Talk as long as you like — take pauses. Tap Done when finished, Skip for the next name, Stop to end."
+          ? "Talk as long as you like — pause about 5 seconds and it moves on. Skip for the next name, Stop to end."
           : "Tap the answer box and use the mic on your keyboard, then tap Done. Skip for the next name, Stop to end."}</p>
       </div>`;
       document.body.appendChild(ov);
@@ -620,11 +629,13 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       try { speechSynthesis.onvoiceschanged = fill; } catch { /* */ }
       sel.addEventListener("change", () => { localStorage.setItem("tts-voice", sel.value); speak("Okay, I'll use this voice."); });
     }
-    if (s.name != null) ov.querySelector("#iv-name").textContent = s.name;
+    if (s.name != null) { ov.querySelector("#iv-name").textContent = s.name; ov.querySelector("#iv-profile").innerHTML = ""; } // new name → clear old profile
     if (s.q != null) ov.querySelector("#iv-q").textContent = s.q;
     if (s.status != null) ov.querySelector("#iv-q").textContent = s.status;
     if (s.a != null) { ov.querySelector("#iv-a").textContent = s.a ? `“${s.a}”` : ""; ov.querySelector("#iv-interim").textContent = ""; }
     if (s.listening) { ov.querySelector("#iv-interim").textContent = "…listening"; ov.querySelector("#iv-a").textContent = ""; }
+    if (s.profileWorking) ov.querySelector("#iv-profile").innerHTML = `<span class="iv-profile-working">◷ updating summary…</span>`;
+    if (s.profile != null) ov.querySelector("#iv-profile").innerHTML = renderAnswerText(s.profile);
   }
 
   // Delegated once on the stable root (survives re-renders): open an entity card, or jump to a mention.
