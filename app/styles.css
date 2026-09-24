@@ -1350,6 +1350,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .iv-input-wrap textarea:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
 .iv-voice { display: flex; align-items: center; gap: 0.5rem; justify-content: center; margin-top: 0.9rem; font-size: 0.82rem; color: var(--ink-soft); }
 .iv-voice select { font: inherit; font-size: 0.82rem; color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 0.3rem 0.5rem; max-width: 14rem; }
+.iv-voicestatus { font-size: 0.72rem; color: var(--ink-soft); margin: 0.4rem 0 0; min-height: 1em; }
 .iv-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.8rem; }
 .ent-note-existing { margin-bottom: 0.6rem; }
 .ent-detail-body { display: flex; flex-direction: column; gap: 0.6rem; }

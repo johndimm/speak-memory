@@ -60,8 +60,9 @@ function speakBrowser(text) {
   });
 }
 
-export function createSpeaker() {
+export function createSpeaker(onStatus) {
   let noKey = false; // only "no OpenAI key" permanently disables OpenAI; a blocked play retries next line
+  const note = (m) => { try { onStatus && onStatus(m); } catch { /* */ } };
 
   async function fetchTTS(text) {
     const c = charById(savedCharacter());
@@ -94,12 +95,12 @@ export function createSpeaker() {
     cancel() { try { if (curSrc) { curSrc.onended = null; curSrc.stop(); } } catch { /* */ } curSrc = null; try { speechSynthesis.cancel(); } catch { /* */ } },
     async speak(text) {
       if (!text) return;
-      if (noKey) return speakBrowser(text);
+      if (noKey) { note("browser (no OpenAI key)"); return speakBrowser(text); }
       let bytes;
       try { bytes = await fetchTTS(text); }
-      catch (e) { if (String(e && e.message).includes("no-openai-key")) noKey = true; return speakBrowser(text); }
-      try { await playBytes(bytes); }
-      catch (e) { return speakBrowser(text); } // decode/play failed → browser this line, retry OpenAI next
+      catch (e) { const m = String(e && e.message || e); if (m.includes("no-openai-key")) noKey = true; note("browser — fetch: " + m.slice(0, 70)); return speakBrowser(text); }
+      try { await playBytes(bytes); note("OpenAI ✓"); }
+      catch (e) { note("browser — play: " + String(e && e.message || e).slice(0, 70)); return speakBrowser(text); }
     },
   };
 }

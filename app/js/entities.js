@@ -459,7 +459,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
   // ChatGPT-quality OpenAI voice (character-steered), with browser fallback — the same speaker the
   // reveal and life interview use. unlock() is called on the interview's start tap (mobile audio).
-  const ivSpeaker = createSpeaker();
+  const ivSpeaker = createSpeaker((m) => { const el = document.getElementById("iv-voicestatus"); if (el) el.textContent = "🔊 " + m; });
   const speak = (text) => ivSpeaker.speak(text);
   // Listen for a whole answer, however long. Recognition runs continuously and RESTARTS through the
   // browser's own silence cutoff, so pauses never end the turn. A turn ends only when: you go quiet
@@ -603,6 +603,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           <button type="button" id="iv-stop">Stop</button>
         </div>
         <label class="iv-voice"><span>Voice</span> <select id="iv-voice-sel">${CHARACTERS.map((c) => `<option value="${c.id}"${c.id === savedCharacter() ? " selected" : ""}>${c.label}</option>`).join("")}</select></label>
+        <p class="iv-voicestatus" id="iv-voicestatus"></p>
         <p class="iv-hint">${SpeechRec
           ? "Talk as long as you like — pause about 5 seconds and it moves on. Skip for the next name, Stop to end."
           : "Tap the answer box and use the mic on your keyboard, then tap Done. Skip for the next name, Stop to end."}</p>
