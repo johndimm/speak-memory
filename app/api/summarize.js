@@ -621,6 +621,36 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       return;
     }
 
+    // Life interview: an intelligent agent gathering the reader's life story to feed better Futures.
+    // Given what's known + the conversation + the last answer, it (1) structures that answer into a
+    // memory if it holds a concrete life fact, and (2) asks the next probing spoken question.
+    if (mode === "lifeinterview") {
+      const known = String(body.context || "").slice(0, 8000);
+      const convo = Array.isArray(body.convo) ? body.convo.slice(-16) : [];
+      const last = String(body.lastAnswer || "").slice(0, 4000);
+      const convoText = convo.map((c) => `Q: ${c.q}\nA: ${c.a}`).join("\n") || "(just starting)";
+      const sys = `You are an intelligent, warm interviewer gathering the reader's LIFE STORY so a later step can project their FUTURE (tell their fortune). Your aim: glean the most future-relevant facts — where they've lived, schools, jobs, key relationships and friends, formative decisions and turning points, values, and recurring patterns. Be genuinely curious.
+Given what's already known, the conversation so far, and their LAST ANSWER, do all of:
+1) memory: if the last answer contains a concrete life fact (a place, school, job, person/relationship, or a decision/turning point), structure it: {"category":"Home|School|Work|Relationship|Decision|Other","subject":"<short label, e.g. 'the house on Pine St' or 'teaching at Rossmoor'>","startYear":<int|null>,"endYear":<int|null>,"label":"<short time phrase>"}. If it holds no concrete fact (chit-chat, "I don't know"), use null.
+2) next: ONE spoken question (one or two sentences) that gathers the most valuable NEW information. Follow up on anything interesting or surprising in their answer; if a decision they described doesn't add up, gently probe why. Don't repeat what's known or asked. If you already have a rich picture, use exactly "ENOUGH".
+3) ack: a brief, warm spoken acknowledgement of their answer (a few words), or "" on the first turn.
+Return ONLY valid JSON: {"ack":"...","memory":{...}|null,"next":"..."}. Escape double quotes with a backslash.`;
+      const user = `KNOWN ABOUT ME:\n${known || "(little yet)"}\n\nCONVERSATION:\n${convoText}\n\nMY LAST ANSWER:\n${last || "(none — this is the first question)"}`;
+      const r = await callJsonObject(sys, user, 0.6, cfg);
+      const int = (v) => (Number.isFinite(v) ? Math.round(v) : (Number.isFinite(+v) ? Math.round(+v) : null));
+      let memory = null;
+      if (r.memory && typeof r.memory === "object" && (r.memory.subject || r.memory.category)) {
+        memory = {
+          category: ["Home", "School", "Work", "Relationship", "Decision", "Other"].includes(r.memory.category) ? r.memory.category : "Other",
+          subject: String(r.memory.subject || "").slice(0, 120),
+          startYear: int(r.memory.startYear), endYear: int(r.memory.endYear),
+          label: String(r.memory.label || "").slice(0, 60),
+        };
+      }
+      res.status(200).json({ ack: String(r.ack || "").slice(0, 200), memory, next: String(r.next || "").slice(0, 400) });
+      return;
+    }
+
     // Extract named entities (people, animals, places, things) from an entry, resolving each to an
     // existing entity when it matches (by canonical name or alias, tolerating spelling variants) or
     // proposing a new one. Powers the entity registry and the "every mention of X" timeline.

@@ -11,7 +11,7 @@
 // and status live on the journals registry (journal.js); nothing is copied into localStorage and
 // nothing lands in your real journal's store.
 
-import { getAllEntries, getAllEntities, seedJournal } from "./db.js";
+import { getAllEntries, getAllEntities, getAllMemories, seedJournal } from "./db.js";
 import { escapeHtml } from "./render.js";
 import {
   dbNameFor, switchJournal, listJournals, registerJournal, journalExists,
@@ -104,6 +104,8 @@ export function initFutures(root) {
             grounded in your real people and threads — then opens them as a life you can browse in Journal,
             Timeline, and Graph. Leave the nudge blank to just see where things drift, or push the future one
             way with a decision, a hope, or a fear.</p>
+          <p class="fut-lead" style="margin-top:0">The more I know about your life, the sharper the fortune.
+            <button type="button" class="fut-interview" id="fut-interview">🎙 Tell me your story</button></p>
           <textarea id="fut-nudge" class="fut-nudge" rows="2"
             placeholder="Optional nudge — e.g. “we move to the coast”, “I finally finish the book”, “what if I never do”. Blank is fine."></textarea>
           <div class="fut-controls">
@@ -140,6 +142,10 @@ export function initFutures(root) {
       if (Number.isFinite(n)) composeCount = Math.max(2, Math.min(40, n));
     });
     root.querySelector("#fut-go")?.addEventListener("click", () => startFuture(nudge.value, composeYears, composeCount));
+    root.querySelector("#fut-interview")?.addEventListener("click", async () => {
+      const { startLifeInterview } = await import("./lifeinterview.js");
+      startLifeInterview((saved) => { if (saved) setStatus("ok", `Added ${saved} memor${saved === 1 ? "y" : "ies"} — imagine a future to see them shape it.`); });
+    });
     root.querySelector("#fut-back")?.addEventListener("click", () => switchJournal(""));
     root.querySelector("#fut-reveal")?.addEventListener("click", async () => {
       const f = getFuture(activeJournalId()) || {};
@@ -207,11 +213,21 @@ export function initFutures(root) {
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), GEN_TIMEOUT_MS);
+      // Your life-states/memories ground the projection — the richer they are (e.g. from the life
+      // interview), the more specific the future. Pass them alongside the journal entries.
+      let baseMemories = [];
+      try {
+        baseMemories = (await getAllMemories()).map((m) => ({
+          category: m.category || "Life", subject: m.subject || m.label || "",
+          startYear: m.startYear, endYear: m.endYear,
+          text: m.text || (m.prose && m.prose.full) || m.brief || "",
+        }));
+      } catch { baseMemories = []; }
       let data;
       try {
         const res = await fetch("/api/future", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entries, prompt: nudge, years, count }), signal: ctrl.signal,
+          body: JSON.stringify({ entries, prompt: nudge, years, count, memories: baseMemories }), signal: ctrl.signal,
         });
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Server ${res.status}`); }
         data = await res.json();

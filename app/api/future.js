@@ -122,6 +122,16 @@ export default async function handler(req, res) {
     if (nudge) {
       system += `\n\nSteer the future this way: "${nudge}"\nHonor that intention, but keep everything else grounded in the journal and its people.`;
     }
+    // The enduring life-states/memories (homes, schools, jobs, relationships, decisions) — the richer
+    // this is, the more grounded and specific the projected future. Gathered via the life interview.
+    const lifeStates = Array.isArray(body.memories) ? body.memories.slice(0, 200) : [];
+    if (lifeStates.length) {
+      const lines = lifeStates.map((m) => {
+        const span = m.startYear ? `${m.startYear}${m.endYear && m.endYear !== m.startYear ? "–" + m.endYear : ""}: ` : "";
+        return `- [${m.category || "Life"}] ${span}${m.subject || m.label || ""}${m.text ? ` — ${String(m.text).replace(/\s+/g, " ").slice(0, 300)}` : ""}`;
+      }).join("\n");
+      system += `\n\n=== MY LIFE SO FAR (homes, schools, jobs, relationships, decisions) ===\n${lines}`;
+    }
     system += `\n\n=== JOURNAL ENTRIES ===\n${context}`;
 
     const userMsg = `It is now around ${baseYear}. Write my raw future diary days${nudge ? ", steered by what I asked" : ""}.`;
