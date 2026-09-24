@@ -172,11 +172,13 @@ modeBtns.forEach((btn) => btn.addEventListener("click", () => setMode(btn.datase
 // The past·present·future band on the Journal — here none is "active"; all three navigate.
 const browseTriptych = document.getElementById("browse-triptych");
 if (browseTriptych) {
-  browseTriptych.innerHTML = triptychHtml();
+  browseTriptych.innerHTML = triptychHtml(undefined, "browse");
+  // On the Journal the trio BROWSES the journal: Memoir → categories, Diary → recent days,
+  // Fortune → the AI-added future section (if this journal has one).
   wireTriptych(browseTriptych, {
-    past: () => setMode("write", {}),   // open Write in silent new-memory mode (hands-free is opt-in there)
-    present: () => setMode("write"),
-    future: () => setMode("futures"),
+    past: () => { setMode("browse"); calendar.goMemoir(); },
+    present: () => { setMode("browse"); calendar.goPresent(); },
+    future: async () => { setMode("browse"); await calendar.goFuture(); },
   });
 }
 

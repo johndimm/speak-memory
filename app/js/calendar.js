@@ -1897,6 +1897,32 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
       }
       await reloadAndRender();
     },
+    // The past·present·future triptych, used for BROWSING the Journal (not creating):
+    //   Memoir  → the categories/Life view (where memories live)
+    //   Diary   → the most recent real (non-future) days
+    //   Fortune → the start of the AI-added future section, if this journal has one
+    async goMemoir() {
+      if (!Object.keys(journal.days).length && !allMemories.length) await load();
+      Object.assign(state, { zoom: "life", focusDate: null, category: null, subject: null, memoryId: null });
+      await reloadAndRender();
+    },
+    async goPresent() {
+      if (!Object.keys(journal.days).length) await load();
+      const yr = new Date().getFullYear();
+      const real = Object.keys(journal.days).filter((iso) => +iso.slice(0, 4) <= yr).sort();
+      const d = real[real.length - 1] || Object.keys(journal.days).sort().pop() || null;
+      Object.assign(state, { zoom: d ? "month" : "life", focusDate: d, category: null, subject: null, memoryId: null });
+      await reloadAndRender();
+    },
+    async goFuture() {
+      if (!Object.keys(journal.days).length) await load();
+      const yr = new Date().getFullYear();
+      const future = Object.keys(journal.days).filter((iso) => +iso.slice(0, 4) > yr).sort();
+      const d = future[0] || Object.keys(journal.days).sort().pop() || null; // first future day, else the latest
+      Object.assign(state, { zoom: d ? "month" : "life", focusDate: d, category: null, subject: null, memoryId: null });
+      await reloadAndRender();
+      return future.length > 0;
+    },
     // Open the Journal on a memory's category/subject page and flash its card.
     async showMemory(mem) {
       state.category = catOf(mem);
