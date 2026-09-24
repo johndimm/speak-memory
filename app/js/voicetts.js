@@ -23,8 +23,6 @@ export const CHARACTERS = [
 export function charById(id) { return CHARACTERS.find((c) => c.id === id) || CHARACTERS[0]; }
 export function savedCharacter() { return localStorage.getItem("tts-character") || "narrator"; }
 
-const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAAZGF0YQAAAAA=";
-
 function pickBrowserVoice() {
   try {
     const vs = (speechSynthesis.getVoices() || []).filter((v) => /^en(-|_|$)/i.test(v.lang));
@@ -35,19 +33,24 @@ function pickBrowserVoice() {
     return vs.slice().sort((a, b) => score(b) - score(a))[0];
   } catch { return null; }
 }
-function b64ToBlob(b64, type) { const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type: type || "audio/mpeg" }); }
+function b64ToArrayBuffer(b64) { const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return arr.buffer; }
 
-// ONE shared audio element, unlocked once by a user gesture, then reused for every spoken line —
-// so a tap can unlock it synchronously (before any async import/fetch) and later plays are allowed
-// on mobile. Unlocking is per-element on iOS, which is exactly why this must be a singleton.
-let sharedAudio = null;
-function audioEl() {
-  if (!sharedAudio) { sharedAudio = new Audio(); sharedAudio.setAttribute("playsinline", ""); }
-  return sharedAudio;
+// Web Audio API playback — far more reliable than <audio>+blob on Android/Samsung. ONE shared
+// AudioContext, resumed by a user gesture (primeAudio) and then reused; BufferSource plays the mp3
+// bytes. Once the context is resumed in a tap, later plays work even after an async fetch.
+let ctx = null, curSrc = null;
+function getCtx() {
+  if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) ctx = new AC(); }
+  return ctx;
 }
-// Call this SYNCHRONOUSLY inside the tap that starts a voice flow (do not await anything first).
+// Call this SYNCHRONOUSLY inside the tap that starts a voice flow (before any await).
 export function primeAudio() {
-  try { const a = audioEl(); a.src = SILENT; const p = a.play(); if (p && p.then) p.then(() => { try { a.pause(); a.currentTime = 0; } catch { /* */ } }).catch(() => {}); } catch { /* */ }
+  try {
+    const c = getCtx(); if (!c) return;
+    if (c.state === "suspended") c.resume();
+    // A one-sample silent buffer nudges the context fully awake on mobile.
+    const b = c.createBuffer(1, 1, 22050); const s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0);
+  } catch { /* */ }
 }
 
 function speakBrowser(text) {
@@ -58,7 +61,6 @@ function speakBrowser(text) {
 }
 
 export function createSpeaker() {
-  const audio = audioEl();
   let noKey = false; // only "no OpenAI key" permanently disables OpenAI; a blocked play retries next line
 
   async function fetchTTS(text) {
@@ -68,32 +70,36 @@ export function createSpeaker() {
       body: JSON.stringify({ ...llmOverrides(), text, voice: c.voice, instructions: c.instructions }),
     });
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `tts ${r.status}`); }
-    const { audio: b64, type } = await r.json();
-    return URL.createObjectURL(b64ToBlob(b64, type));
+    const { audio: b64 } = await r.json();
+    return b64ToArrayBuffer(b64);
+  }
+
+  async function playBytes(arrayBuf) {
+    const c = getCtx(); if (!c) throw new Error("no-audio-context");
+    if (c.state === "suspended") await c.resume();
+    const decoded = await new Promise((resolve, reject) => {
+      // Safari wants the callback form; modern browsers return a promise. Support both.
+      const p = c.decodeAudioData(arrayBuf, resolve, reject);
+      if (p && p.then) p.then(resolve, reject);
+    });
+    await new Promise((resolve) => {
+      const s = c.createBufferSource(); s.buffer = decoded; s.connect(c.destination);
+      s.onended = resolve; curSrc = s; s.start(0);
+    });
   }
 
   return {
     unlock() { primeAudio(); },
     usingOpenAI() { return !noKey; },
-    cancel() { try { audio.pause(); } catch { /* */ } try { speechSynthesis.cancel(); } catch { /* */ } },
+    cancel() { try { if (curSrc) { curSrc.onended = null; curSrc.stop(); } } catch { /* */ } curSrc = null; try { speechSynthesis.cancel(); } catch { /* */ } },
     async speak(text) {
       if (!text) return;
       if (noKey) return speakBrowser(text);
-      let url;
-      try { url = await fetchTTS(text); }
+      let bytes;
+      try { bytes = await fetchTTS(text); }
       catch (e) { if (String(e && e.message).includes("no-openai-key")) noKey = true; return speakBrowser(text); }
-      try {
-        audio.src = url;
-        try { audio.load(); } catch { /* */ }
-        await new Promise((resolve, reject) => {
-          audio.onended = resolve; audio.onerror = () => reject(new Error("audio"));
-          const p = audio.play(); if (p && p.catch) p.catch(reject);
-        });
-        try { URL.revokeObjectURL(url); } catch { /* */ }
-      } catch (e) {
-        try { URL.revokeObjectURL(url); } catch { /* */ }
-        return speakBrowser(text); // play blocked this time (e.g. not unlocked yet) — retry OpenAI next line
-      }
+      try { await playBytes(bytes); }
+      catch (e) { return speakBrowser(text); } // decode/play failed → browser this line, retry OpenAI next
     },
   };
 }
