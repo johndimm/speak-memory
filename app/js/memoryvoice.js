@@ -7,8 +7,8 @@
 
 import { putMemory } from "./db.js";
 import { createSpeaker } from "./voicetts.js";
+import { listenTurn as vListen, hasSpeechInput } from "./voiceinput.js";
 
-const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "m" + Date.now() + Math.random().toString(36).slice(2));
 
 // A sensible starter set — the user can also type any category in Write.
@@ -30,12 +30,12 @@ function llmOverrides() {
 const yearsLabel = (a, b) => (a == null ? "sometime" : b && b !== a ? `${Math.min(a, b)}–${Math.max(a, b)}` : String(a));
 
 export async function startMemoryVoice(startCategory, onDone) {
-  if (!SpeechRec) { alert("Voice capture needs speech recognition — try Chrome on desktop or Android."); return; }
+  if (!hasSpeechInput) { alert("Voice capture needs speech recognition — try Chrome on desktop or Android."); return; }
   const speaker = createSpeaker();
   speaker.unlock(); // best-effort; the launcher already primed audio in the tap
 
   let category = startCategory || DEFAULT_CATEGORIES[0];
-  let active = true, recog = null, finishTurn = null, saved = 0;
+  let active = true, finishTurn = null, saved = 0;
 
   const ov = document.createElement("div");
   ov.className = "iv-overlay";
@@ -62,7 +62,7 @@ export async function startMemoryVoice(startCategory, onDone) {
   const $ = (id) => ov.querySelector(id);
   const catEl = $("#mv-cat"), phaseEl = $("#mv-phase"), interimEl = $("#mv-interim"), savedEl = $("#mv-saved");
   catEl.addEventListener("change", () => { category = catEl.value; });
-  const cleanup = () => { active = false; speaker.cancel(); try { recog && recog.stop(); } catch { /* */ } ov.remove(); onDone && onDone(saved); };
+  const cleanup = () => { active = false; speaker.cancel(); if (finishTurn) finishTurn("stop"); ov.remove(); onDone && onDone(saved); };
   $("#mv-stop").addEventListener("click", () => { active = false; if (finishTurn) finishTurn("stop"); else cleanup(); });
   $("#mv-skip").addEventListener("click", () => { if (finishTurn) finishTurn("skip"); });
 
@@ -73,41 +73,12 @@ export async function startMemoryVoice(startCategory, onDone) {
   };
   const flash = () => { ov.querySelector(".mv-card").classList.add("mv-flash"); setTimeout(() => ov.querySelector(".mv-card")?.classList.remove("mv-flash"), 700); };
 
-  // Continuous listening; ends on ~5s silence, or early when the speech ends with an end-word.
+  // One turn of listening — the shared, Android-safe loop (rebuilds transcript, never appends).
   const SIL_MS = 5000;
   function listen(endWords = []) {
-    return new Promise((resolve) => {
-      let full = "", stopped = false, r = null, silence = null;
-      const parse = (t) => {
-        const low = t.toLowerCase().trim();
-        if (/\b(stop|finished|that'?s all|i'?m done for now|end session)\b/.test(low)) return { text: t, command: "stop" };
-        if (/\b(skip|scratch that|never mind|forget it)\b/.test(low)) return { text: t, command: "skip" };
-        let text = t;
-        for (const w of endWords) text = text.replace(new RegExp("\\b" + w + "\\b[.!?]*\\s*$", "i"), "").trim();
-        return { text, command: null };
-      };
-      const done = (res) => { if (stopped) return; stopped = true; clearTimeout(silence); finishTurn = null; try { if (r) { r.onend = null; r.stop(); } } catch { /* */ } resolve(res); };
-      finishTurn = (cmd) => done(cmd ? { text: full.trim(), command: cmd } : parse(full));
-      const arm = () => { clearTimeout(silence); silence = setTimeout(() => { if (full.trim()) done(parse(full)); }, SIL_MS); };
-      const start = () => {
-        r = new SpeechRec(); r.lang = navigator.language || "en-US"; r.interimResults = true; r.continuous = true;
-        r.onresult = (e) => {
-          let interim = "";
-          for (let i = e.resultIndex; i < e.results.length; i++) { const res = e.results[i]; if (res.isFinal) full += res[0].transcript + " "; else interim += res[0].transcript; }
-          const shown = (full + interim).trim();
-          interimEl.textContent = shown;
-          const low = shown.toLowerCase();
-          if (endWords.some((w) => new RegExp("\\b" + w + "\\b[.!?]*$", "i").test(low))) { done(parse(full + interim)); return; }
-          if (/\b(stop|finished)\b[.!?]*$/i.test(low)) { done({ text: shown, command: "stop" }); return; }
-          arm();
-        };
-        r.onerror = () => { /* restart on end */ };
-        r.onend = () => { if (!stopped) setTimeout(() => { if (!stopped) start(); }, 250); };
-        recog = r;
-        try { r.start(); } catch { setTimeout(() => { if (!stopped) start(); }, 400); }
-      };
-      start();
-    });
+    const ctrl = {};
+    finishTurn = (cmd) => { if (cmd === "stop") ctrl.stop && ctrl.stop(); else if (cmd === "skip") ctrl.skip && ctrl.skip(); else ctrl.finish && ctrl.finish(); };
+    return vListen({ silenceMs: SIL_MS, endWords, onInterim: (t) => { interimEl.textContent = t; }, control: ctrl });
   }
 
   await speaker.speak(`Let's add memories about ${category}. Tell me what the first one is, and roughly when.`);

@@ -6,6 +6,7 @@
 
 import { getAllEntries, getAllMemories, getAllEntities, putMemory } from "./db.js";
 import { createSpeaker, CHARACTERS, savedCharacter } from "./voicetts.js";
+import { listenTurn as vListen, hasSpeechInput } from "./voiceinput.js";
 
 const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "m" + Date.now() + Math.random().toString(36).slice(2));
@@ -57,29 +58,19 @@ export async function startLifeInterview(onDone) {
   ov.querySelector("#li-voice").addEventListener("change", (e) => localStorage.setItem("tts-character", e.target.value));
   const speak = (t) => speaker.speak(t);
 
-  let active = true, recog = null, finishTurn = null, saved = 0;
-  const cleanup = () => { active = false; speaker.cancel(); try { recog && recog.stop(); } catch { /* */ } ov.remove(); onDone && onDone(saved); };
+  let active = true, finishTurn = null, saved = 0;
+  const cleanup = () => { active = false; speaker.cancel(); if (finishTurn) finishTurn("__stop__"); ov.remove(); onDone && onDone(saved); };
   ov.querySelector("#li-stop").addEventListener("click", () => { active = false; if (finishTurn) finishTurn("__stop__"); else cleanup(); });
   ov.querySelector("#li-skip").addEventListener("click", () => { if (finishTurn) finishTurn("__skip__"); });
 
-  // Continuous listening that survives pauses; a ~5s trailing silence ends the turn (no tap needed).
-  const SIL_MS = 5000;
-  function listenTurn() {
-    return new Promise((resolve) => {
-      let full = "", stopped = false, r = null, silence = null;
-      const done = (result) => { if (stopped) return; stopped = true; clearTimeout(silence); finishTurn = null; try { if (r) { r.onend = null; r.stop(); } } catch { /* */ } resolve(result !== undefined ? result : full.trim()); };
-      finishTurn = done;
-      const armSilence = () => { clearTimeout(silence); silence = setTimeout(() => { if (full.trim()) done(full.trim()); }, SIL_MS); };
-      const start = () => {
-        r = new SpeechRec(); r.lang = navigator.language || "en-US"; r.interimResults = true; r.continuous = true;
-        r.onresult = (e) => { let interim = ""; for (let i = e.resultIndex; i < e.results.length; i++) { const res = e.results[i]; if (res.isFinal) full += res[0].transcript + " "; else interim += res[0].transcript; } interimEl.textContent = (full + interim).trim(); armSilence(); };
-        r.onerror = () => { /* no-speech/aborted → onend restarts */ };
-        r.onend = () => { if (!stopped) setTimeout(() => { if (!stopped) start(); }, 250); };
-        recog = r;
-        try { r.start(); } catch { setTimeout(() => { if (!stopped) start(); }, 400); }
-      };
-      start();
-    });
+  // One turn via the shared Android-safe listener; map its {command} back to this loop's sentinels.
+  async function listenTurn() {
+    const ctrl = {};
+    finishTurn = (cmd) => { if (cmd === "__stop__") ctrl.stop && ctrl.stop(); else if (cmd === "__skip__") ctrl.skip && ctrl.skip(); else ctrl.finish && ctrl.finish(); };
+    const res = await vListen({ silenceMs: 5000, onInterim: (t) => { interimEl.textContent = t; }, control: ctrl });
+    if (res.command === "stop") return "__stop__";
+    if (res.command === "skip") return "__skip__";
+    return res.text;
   }
 
   const context = await buildContext();

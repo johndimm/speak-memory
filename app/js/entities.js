@@ -14,6 +14,7 @@ import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { resolveEntityNames, resetEntityIndex } from "./entityresolve.js";
 import { createSpeaker, CHARACTERS, savedCharacter } from "./voicetts.js";
+import { listenTurn as vListen, hasSpeechInput } from "./voiceinput.js";
 
 const SpeechRec = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
 const KIND_LABEL = { person: "Person", animal: "Animal", place: "Place", org: "Organization", thing: "Thing" };
@@ -515,38 +516,15 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       iv.finishTurn = (result) => { iv.finishTurn = null; box.hidden = true; const v = box.querySelector("#iv-input"); resolve(result !== undefined ? result : (v ? v.value.trim() : "")); };
     });
   }
-  function listenTurn() {
-    if (!SpeechRec) return listenTurnMobile(); // no Web Speech at all → type/Gboard fallback
-    return new Promise((resolve) => {
-      let full = "", stopped = false, r = null, silence = null;
-      const done = (result) => {
-        if (stopped) return; stopped = true;
-        clearTimeout(silence); iv.finishTurn = null;
-        try { if (r) { r.onend = null; r.stop(); } } catch { /* */ }
-        resolve(result !== undefined ? result : full.trim());
-      };
-      iv.finishTurn = done; // Done/Skip/Stop buttons call this
-      const armSilence = () => { clearTimeout(silence); silence = setTimeout(() => { if (full.trim()) done(full.trim()); }, SIL_MS); };
-      const start = () => {
-        r = new SpeechRec(); r.lang = "en-US"; r.interimResults = true; r.continuous = true;
-        r.onresult = (e) => {
-          let interim = "";
-          for (let i = e.resultIndex; i < e.results.length; i++) {
-            const res = e.results[i];
-            if (res.isFinal) full += res[0].transcript + " "; else interim += res[0].transcript;
-          }
-          setInterview({ interim: (full + interim).trim() });
-          armSilence();
-        };
-        r.onerror = () => { /* no-speech/aborted → let onend restart */ };
-        // Restart through the browser's silence cutoff (mobile ignores `continuous`, so this loop is
-        // what keeps it listening). A short delay avoids "already started" errors on rapid restarts.
-        r.onend = () => { if (!stopped) setTimeout(() => { if (!stopped) start(); }, 250); };
-        iv.recog = r;
-        try { r.start(); } catch { setTimeout(() => { if (!stopped) start(); }, 400); }
-      };
-      start();
-    });
+  async function listenTurn() {
+    if (!hasSpeechInput) return listenTurnMobile(); // no Web Speech at all → type/Gboard fallback
+    const ctrl = {};
+    iv.finishTurn = (cmd) => { if (cmd === "__stop__") ctrl.stop && ctrl.stop(); else if (cmd === "__skip__") ctrl.skip && ctrl.skip(); else ctrl.finish && ctrl.finish(); };
+    const res = await vListen({ silenceMs: SIL_MS, onInterim: (t) => setInterview({ interim: t }), control: ctrl });
+    iv.finishTurn = null;
+    if (res.command === "stop") return "__stop__";
+    if (res.command === "skip") return "__skip__";
+    return res.text;
   }
   async function getQuestion(ent, mentions, convo) {
     const entries = mentions.map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
