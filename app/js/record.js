@@ -298,6 +298,21 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     if (memFields) memFields.hidden = !memory;      // category/subject/years/location — memoir only
     if (memoirActions) memoirActions.hidden = !memory; // the voice tools — memoir only
     if (moreEl) moreEl.hidden = memory;             // the date changer — diary only (memories use years)
+    // Highlight the matching triptych cell: Memoir (past) for a memory, Diary (present) otherwise.
+    const wantActive = memory ? "past" : "present";
+    const trip = root.querySelector(".triptych");
+    if (trip && trip.getAttribute("data-active") !== wantActive) {
+      trip.outerHTML = triptychHtml(wantActive);
+      const nt = root.querySelector(".triptych"); if (nt) nt.setAttribute("data-active", wantActive);
+      wireTrip();
+    }
+  }
+  function wireTrip() {
+    wireTriptych(root, {
+      past: () => newMemory({}),
+      present: () => { dateEl.value = todayISO(); loadDraft({ focus: true }); }, // back to today's diary
+      future: () => onNavigate && onNavigate("futures"),
+    });
   }
   const catEl = root.querySelector("#entry-category");
   const catChips = root.querySelector("#entry-category-chips");
@@ -562,12 +577,9 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // In-app dictation (for devices whose keyboard has no mic). See dictation.js for the
   // Android-robust handling of auto-restart and de-duplication.
   setupDictation(micBtn, textEl, statusEl, refreshSaveState);
-  // Triptych: Past → the memoir, opened for MANUAL entry (no talking). Hands-free is an explicit
-  // choice — the "🎙 Talk it through" button inside. Future → the fortune (Futures).
-  wireTriptych(root, {
-    past: () => newMemory({}),
-    future: () => onNavigate && onNavigate("futures"),
-  });
+  // Triptych: Past → the memoir (manual entry; hands-free is an explicit choice inside),
+  // Present → today's diary, Future → the fortune (Futures). The active cell follows the mode.
+  wireTrip();
   root.querySelector("#memoir-handsfree")?.addEventListener("click", async () => {
     primeAudio(); // unlock audio IN this tap, before the async import (mobile blocks post-gesture play)
     const { startLifeInterview } = await import("./lifeinterview.js");
