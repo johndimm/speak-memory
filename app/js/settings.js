@@ -377,11 +377,14 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
   const deleteAllBtn = root.querySelector("#delete-all-btn");
 
   deleteAllBtn.addEventListener("click", async () => {
-    const [entries, mems] = await Promise.all([getAllEntries(), getAllMemories()]);
-    if (!entries.length && !mems.length) { importStatus.textContent = "Nothing to delete."; importStatus.className = "import-status"; return; }
+    const [entries, mems, ents] = await Promise.all([getAllEntries(), getAllMemories(), getAllEntities()]);
+    // Count names too — you can have a filled-in Me / Names with no diary entries or memories yet,
+    // and "Delete everything" must clear those (this used to bail with "Nothing to delete").
+    if (!entries.length && !mems.length && !ents.length) { importStatus.textContent = "Nothing to delete."; importStatus.className = "import-status"; return; }
     const parts = [];
     if (entries.length) parts.push(`${entries.length} ${entries.length === 1 ? "entry" : "entries"}`);
     if (mems.length) parts.push(`${mems.length} ${mems.length === 1 ? "memory" : "memories"}`);
+    if (ents.length) parts.push(`${ents.length} name${ents.length === 1 ? "" : "s"} (including you)`);
     if (!confirm(`Delete ALL ${parts.join(" and ")} permanently? This cannot be undone.`)) return;
     // Clear names (entities) too — otherwise old Names linger after a wipe — and drop the resolver's
     // in-memory cache and your self-description so nothing comes back.
