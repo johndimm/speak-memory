@@ -390,7 +390,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       }
     }
     root.querySelector("#ent-summary-refresh")?.addEventListener("click", genProfile);
-    if (!ent.profile && (mentions.length || ent.note)) genProfile(); // auto-write on first open
+    // Auto-write on first open, OR refresh a profile that's now stale — written before you added
+    // notes (so it won't keep saying "little is known" above your detailed notes).
+    const stale = (ent.profileAt || 0) < (ent.updatedAt || 0);
+    if ((!ent.profile || stale) && (mentions.length || ent.note)) genProfile();
 
     // Your notes — a growing transcript in your words. Adding appends to the note and rewrites the
     // profile (and, via the roster, folds into summaries that mention this name as they're rewritten).
