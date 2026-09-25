@@ -313,8 +313,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     root.innerHTML = `
       <div class="entities">
         <button type="button" class="ent-back" id="ent-back">← All names</button>
-        <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
-        <p class="node-subtitle">${KIND_LABEL[ent.entityKind || "person"]}${(ent.aliases && ent.aliases.length) ? ` · also ${escapeHtml(ent.aliases.join(", "))}` : ""}</p>
+        <!-- The name is editable right here — fixing a mishearing renames it everywhere at once. -->
+        <input type="text" class="node-name ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" aria-label="Name" spellcheck="false">
+        <p class="node-subtitle">${KIND_LABEL[ent.entityKind || "person"]}${(ent.aliases && ent.aliases.length) ? ` · also ${escapeHtml(ent.aliases.join(", "))}` : ""} · <span class="ent-rename-hint">edit the name above to fix a spelling — it updates every summary</span></p>
+        ${ent.recognized === false ? `<p class="ent-flag-banner">🕳 You didn't recognize this name — a possible mistake or a memory hole. Add anything you can below, or it stays flagged.</p>` : ""}
         ${ent.recognized === false ? `<p class="ent-flag-banner">🕳 You didn't recognize this name — a possible mistake or a memory hole. Add anything you can below, or it stays flagged.</p>` : ""}
 
         <!-- Profile paragraph at the top — written from the mentions PLUS your own notes below. -->
@@ -347,10 +349,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         <div class="ent-mentions">${rows || '<p class="ent-empty">No mentions tagged yet.</p>'}</div>
 
         <details class="node-fold ent-details">
-          <summary>Name, kind &amp; aliases</summary>
+          <summary>Kind, aliases &amp; merge</summary>
           <div class="node-fold-body ent-detail-body">
-            <label class="ent-field"><span>Name</span>
-              <input type="text" id="ent-canon" value="${escapeHtml(ent.canonical)}"></label>
             <label class="ent-field"><span>Kind</span>
               <select id="ent-kind" class="ent-kindsel">${KIND_ORDER.map((k) => `<option value="${k}"${(ent.entityKind || "person") === k ? " selected" : ""}>${KIND_LABEL[k]}</option>`).join("")}</select></label>
             <label class="ent-field"><span>Also known as (comma-separated)</span>
@@ -446,11 +446,28 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     });
 
     root.querySelector("#ent-back").addEventListener("click", () => { openId = null; render(); });
+
+    // Inline rename — fix a mishearing here and it updates every summary (tokens re-render to the new
+    // name) without re-summarizing anything.
+    const renameEl = root.querySelector("#ent-rename");
+    const doRename = async () => {
+      const v = renameEl.value.trim();
+      if (!v || v === ent.canonical) return;
+      const fresh = (await getEntity(id)) || ent;
+      await putEntity({ ...fresh, canonical: v, updatedAt: Date.now() });
+      ent.canonical = v;
+      resetEntityIndex();
+      setEntityMap(new Map((await getAllEntities()).map((e) => [e.id, e.canonical]))); // tokens → new name now
+      renderEntity(id);
+    };
+    renameEl.addEventListener("change", doRename);
+    renameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); renameEl.blur(); } });
+    renameEl.addEventListener("blur", doRename);
     root.querySelector("#ent-save").addEventListener("click", async () => {
       const fresh = (await getEntity(id)) || ent;
       const next = {
         ...fresh,
-        canonical: root.querySelector("#ent-canon").value.trim() || fresh.canonical,
+        canonical: (root.querySelector("#ent-rename")?.value.trim()) || fresh.canonical, // name is edited at the top
         entityKind: root.querySelector("#ent-kind").value,
         aliases: root.querySelector("#ent-aliases").value.split(",").map((s) => s.trim()).filter(Boolean),
         updatedAt: Date.now(),
