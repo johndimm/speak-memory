@@ -1408,6 +1408,28 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .mv-field b { color: var(--ink); font-weight: 600; border-radius: 4px; padding: 0 2px; margin: 0 -2px; }
 .mv-field b.mv-just { animation: mv-just 0.7s ease; }        /* pulse a field the moment it fills as you talk */
 @keyframes mv-just { 0% { background: var(--accent); color: #fff; } 70% { background: var(--accent-soft); color: var(--ink); } 100% { background: transparent; } }
+
+/* ---- Live capture: colour the text as you write, list what was found ------------------------ */
+/* A transparent textarea sits on top of a metric-matched backdrop that paints the highlights. */
+.cap-wrap { position: relative; width: 100%; }
+.cap-input { position: relative; z-index: 1; display: block; width: 100%; box-sizing: border-box; background: transparent !important; }
+.cap-marks {
+  position: absolute; inset: 0; z-index: 0;
+  box-sizing: border-box; overflow: hidden; pointer-events: none;
+  white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word;
+  color: transparent; background: var(--card);
+}
+.cap-marks mark { color: transparent; border-radius: 3px; }
+.cap-marks mark.cap-name { background: rgba(214, 158, 46, 0.30); box-shadow: inset 0 -2px 0 rgba(214, 158, 46, 0.7); }   /* names — amber */
+.cap-marks mark.cap-fact { background: rgba(64, 155, 155, 0.26); box-shadow: inset 0 -2px 0 rgba(64, 155, 155, 0.65); }  /* answers — teal */
+
+.cap-found { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.55rem 0 0.2rem; }
+.cap-found[hidden] { display: none; }
+.cap-found-label { font-size: 0.72rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.06em; margin-right: 0.15rem; }
+.cap-chip { font-size: 0.85rem; padding: 0.16rem 0.55rem; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); animation: cap-pop 0.35s ease; }
+.cap-chip-name { border-color: rgba(214, 158, 46, 0.8); }
+.cap-chip-when, .cap-chip-where, .cap-chip-category, .cap-chip-subject { border-color: rgba(64, 155, 155, 0.8); }
+@keyframes cap-pop { 0% { transform: scale(0.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 .mv-phase { font-size: 1.05rem; color: var(--ink); min-height: 1.4em; margin-bottom: 0.4rem; }
 .iv-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.8rem; }
 .ent-note-existing { margin-bottom: 0.6rem; }

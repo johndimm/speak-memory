@@ -10,6 +10,7 @@ import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { triptychHtml, wireTriptych } from "./triptych.js";
 import { primeAudio } from "./voicetts.js";
 import { DEFAULT_CATEGORIES } from "./memoryvoice.js";
+import { attachLiveCapture } from "./capture.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -117,6 +118,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
         <textarea id="entry-text" rows="8"
           placeholder="Just talk — tap 🎤 Dictate — or type…"></textarea>
       </label>
+      <!-- Names (and, in memoir, dates/places) light up as you write; found ones collect here. -->
+      <div class="cap-found" id="entry-found" hidden></div>
       <div class="write-actions">
         <button type="button" class="mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button>
         <button type="submit" class="save-btn" id="save-btn" disabled>Save entry</button>
@@ -226,6 +229,12 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   const entryView = root.querySelector("#entry-view");
   const editTextToggle = root.querySelector("#edit-text-toggle");
   wireReps(entryView);
+
+  // Live capture: colour names as you type/dictate and collect them below the box. Diary surfaces
+  // names; memoir also lights up dates/places/categories (its structured fields cover the rest).
+  const foundEl = root.querySelector("#entry-found");
+  const capture = attachLiveCapture(textEl, { mount: foundEl, buckets: ["names"] });
+
   let currentSummarized = true; // mode of the loaded entry (edit mode)
   let inEditMode = false;
   let editingText = false; // in edit mode: showing the raw text box vs the formatted view
@@ -447,6 +456,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     updateModeUI();
     applyEntryLayout();
     refreshSaveState();
+    capture.reset(); capture.refresh(); // recolour the loaded text and rebuild the Found list for this day
     if (focus && !textEl.hidden) {
       textEl.focus();
       const len = textEl.value.length;
@@ -550,7 +560,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     refreshSaveState();
   });
 
-  textEl.addEventListener("input", refreshSaveState);
+  const onText = () => { refreshSaveState(); capture.update(); };
+  textEl.addEventListener("input", onText);
   dateEl.addEventListener("change", () => loadDraft({ focus: true }));
 
   // Delete the thing being edited (a day entry or a memory), then hand navigation back to the caller.
@@ -577,7 +588,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
 
   // In-app dictation (for devices whose keyboard has no mic). See dictation.js for the
   // Android-robust handling of auto-restart and de-duplication.
-  setupDictation(micBtn, textEl, statusEl, refreshSaveState);
+  setupDictation(micBtn, textEl, statusEl, onText); // dictation writes textEl.value → recolour + refresh Save
   // Triptych: Past → the memoir (manual entry; hands-free is an explicit choice inside),
   // Present → today's diary, Future → the fortune (Futures). The active cell follows the mode.
   wireTrip();
@@ -713,6 +724,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     renderCategoryChips(); renderSubjectChips();
     applyEntryLayout(); // inEditMode is false now → shows the text box
     refreshSaveState();
+    capture.reset(); capture.refresh(); // colour the memory's text + collect its names
     saveBtn.textContent = "Update memory";
     statusEl.textContent = `Editing “${mem.subject || mem.category || mem.label || "memory"}” — change anything, then Save.`;
     statusEl.className = "write-status";
@@ -786,6 +798,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     if (memoirActions) memoirActions.scrollIntoView({ behavior: "smooth", block: "start" });
     applyEntryLayout();
     refreshSaveState();
+    capture.reset(); // fresh memory — clear the Found list
     (seed.subject ? textEl : subjectEl).focus();
   }
 
