@@ -676,10 +676,13 @@ Return ONLY valid JSON: {"ack":"...","memory":{...}|null,"next":"..."}. Escape d
     // proposing a new one. Powers the entity registry and the "every mention of X" timeline.
     if (mode === "entities") {
       const KINDS = ["person", "animal", "place", "org", "thing"];
-      const cleanMentions = (arr) => (Array.isArray(arr) ? arr.filter((m) => m && m.name).map((m) => ({
-        name: String(m.name).slice(0, 80),
-        kind: KINDS.includes(m.kind) ? m.kind : "person",
-      })) : []);
+      // Strip any reference tokens the model echoed back ("{{e:id|Luann}}" → "Luann") so a token can
+      // never become an entity name; drop anything left empty.
+      const deToken = (n) => { const m = String(n || "").match(/\{\{(?:e:)?[A-Za-z0-9_:-]+\|([^{}]*)\}\}/); let s = m ? m[1] : String(n || ""); return s.replace(/\{\{[^{}]*\}\}/g, " ").replace(/[{}]/g, " ").replace(/\s+/g, " ").trim(); };
+      const cleanMentions = (arr) => (Array.isArray(arr) ? arr.map((m) => ({
+        name: deToken(m && m.name).slice(0, 80),
+        kind: KINDS.includes(m && m.kind) ? m.kind : "person",
+      })).filter((m) => m.name) : []);
 
       // BATCH: several entries in one call — far fewer round-trips when sweeping a big backlog.
       if (Array.isArray(body.batch)) {

@@ -12,7 +12,7 @@ import { getAllEntries, getAllMemories, putEntry, putMemory, getAllEntities, get
 import { escapeHtml, resolveEntityTokens, setEntityMap } from "./render.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
-import { resolveEntityNames, resetEntityIndex } from "./entityresolve.js";
+import { resolveEntityNames, resetEntityIndex, sanitizeEntities } from "./entityresolve.js";
 import { ensureSelf, isSelfEntity, needsDescription } from "./self.js";
 import { jkey } from "./journal.js";
 import { createSpeaker, CHARACTERS, savedCharacter } from "./voicetts.js";
@@ -201,6 +201,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
   // ---- Roster (the entity list) --------------------------------------------------------------
   async function render() {
+    await sanitizeEntities(); // repair any names that are leftover {{tokens}}
     await ensureSelf(); // the journal-keeper is the first Name, there by default
     const all = await getAllEntities();
     setEntityMap(new Map(all.map((e) => [e.id, e.canonical]))); // so {{e:id|Name}} tokens resolve to names here
