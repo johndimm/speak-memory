@@ -308,9 +308,10 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     }
   }
   function wireTrip() {
+    // Route through the top nav so the tab highlight stays in sync with the triptych.
     wireTriptych(root, {
-      past: () => newMemory({}),
-      present: () => { dateEl.value = todayISO(); loadDraft({ focus: true }); }, // back to today's diary
+      past: () => onNavigate ? onNavigate("memoir") : newMemory({}),
+      present: () => onNavigate ? onNavigate("diary") : (dateEl.value = todayISO(), loadDraft({ focus: true })),
       future: () => onNavigate && onNavigate("futures"),
     });
   }

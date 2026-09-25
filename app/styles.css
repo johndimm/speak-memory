@@ -1720,7 +1720,8 @@ img.sample-photo { object-fit: cover; }
 .sample-status.error { color: #b3261e; }
 
 /* Sample lives are read-only: hide writing/editing affordances (the journal is a fixed artifact). */
-.sample-journal .mode-btn[data-mode="write"],
+.sample-journal .mode-btn[data-mode="diary"],
+.sample-journal .mode-btn[data-mode="memoir"],
 .sample-journal .day-actions,
 .sample-journal .period-delete,
 .sample-journal .period-summarize,

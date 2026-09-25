@@ -68,7 +68,7 @@ function renderLives() {
 }
 const places = initPlaces(placesView); // map of a life; opened lazily (loads Leaflet on first open)
 const timeline = initTimeline(timelineView, {
-  onEditMemory: (mem) => setMode("write", mem),      // "Edit full ›" opens the memory in Write
+  onEditMemory: (mem) => setMode("memoir", mem),      // "Edit full ›" opens the memory in Memoire
   onOpenMemory: (mem) => openMemoryInJournal(mem),   // tap a bar → read that state's full page (works read-only)
   onChanged: () => { /* memories changed inline; Journal reloads on its next open */ },
 });
@@ -115,9 +115,9 @@ const calendar = initCalendar({
   detailEdit: document.getElementById("detail-edit"),
   closeDetail: document.getElementById("close-detail"),
 }, {
-  onEdit: (date) => setMode("write", date), // Journal "Edit" opens the day in the Write editor
-  onEditMemory: (mem) => setMode("write", mem), // edit a memory in the same Write form
-  onAddMemory: (seed) => setMode("write", seed), // "Add another" → Write, pre-filled category/subject
+  onEdit: (date) => setMode("diary", date), // Journal "Edit" opens the day in the Diary editor
+  onEditMemory: (mem) => setMode("memoir", mem), // edit a memory in the Memoire form
+  onAddMemory: (seed) => setMode("memoir", seed), // "Add another" → Memoire, pre-filled category/subject
   onOpenEntity: (id) => { setMode("people"); people.openEntity(id); }, // tap a name in a summary → its page
 });
 
@@ -130,7 +130,7 @@ function setMode(mode, arg, zoom) {
   // Graph now lives inside the Activity tab as a sub-view (Queue | Graph).
   const showGraph = mode === "activity" && activitySub === "graph";
   const showQueue = mode === "activity" && activitySub === "queue";
-  writeView.hidden = mode !== "write";
+  writeView.hidden = !(mode === "diary" || mode === "memoir"); // one view, two tabs
   browseView.hidden = mode !== "browse";
   settingsView.hidden = mode !== "settings";
   graphView.hidden = !showGraph;
@@ -158,7 +158,8 @@ function setMode(mode, arg, zoom) {
   else if (mode === "futures") futures.open();
   else if (mode === "activity") { calendar.prime(); if (showGraph) { activity.close(); graph.open(); } else { activity.open(); } } // pass runs; show queue or graph
   else if (mode === "people") people.open();
-  else recorder.refresh(arg); // arg = date (day) or memory object to edit
+  else if (mode === "memoir") recorder.refresh(arg || {}); // Memoire: a memory (arg = memory to edit, else new)
+  else recorder.refresh(arg); // Diary: arg = a date to edit, else today
 }
 if (activitySubnav) activitySubnav.addEventListener("click", (e) => {
   const b = e.target.closest(".subnav-btn");
@@ -213,7 +214,8 @@ const settings = initSettings(settingsView, {
 // Journal, also restore the exact page (zoom/date/entity) you were viewing.
 let savedMode = (() => { try { return localStorage.getItem(LAST_MODE_KEY) || ""; } catch { return ""; } })();
 if (savedMode === "graph") { savedMode = "activity"; activitySub = "graph"; } // Graph moved inside Activity
-const VALID_MODES = new Set(["write", "browse", "timeline", "futures", "places", "people", "activity"]);
+if (savedMode === "write") savedMode = "diary"; // Write split into Diary + Memoire
+const VALID_MODES = new Set(["diary", "memoir", "browse", "timeline", "futures", "places", "people", "activity"]);
 
 // Stepping into a future via its "▶ Reveal" button asks to auto-play the audio show on load.
 try {
@@ -234,15 +236,15 @@ if (isSampleJournal()) {
   if (landActivity && landActivity === activeJournalId()) {
     sessionStorage.removeItem("land-on-graph");
     setMode("activity");   // opening Activity primes the pass, then shows the live queue
-  } else if (savedMode && savedMode !== "write" && VALID_MODES.has(savedMode)) {
+  } else if (savedMode && savedMode !== "diary" && savedMode !== "memoir" && VALID_MODES.has(savedMode)) {
     if (savedMode === "browse") { restoreJournalPos(); setMode("browse"); }
     else setMode(savedMode);
   } else {
-    setMode("browse", undefined, "life");
+    setMode("browse", undefined, "life"); // a sample/future never opens the editor
   }
 } else if (savedMode && VALID_MODES.has(savedMode)) {
   if (savedMode === "browse") { restoreJournalPos(); setMode("browse"); } // back to the exact Journal page
   else setMode(savedMode);
 } else {
-  setMode("write"); // first run: your own journal opens on Today
+  setMode("diary"); // first run: your own journal opens on Today
 }
