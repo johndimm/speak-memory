@@ -655,6 +655,26 @@ Return ONLY valid JSON: {"ack":"...","memory":{...}|null,"next":"..."}. Escape d
     // existing entity when it matches (by canonical name or alias, tolerating spelling variants) or
     // proposing a new one. Powers the entity registry and the "every mention of X" timeline.
     if (mode === "entities") {
+      const KINDS = ["person", "animal", "place", "org", "thing"];
+      const cleanMentions = (arr) => (Array.isArray(arr) ? arr.filter((m) => m && m.name).map((m) => ({
+        name: String(m.name).slice(0, 80),
+        kind: KINDS.includes(m.kind) ? m.kind : "person",
+      })) : []);
+
+      // BATCH: several entries in one call — far fewer round-trips when sweeping a big backlog.
+      if (Array.isArray(body.batch)) {
+        const items = body.batch.slice(0, 20).map((x) => ({ id: String(x.id || ""), text: String(x.text || "").slice(0, 3000) })).filter((x) => x.id && x.text.trim());
+        if (!items.length) { res.status(200).json({ results: [] }); return; }
+        const sys = `You extract the named INDIVIDUALS from SEVERAL journal entries at once — people and animals by name, and named places, organizations, or things that matter to this life. Skip generic references ("my boss", "the dog") unless a name is given.
+For EACH entry, identified by its id, give each individual its clearest canonical name.
+Return ONLY valid JSON: {"results":[{"id":"<the entry id>","mentions":[{"name":"<name>","kind":"person|animal|place|org|thing"}]}]}. Include EVERY id exactly once, with an empty mentions array if it names no one. Escape double quotes with a backslash.`;
+        const user = items.map((it) => `=== ENTRY id="${it.id}" ===\n${it.text}`).join("\n\n");
+        const r = await callJsonObject(sys, user, 0.2, cfg);
+        const results = Array.isArray(r.results) ? r.results.map((row) => ({ id: String(row && row.id || ""), mentions: cleanMentions(row && row.mentions) })).filter((row) => row.id) : [];
+        res.status(200).json({ results });
+        return;
+      }
+
       const text = String(body.text || "").trim();
       if (!text) { res.status(200).json({ mentions: [] }); return; }
       // Constant-size prompt — NO roster (that doesn't scale as the cast grows). Just extract the
@@ -663,11 +683,7 @@ Return ONLY valid JSON: {"ack":"...","memory":{...}|null,"next":"..."}. Escape d
 Give each individual its clearest canonical name as written in the entry.
 Return ONLY valid JSON: {"mentions":[{"name":"<name>","kind":"person|animal|place|org|thing"}]}. Escape double quotes with a backslash.`;
       const r = await callJsonObject(sys, `Entry:\n\n${text.slice(0, 12000)}`, 0.2, cfg);
-      const mentions = Array.isArray(r.mentions) ? r.mentions.filter((m) => m && m.name).map((m) => ({
-        name: String(m.name).slice(0, 80),
-        kind: ["person", "animal", "place", "org", "thing"].includes(m.kind) ? m.kind : "person",
-      })) : [];
-      res.status(200).json({ mentions });
+      res.status(200).json({ mentions: cleanMentions(r.mentions) });
       return;
     }
 

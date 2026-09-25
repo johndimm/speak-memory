@@ -37,6 +37,19 @@ async function postEntities(text) {
     return await r.json();
   } finally { clearTimeout(timer); }
 }
+// Batch: extract names from several entries in one call → { results:[{id, mentions}] }.
+async function postEntitiesBatch(items) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 120000);
+  try {
+    const r = await fetch("/api/summarize", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...llmOverrides(), mode: "entities", batch: items }), signal: ctrl.signal,
+    });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `Server ${r.status}`); }
+    return await r.json();
+  } finally { clearTimeout(timer); }
+}
 // Normalize a name for matching: lowercase, drop possessives/punctuation, collapse spaces.
 function normName(s) {
   return String(s || "").toLowerCase().replace(/['’]s\b/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
@@ -108,63 +121,77 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     resetEntityIndex(); // roster changed — the pass's resolver cache must rebuild
   }
 
-  // ---- Scan: tag every entry with the entities it names, resolving to the roster --------------
+  // An entry already has a summary → the summarization pass has run on it. NER now rides along with
+  // that pass, so un-summarized entries get their names for free when they're summarized; Scan only
+  // needs to catch up the ALREADY-summarized entries that predate NER-in-summarize.
+  const hasSummary = (s) => !!(s.levels || (s.prose && (s.prose.full || s.prose.brief)) || s.summarized === true);
+  const srcKey = (s) => s.date || s.id;
+
+  // ---- Scan: tag already-summarized entries that still lack name tags. Batched (10 per call). ----
   async function scan(setStatus) {
     if (scanning) return;
     scanning = true;
     try {
       const sources = await allSources();
-      let queue = sources.filter((s) => (s.raw || s.text) && !Array.isArray(s.entityRefs));
-      if (!queue.length) { setStatus("Everything's already scanned. Re-scan anyway from an entry's page if a name looks off.", ""); return; }
+      const untagged = sources.filter((s) => (s.raw || s.text) && !Array.isArray(s.entityRefs));
+      let queue = untagged.filter(hasSummary); // leave un-summarized ones to the pass (free NER)
+      const deferred = untagged.length - queue.length;
+      if (!queue.length) {
+        setStatus(deferred ? `Nothing to scan — ${deferred} entr${deferred === 1 ? "y is" : "ies are"} still summarizing, and names come with that automatically.` : "Everything's already scanned.", deferred ? "" : "");
+        return;
+      }
 
-      // Resolution runs through the shared resolver (normalized name/alias match, new entities
-      // created as needed) — the same path the summarization pass uses, so no divergence or dupes.
+      // Shared resolver (normalized name/alias match) — same path the pass uses, so no dupes.
       resetEntityIndex();
       const before = (await getAllEntities()).length;
       const total = queue.length;
-      let found = 0;
 
-      const scanOne = async (src) => {
-        const text = src.raw || src.text || "";
-        const label = src.date ? src.date : (src.subject || src.label || "memory");
-        const jid = logAdd(label, "scan");
-        logSet(jid, "running");
-        const { mentions } = await postEntities(text); // LLM extracts names only
-        const refs = await resolveEntityNames(mentions);
-        const next = { ...src, entityRefs: refs };
-        if (src.date) await putEntry(next); else await putMemory(next);
-        logSet(jid, "done");
-      };
+      // One call handles a whole chunk of entries; the model returns names per entry id.
+      const CHUNK = 10;
+      const chunks = [];
+      for (let i = 0; i < queue.length; i += CHUNK) chunks.push(queue.slice(i, i + CHUNK));
 
-      let completed = 0;
+      let completed = 0, failedEntries = 0;
       const btn = root.querySelector("#ent-scan");
       if (btn) btn.disabled = true;
       const tick = () => {
-        setStatus(`◷ Scanning… ${completed} of ${total} entries — watch it live in Activity`, "working");
+        setStatus(`◷ Scanning… ${completed} of ${total} entries (batched)`, "working");
         if (btn) btn.textContent = `Scanning ${completed}/${total}…`;
       };
       tick();
 
-      // Run several at once (the calls are slow), retrying flaky failures up to 3 passes. A source
-      // that fails every pass stays untagged so a later "Scan new entries" picks it up.
-      const CONCURRENCY = 4;
-      for (let pass = 0; pass < 3 && queue.length; pass++) {
-        const failures = [];
-        let i = 0;
-        const worker = async () => {
-          while (i < queue.length) {
-            const src = queue[i++];
-            try { await scanOne(src); } catch { failures.push(src); }
+      const doChunk = async (chunk) => {
+        const jid = logAdd(`${chunk.length} entries`, "scan");
+        logSet(jid, "running");
+        const byId = new Map(chunk.map((s) => [String(srcKey(s)), s]));
+        try {
+          const { results } = await postEntitiesBatch(chunk.map((s) => ({ id: String(srcKey(s)), text: s.raw || s.text || "" })));
+          const map = new Map((results || []).map((r) => [String(r.id), r.mentions || []]));
+          for (const s of chunk) {
+            const mentions = map.get(String(srcKey(s))) || [];
+            const refs = await resolveEntityNames(mentions);
+            const next = { ...s, entityRefs: refs };
+            if (s.date) await putEntry(next); else await putMemory(next);
             completed++;
-            tick();
           }
-        };
-        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker));
-        queue = failures;
-      }
-      found = (await getAllEntities()).length - before;
-      if (queue.length) setStatus(`Scanned — ${queue.length} still failing (tap “Scan new entries” to retry). ${found} new name${found === 1 ? "" : "s"}.`, "error");
-      else setStatus(`Done — ${found} new name${found === 1 ? "" : "s"} across ${total} entr${total === 1 ? "y" : "ies"}.`, "ok");
+          logSet(jid, "done");
+        } catch (e) {
+          failedEntries += chunk.length; // whole chunk failed → left untagged for a later Scan
+          logSet(jid, "error", (e && e.message) || "failed");
+        }
+        tick();
+      };
+
+      // A couple of chunks in flight at once.
+      const CONCURRENCY = 2;
+      let ci = 0;
+      const worker = async () => { while (ci < chunks.length) { await doChunk(chunks[ci++]); } };
+      await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, worker));
+
+      const found = (await getAllEntities()).length - before;
+      const tail = deferred ? ` (${deferred} more will get names as they summarize)` : "";
+      if (failedEntries) setStatus(`Scanned ${completed} of ${total} — ${failedEntries} failed, tap Scan again to retry. ${found} new name${found === 1 ? "" : "s"}.${tail}`, "error");
+      else setStatus(`Done — ${found} new name${found === 1 ? "" : "s"} across ${total} entr${total === 1 ? "y" : "ies"}.${tail}`, "ok");
       render();
     } finally { scanning = false; }
   }
