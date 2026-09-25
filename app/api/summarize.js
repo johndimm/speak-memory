@@ -643,6 +643,32 @@ Return ONLY valid JSON: {"subject":"...","fromYear":<int|null>,"toYear":<int|nul
       return;
     }
 
+    // Onboarding: the reader talks freely about their life NOW; extract the target facts + names as
+    // they go, so a checklist can fill in live (fingerprint-registration style). Cumulative transcript.
+    if (mode === "onboard") {
+      const text = String(body.text || "").slice(0, 8000).trim();
+      if (!text) { res.status(200).json({ age: null, birthYear: null, location: "", livesWith: "", job: "", friends: [], names: [] }); return; }
+      const sys = `The reader is describing their CURRENT life out loud, to set up their journal. From everything they've said SO FAR (a running transcript), extract only what is actually stated:
+- age: their age in years (integer) if stated, else null
+- birthYear: a 4-digit birth year if stated, else null
+- location: where they live now (city/place), else ""
+- livesWith: who they live with (e.g. "my wife and two kids"), else ""
+- job: what they do for work, else ""
+- friends: array of the names of best/close friends they mention (names only), else []
+- names: EVERY named person, animal, place, or organization mentioned, as {"name","kind":"person|animal|place|org|thing"}
+Return ONLY valid JSON: {"age":<int|null>,"birthYear":<int|null>,"location":"...","livesWith":"...","job":"...","friends":["..."],"names":[{"name":"...","kind":"..."}]}.`;
+      const r = await callJsonObject(sys, text, 0.2, cfg);
+      const int = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
+      const KINDS = ["person", "animal", "place", "org", "thing"];
+      res.status(200).json({
+        age: int(r.age), birthYear: (int(r.birthYear) && int(r.birthYear) > 1000 && int(r.birthYear) < 2200) ? int(r.birthYear) : null,
+        location: String(r.location || "").slice(0, 160), livesWith: String(r.livesWith || "").slice(0, 200), job: String(r.job || "").slice(0, 200),
+        friends: Array.isArray(r.friends) ? r.friends.filter((x) => typeof x === "string").map((x) => x.slice(0, 80)).slice(0, 20) : [],
+        names: Array.isArray(r.names) ? r.names.filter((m) => m && m.name).map((m) => ({ name: String(m.name).slice(0, 80), kind: KINDS.includes(m.kind) ? m.kind : "person" })) : [],
+      });
+      return;
+    }
+
     // A short profile of one Name, from MY notes (authoritative) + the journal excerpts. Its own mode
     // so it never inherits the chat assistant's "say what's missing" hedging.
     if (mode === "entityprofile") {

@@ -1303,7 +1303,26 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-status.ok { color: #3a7d44; }
 .ent-status.error { color: #b3261e; }
 .ent-empty { color: var(--ink-soft); font-style: italic; margin-top: 1rem; }
+.ent-onboard { display: block; width: 100%; margin: 0.2rem 0 0.6rem; border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600; font-size: 0.95rem; padding: 0.7rem 1rem; border-radius: 10px; cursor: pointer; text-align: left; }
+.ent-onboard:hover { filter: brightness(1.05); }
 .ent-needs { display: block; width: 100%; margin: 0.2rem 0 0.8rem; border: 1px solid rgba(196,92,38,0.4); background: rgba(196,92,38,0.08); color: var(--accent); font: inherit; font-weight: 600; font-size: 0.9rem; padding: 0.6rem 0.9rem; border-radius: 10px; cursor: pointer; text-align: left; }
+/* Onboarding overlay — the live checklist + names */
+.ob-card { max-width: 34rem; text-align: left; }
+.ob-title { font-family: var(--font-display); font-size: 1.8rem; margin-bottom: 0.3rem; text-align: center; }
+.ob-lead { color: var(--ink-soft); font-size: 0.9rem; line-height: 1.5; margin: 0 0 1rem; text-align: center; }
+.ob-list { list-style: none; margin: 0 0 1rem; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.ob-item { display: flex; align-items: baseline; gap: 0.6rem; font-size: 1rem; color: var(--ink-soft); }
+.ob-item.ob-ok { color: var(--ink); }
+.ob-check { width: 1.2rem; flex-shrink: 0; color: var(--ink-soft); font-weight: 700; }
+.ob-item.ob-ok .ob-check { color: #3a7d44; }
+.ob-label { flex-shrink: 0; }
+.ob-val { color: var(--accent); font-weight: 600; font-size: 0.9rem; }
+.ob-names-wrap { border-top: 1px solid var(--line); padding-top: 0.7rem; margin-bottom: 0.6rem; }
+.ob-names-title { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
+.ob-names { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.4rem; }
+.ob-names-none { color: var(--ink-soft); font-style: italic; font-size: 0.85rem; }
+.ob-chip { background: var(--accent-soft); color: var(--paper); border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.82rem; animation: show-in 0.4s ease; }
+#ob-stop { color: var(--ink-soft); border: 1px solid var(--line); background: var(--card); font: inherit; border-radius: 999px; padding: 0.5rem 1.2rem; cursor: pointer; }
 .ent-needs:hover { background: rgba(196,92,38,0.14); }
 .ent-card-self { border-color: var(--accent); }
 /* Editable name heading on a name's page — looks like a title, becomes clearly editable on focus. */

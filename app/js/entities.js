@@ -278,6 +278,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           </div>
         </div>
         <p class="field-hint">Everyone and everything your journal names — starting with you. Each has every mention in time order; merge two cards if they're the same individual.</p>
+        <button type="button" class="ent-onboard" id="ent-onboard">✨ Tell me about your life — I'll fill in your circle as you talk</button>
         ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} name${undescribed.length === 1 ? "" : "s"} still need${undescribed.length === 1 ? "s" : ""} a description — start with you</button>` : ""}
         <div id="ent-status" class="ent-status" hidden></div>
         ${selfCard}
@@ -292,6 +293,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     root.querySelector("#ent-interview")?.addEventListener("click", () => startInterview());
     root.querySelector("#ent-singles")?.addEventListener("click", () => { showSingles = !showSingles; render(); });
     root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) renderEntity(openId); }); // open the first undescribed name (you)
+    root.querySelector("#ent-onboard")?.addEventListener("click", async () => {
+      const { startOnboarding } = await import("./onboard.js");
+      startOnboarding(() => render()); // refresh the roster with the names it found
+    });
   }
 
   function setStatus(msg, cls) {
