@@ -1288,7 +1288,7 @@ function llmOverrides() {
     baseUrl: localStorage.getItem("llm-base-url") || "",
   };
 }
-async function postSummarize(body, timeoutMs = 60000) {
+async function postSummarizeOnce(body, timeoutMs) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -1301,10 +1301,29 @@ async function postSummarize(body, timeoutMs = 60000) {
       // not just the status — otherwise "Server 500" hides the real cause on the Activity page.
       let detail = "";
       try { detail = (await r.json())?.error || ""; } catch { /* body wasn't JSON */ }
-      throw new Error(`Server ${r.status}${detail ? ": " + String(detail).slice(0, 100) : ""}`);
+      const err = new Error(`Server ${r.status}${detail ? ": " + String(detail).slice(0, 100) : ""}`);
+      err.status = r.status;
+      throw err;
     }
     return await r.json();
   } finally { clearTimeout(timer); }
+}
+// Retry transient failures — a network drop ("Failed to fetch"), an abort, or a 429/5xx — with
+// backoff. These hit en masse when a redeploy lands mid-pass or connections saturate; retrying lets
+// the pass heal itself instead of leaving a wall of failures.
+async function postSummarize(body, timeoutMs = 60000) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((res) => setTimeout(res, 500 * 2 ** attempt + Math.random() * 400));
+    try {
+      return await postSummarizeOnce(body, timeoutMs);
+    } catch (e) {
+      lastErr = e;
+      const transient = e.name === "AbortError" || [429, 500, 502, 503, 504].includes(e.status) || /failed to fetch|networkerror|load failed|network request failed/i.test(e.message || "");
+      if (!transient || attempt === 2) throw e;
+    }
+  }
+  throw lastErr;
 }
 
 const DAY_ID = (iso) => "DAY:" + iso;
