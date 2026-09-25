@@ -81,10 +81,13 @@ function renderAnswerText(t) {
 // hands-free interview. Returns the profile text.
 async function writeProfile(ent, mentions) {
   const entries = (mentions || []).map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
-  if (ent.note) entries.unshift({ date: `My notes about ${ent.canonical}`, full: ent.note });
-  const sys = `Write a very short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}, using the entries below (they include "My notes about ${ent.canonical}" — my own authoritative words — and the journal entries that mention them). ONE or TWO sentences, first person from my view: who they are and our relationship. My notes win where they conflict.
-Just state what's known, plainly. Do NOT comment on the sources or how much is known — never write things like "based on the entries", "the journal only mentions", "that's all I know", "limited information", or "not much detail". No preamble, no caveats.`;
-  const { reply } = await postChat([{ role: "user", content: `${sys}\n\nWrite the profile now.` }], entries);
+  const r = await fetch("/api/summarize", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...llmOverrides(), mode: "entityprofile", name: ent.canonical, aliases: ent.aliases || [], note: ent.note || "", entries }),
+  });
+  if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `Server ${r.status}`); }
+  const { profile } = await r.json();
+  const reply = profile || "";
   const fresh = (await getEntity(ent.id)) || ent;
   await putEntity({ ...fresh, profile: reply, profileAt: Date.now(), updatedAt: Date.now() });
   return reply;
