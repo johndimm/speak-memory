@@ -1185,7 +1185,7 @@ async function renderCategory() {
   const subjectLinks = nodeLinksHtml(subjects.map((s, i) => ({ label: s, sentence: levelsOf(subRecs[i]).sentence, attrs: { subject: s }, thumb: repImage([], memoriesInSubject(cat, s)) })));
   const looseLinks = nodeLinksHtml(loose.map((m) => ({ label: m.label || "", sentence: levelsOf(m).sentence, attrs: { mem: m.id }, thumb: memImageUrls(m)[0] })));
   const timeline = memoryTimelineSpan(mems);
-  els.root.innerHTML = `<div class="day-actions">${addMemoryBtn(cat, "")}</div>` + nodeScaffold({
+  els.root.innerHTML = `<div class="day-actions">${addMemoryBtn(cat, "")}<button type="button" class="detail-nav-btn" data-rename-cat="${escapeHtml(cat)}">✎ Rename / merge category</button></div>` + nodeScaffold({
     name: cat, levels: levelsOf(rec),
     elementsHtml: (timeline ? `<p class="nav-hint">Timeline</p>${timeline}` : "")
       + (subjects.length ? `<p class="nav-hint">By subject</p>${subjectLinks}` : "")
@@ -1863,6 +1863,20 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
       else if (d.month) navDown("month", firstEntryDateIn("month", d.month));
       else if (d.week) navDown("week", d.week);
       else if (d.day) navDown("day", d.day);
+      return;
+    }
+    // Rename a category — type an existing name to MERGE this category's memories into it, then drop it.
+    const rc = e.target.closest("[data-rename-cat]");
+    if (rc) {
+      const from = rc.dataset.renameCat;
+      const to = (prompt(`Rename “${from}” to… (type an existing category, e.g. Homes, to merge into it)`, from) || "").trim();
+      if (!to || to === from) return;
+      const moving = memoriesInCategory(from);
+      for (const m of moving) await putMemory({ ...m, category: to, updatedAt: Date.now() });
+      allMemories = await getAllMemories();
+      state.zoom = "category"; state.category = to; state.subject = null; state.memoryId = null;
+      render();
+      autoSummarize(); // recompute the merged category's rollups in the background
       return;
     }
     const add = e.target.closest(".add-mem");
