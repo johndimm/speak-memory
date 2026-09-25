@@ -16,7 +16,7 @@ import { escapeHtml } from "./render.js";
 import { primeAudio } from "./voicetts.js";
 import {
   dbNameFor, switchJournal, listJournals, registerJournal, journalExists,
-  deleteJournal, slugify, activeJournalId, isSampleJournal, jkey,
+  deleteJournal, slugify, activeJournalId, isSampleJournal, jkey, aboutMeText,
 } from "./journal.js";
 
 const GEN_TIMEOUT_MS = 180000; // one big generation call; abort if it hangs
@@ -271,7 +271,7 @@ export function initFutures(root) {
       try {
         const res = await fetch("/api/future", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entries, prompt: nudge, years, count, memories: baseMemories }), signal: ctrl.signal,
+          body: JSON.stringify({ entries, prompt: nudge, years, count, memories: baseMemories, about: aboutMeText() }), signal: ctrl.signal,
         });
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Server ${res.status}`); }
         data = await res.json();

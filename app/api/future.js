@@ -132,6 +132,8 @@ export default async function handler(req, res) {
       }).join("\n");
       system += `\n\n=== MY LIFE SO FAR (homes, schools, jobs, relationships, decisions) ===\n${lines}`;
     }
+    const about = String(body.about || "").slice(0, 1500).trim();
+    if (about) system += `\n\n=== WHO I AM ===\n${about}`;
     system += `\n\n=== JOURNAL ENTRIES ===\n${context}`;
 
     const userMsg = `It is now around ${baseYear}. Write my raw future diary days${nudge ? ", steered by what I asked" : ""}.`;

@@ -5,6 +5,7 @@
 // you like — a ~5s pause ingests your answer (no tap). Skip changes topic; Stop ends.
 
 import { getAllEntries, getAllMemories, getAllEntities, putMemory } from "./db.js";
+import { aboutMeText } from "./journal.js";
 import { createSpeaker, CHARACTERS, savedCharacter } from "./voicetts.js";
 import { listenTurn as vListen, hasSpeechInput } from "./voiceinput.js";
 
@@ -22,7 +23,8 @@ async function buildContext() {
   const recent = days.slice(-25).map((d) => `${d.date}: ${(d.brief || d.full || d.raw || "").replace(/\s+/g, " ").slice(0, 120)}`);
   const memLines = mems.map((m) => `${m.category || "Life"}: ${m.subject || m.label || ""}${m.startYear ? ` (${m.startYear}${m.endYear && m.endYear !== m.startYear ? "–" + m.endYear : ""})` : ""}`);
   const names = ents.map((e) => e.canonical);
-  return `Recent journal days:\n${recent.join("\n") || "(none)"}\n\nKnown life-states:\n${memLines.join("\n") || "(none yet)"}\n\nNames I've mentioned: ${names.join(", ") || "(none)"}`.slice(0, 8000);
+  const about = aboutMeText();
+  return `${about ? `Who I am: ${about}\n\n` : ""}Recent journal days:\n${recent.join("\n") || "(none)"}\n\nKnown life-states:\n${memLines.join("\n") || "(none yet)"}\n\nNames I've mentioned: ${names.join(", ") || "(none)"}`.slice(0, 8000);
 }
 
 async function postInterview(context, convo, lastAnswer) {

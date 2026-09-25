@@ -19,6 +19,24 @@ export function dbNameFor(id = activeJournalId()) { return id ? `${BASE_DB}~${id
 // you already set); a sample suffixes the key so its title/birth-year/grouping stand apart.
 export function jkey(base, id = activeJournalId()) { return id ? `${base}::${id}` : base; }
 
+// Who the journal-keeper is (Settings › About you) — name, birth year, and a short self-description.
+// Used to ground summaries, futures, and the interviews in the first person.
+export function aboutMe() {
+  const name = (localStorage.getItem(jkey("about-name")) || "").trim();
+  const about = (localStorage.getItem(jkey("about-me")) || "").trim();
+  const by = Number(localStorage.getItem(jkey("birth-year")));
+  const birthYear = Number.isFinite(by) && by > 1000 && by < 2200 ? by : null;
+  return { name, about, birthYear };
+}
+export function aboutMeText() {
+  const { name, about, birthYear } = aboutMe();
+  const bits = [];
+  if (name) bits.push(`My name is ${name}.`);
+  if (birthYear) bits.push(`I was born in ${birthYear}.`);
+  if (about) bits.push(about);
+  return bits.join(" ").trim();
+}
+
 // Switch to a journal (by id; "" = your own) and reload so every layer re-reads it.
 export function switchJournal(id) {
   if ((id || "") === activeJournalId()) return;

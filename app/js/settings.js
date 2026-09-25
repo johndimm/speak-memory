@@ -100,6 +100,19 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
   root.innerHTML = `
     <div class="settings">
       <section class="settings-group">
+        <h2 class="settings-h">About you</h2>
+        <p class="field-hint">Who this journal belongs to. The app writes in your voice and draws on this to ground your summaries, your Names, and the futures it imagines.</p>
+        <label class="field">
+          <span class="field-label" for="about-name">Your name</span>
+          <input type="text" id="about-name" class="settings-input" autocomplete="name" placeholder="e.g. John">
+        </label>
+        <label class="field">
+          <span class="field-label" for="about-me">Who you are</span>
+          <textarea id="about-me" class="ent-note-input" rows="4" placeholder="A few lines: where you're from, family, work, what matters to you — anything that helps the app understand your world."></textarea>
+        </label>
+      </section>
+
+      <section class="settings-group">
         <h2 class="settings-h">Journal</h2>
         <label class="field">
           <span class="field-label" for="landing-level">Opens on</span>
@@ -351,6 +364,14 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
   syncGrouping();
   groupingEl.addEventListener("change", () => { localStorage.setItem(jkey("year-grouping"), groupingEl.value); syncGrouping(); });
   birthEl.addEventListener("input", () => save(jkey("birth-year"), birthEl.value));
+
+  // About you — name + a short self-description, grounding summaries, Names, and futures.
+  const nameEl = root.querySelector("#about-name");
+  const aboutEl = root.querySelector("#about-me");
+  nameEl.value = localStorage.getItem(jkey("about-name")) || "";
+  aboutEl.value = localStorage.getItem(jkey("about-me")) || "";
+  nameEl.addEventListener("input", () => save(jkey("about-name"), nameEl.value));
+  aboutEl.addEventListener("input", () => save(jkey("about-me"), aboutEl.value));
 
   // Summary voice — an author style applied to all generated prose (stored in localStorage).
   const styleSelect = root.querySelector("#summary-style-select");
