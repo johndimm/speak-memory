@@ -6,7 +6,7 @@
 import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, deleteEntry, deleteMemory, photoToStored, storedToBlob } from "./db.js";
 import { renderReps, wireReps, isOutlineText, escapeHtml } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
-import { setupDictation, setupHandsFree, IS_MOBILE } from "./dictation.js";
+import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { triptychHtml, wireTriptych } from "./triptych.js";
 import { primeAudio } from "./voicetts.js";
 import { DEFAULT_CATEGORIES } from "./memoryvoice.js";
@@ -115,10 +115,9 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <label class="field write-main">
         <span class="field-label write-prompt" id="entry-label">What happened today?</span>
         <textarea id="entry-text" rows="8"
-          placeholder="Just talk — tap 🎙 Hands-free and speak as long as you like — or type…"></textarea>
+          placeholder="Just talk — tap 🎤 Dictate — or type…"></textarea>
       </label>
       <div class="write-actions">
-        <button type="button" class="mic-btn handsfree-btn" id="handsfree-btn" hidden><span>🎙 Hands-free</span></button>
         <button type="button" class="mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button>
         <button type="submit" class="save-btn" id="save-btn" disabled>Save entry</button>
       </div>
@@ -145,15 +144,20 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
         <div class="photo-thumbs" id="photo-thumbs"></div>
       </div>
 
+      <!-- Diary-only: change the date. Hidden in Memoir mode (memories are placed by year). -->
       <details class="write-more" id="write-more">
-        <summary>Date, or file as a past memory</summary>
+        <summary>Change the date</summary>
         <label class="field">
           <span class="field-label">Date</span>
           <input type="date" id="entry-date" value="${todayISO()}" max="${todayISO()}">
         </label>
+      </details>
+
+      <!-- Memoir-only: the memory's category, subject, span, and place. Hidden in Diary mode. -->
+      <div id="memory-fields" hidden>
         <div class="field">
           <span class="field-label">Category</span>
-          <input type="text" id="entry-category" autocomplete="off" placeholder="childhood, girlfriends…  (blank = journal)">
+          <input type="text" id="entry-category" autocomplete="off" placeholder="places, friends, jobs…">
           <div class="chip-row" id="entry-category-chips"></div>
         </div>
         <div class="field">
@@ -179,8 +183,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
           </label>
           <label class="mem-ongoing"><input type="checkbox" id="entry-ongoing"> still going</label>
         </fieldset>
-        <span class="field-hint">Fill in a category to file this as a memory instead of a dated journal entry.</span>
-      </details>
+      </div>
 
       <button type="button" class="delete-entry-btn" id="delete-entry-btn" hidden>Delete entry</button>
       <p class="write-status" id="write-status"></p>
@@ -285,6 +288,17 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // ---- Memory fields — this same form also files a past memory (category/subject/year). A
   // filled-in category makes it a memory instead of a dated journal entry.
   const moreEl = root.querySelector("#write-more");
+  const memFields = root.querySelector("#memory-fields");
+  const memoirActions = root.querySelector("#memoir-actions");
+  // Switch the whole form between DIARY and MEMOIR so it's never a combined page.
+  let formMode = "diary";
+  function setFormMode(mode) { // "diary" | "memory"
+    formMode = mode;
+    const memory = mode === "memory";
+    if (memFields) memFields.hidden = !memory;      // category/subject/years/location — memoir only
+    if (memoirActions) memoirActions.hidden = !memory; // the voice tools — memoir only
+    if (moreEl) moreEl.hidden = memory;             // the date changer — diary only (memories use years)
+  }
   const catEl = root.querySelector("#entry-category");
   const catChips = root.querySelector("#entry-category-chips");
   const subjectEl = root.querySelector("#entry-subject");
@@ -372,26 +386,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   subChips.addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; subjectEl.value = b.dataset.val; renderSubjectChips(); });
 
   // Opening "add a memory" → a memory is placed by its year, not a calendar date, so blank the
-  // date field. And starting a memory from a saved day begins with a BLANK box (don't carry the
-  // day's text into it); a fresh unsaved draft is left alone so you can turn it into a memory.
-  moreEl.addEventListener("toggle", () => {
-    if (moreEl.open) {
-      dateEl.value = "";
-      briefEl.value = ""; headlineField.hidden = true; // headline belongs to a dated entry, not a memory
-      if (inEditMode && !editingMemId) {
-        loadedEntry = null; inEditMode = false; editingText = false;
-        textEl.value = "";
-        pendingPhotos = []; renderThumbs();
-        entryLabel.textContent = "The memory";
-        saveBtn.textContent = "Save memory";
-        applyEntryLayout();
-        refreshSaveState();
-        textEl.focus();
-      }
-    } else if (!dateEl.value) {
-      dateEl.value = todayISO(); // closed again → back to a dated journal entry (today by default)
-    }
-  });
+  // (The date fold is now just a date changer for diary entries; memory mode is entered via Memoir,
+  // which shows the memory fields — no more "open the fold to convert to a memory".)
 
   function refreshSaveState() {
     saveBtn.disabled = !(textEl.value.trim() || pendingPhotos.length);
@@ -427,7 +423,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     editingText = false;
     headlineField.hidden = !editMode;
     entryLabel.textContent = promptForDate(date, editMode); // show the selected date (normally today)
-    root.querySelector("#memoir-actions").hidden = true; // diary mode — memoir voice tools hidden
+    setFormMode("diary"); // pure diary — no memory fields, no memoir voice tools
     briefEl.value = entry?.brief ?? "";
     currentSummarized = entry ? entry.summarized !== false : true;
     saveBtn.textContent = editMode ? "Update entry" : "Save entry";
@@ -565,7 +561,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // In-app dictation (for devices whose keyboard has no mic). See dictation.js for the
   // Android-robust handling of auto-restart and de-duplication.
   setupDictation(micBtn, textEl, statusEl, refreshSaveState);
-  setupHandsFree(root.querySelector("#handsfree-btn"), textEl, refreshSaveState); // tap once, talk for a long time
   // Triptych: Past → the memoir, opened for MANUAL entry (no talking). Hands-free is an explicit
   // choice — the "🎙 Talk it through" button inside. Future → the fortune (Futures).
   wireTriptych(root, {
@@ -679,7 +674,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
 
   function resetMemoryFields() {
     editingMemId = null; editingMemOrig = null;
-    moreEl.open = false;
+    setFormMode("diary");
     catEl.value = ""; subjectEl.value = ""; startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false;
     locationEl.value = ""; chosenLocation = null; locSuggest.hidden = true; setLocHint("", false);
     renderCategoryChips(); renderSubjectChips();
@@ -691,12 +686,11 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     // Leave day-edit mode (a day may have been loaded first) so the plain memory text box shows,
     // not the day's formatted entry-view.
     loadedEntry = null; inEditMode = false; editingText = false;
-    root.querySelector("#memoir-actions").hidden = true; // editing one memory — no series tools
+    setFormMode("memory"); memoirActions.hidden = true; // editing one memory: show fields, hide series tools
     dateEl.value = ""; briefEl.value = ""; headlineField.hidden = true;
     entryLabel.textContent = "The memory";
     pendingPhotos = (mem.photos ?? []).map((ph) => { const b = storedToBlob(ph); return { blob: b, url: URL.createObjectURL(b) }; });
     renderThumbs();
-    moreEl.open = true;
     catEl.value = mem.category || ""; subjectEl.value = mem.subject || "";
     startYearEl.value = mem.startYear ?? ""; endYearEl.value = mem.endYear ?? ""; ongoingEl.checked = !!mem.ongoing;
     locationEl.value = mem.place || ""; chosenLocation = null; locSuggest.hidden = true;
@@ -713,7 +707,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
 
   root.querySelector("#write-form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (catEl.value.trim() || editingMemId) { await saveMemory(); return; } // category filled → a memory
+    if (formMode === "memory" || editingMemId) { await saveMemory(); return; } // memoir mode → a memory
     const date = dateEl.value || todayISO();
     const text = textEl.value.trim();
     const existing = loadedEntry ?? (await getEntry(date));
@@ -771,12 +765,11 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     catEl.value = seed.category || "";
     subjectEl.value = seed.subject || "";
     startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false;
-    moreEl.open = true;
+    setFormMode("memory"); // show memory fields + voice tools, hide the diary date
     renderCategoryChips(); renderSubjectChips();
     entryLabel.textContent = "The memory";
     saveBtn.textContent = "Save memory";
-    const actions = root.querySelector("#memoir-actions");
-    if (actions) { actions.hidden = false; actions.scrollIntoView({ behavior: "smooth", block: "start" }); } // voice tools up front
+    if (memoirActions) memoirActions.scrollIntoView({ behavior: "smooth", block: "start" });
     applyEntryLayout();
     refreshSaveState();
     (seed.subject ? textEl : subjectEl).focus();
