@@ -1303,6 +1303,9 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-status.ok { color: #3a7d44; }
 .ent-status.error { color: #b3261e; }
 .ent-empty { color: var(--ink-soft); font-style: italic; margin-top: 1rem; }
+.ent-needs { display: block; width: 100%; margin: 0.2rem 0 0.8rem; border: 1px solid rgba(196,92,38,0.4); background: rgba(196,92,38,0.08); color: var(--accent); font: inherit; font-weight: 600; font-size: 0.9rem; padding: 0.6rem 0.9rem; border-radius: 10px; cursor: pointer; text-align: left; }
+.ent-needs:hover { background: rgba(196,92,38,0.14); }
+.ent-card-self { border-color: var(--accent); }
 .ent-singles-toggle { display: block; margin: 1rem 0 0; border: none; background: none; color: var(--accent); font: inherit; font-size: 0.85rem; cursor: pointer; padding: 0.3rem 0; }
 .ent-singles-toggle:hover { text-decoration: underline; }
 .ent-kind { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; color: var(--ink-soft); margin: 1.4rem 0 0.6rem; }
@@ -1412,13 +1415,11 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
   .week-day-header { flex-direction: column; }
   /* Tab bar wraps to its own full-width row; text tabs share the space, gear stays put. */
   .app-bar-inner { gap: 0.6rem; }
-  /* Buttons grow to fill the row but never shrink below their own text, so a long label like
-     "Timeline" can't spill into its neighbour. If a phone is too narrow for one row, the pill
-     scrolls horizontally instead of overlapping. */
-  .mode-nav { width: 100%; gap: 0.15rem; overflow-x: auto; scrollbar-width: none; }
-  .mode-nav::-webkit-scrollbar { display: none; }
-  .mode-btn { flex: 1 0 auto; min-width: 0; padding: 0.5rem 0.3rem; font-size: 0.75rem; white-space: nowrap; }
-  .mode-btn-gear { flex: 0 0 auto; padding: 0.5rem 0.45rem; font-size: 0.9rem; }
+  /* Too many tabs for one row on a phone — WRAP to two rows so the whole bar fits the screen
+     (no horizontal scroll spilling past the edge). A gentler radius suits the multi-row block. */
+  .mode-nav { width: 100%; max-width: 100%; gap: 0.25rem; flex-wrap: wrap; justify-content: center; border-radius: 16px; box-sizing: border-box; }
+  .mode-btn { flex: 0 1 auto; min-width: 0; padding: 0.45rem 0.7rem; font-size: 0.8rem; white-space: nowrap; }
+  .mode-btn-gear { flex: 0 0 auto; padding: 0.45rem 0.6rem; font-size: 0.95rem; }
 }
 
 /* Live summarization progress — a fixed toast showing the summary climbing the levels. */

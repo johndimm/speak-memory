@@ -13,6 +13,8 @@ import { escapeHtml, resolveEntityTokens, setEntityMap } from "./render.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { resolveEntityNames, resetEntityIndex } from "./entityresolve.js";
+import { ensureSelf, isSelfEntity, needsDescription } from "./self.js";
+import { jkey } from "./journal.js";
 import { createSpeaker, CHARACTERS, savedCharacter } from "./voicetts.js";
 import { listenTurn as vListen, hasSpeechInput } from "./voiceinput.js";
 
@@ -199,10 +201,11 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
   // ---- Roster (the entity list) --------------------------------------------------------------
   async function render() {
+    await ensureSelf(); // the journal-keeper is the first Name, there by default
     const all = await getAllEntities();
     setEntityMap(new Map(all.map((e) => [e.id, e.canonical]))); // so {{e:id|Name}} tokens resolve to names here
     if (openId) { renderEntity(openId); return; }
-    const [entities, sources] = [all, await allSources()];
+    const sources = await allSources();
     // Count mentions per entity from the tagged sources.
     const counts = new Map();
     let taggedCount = 0;
@@ -211,11 +214,28 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     }
     const total = sources.filter((s) => s.raw || s.text).length;
 
+    // You (the self) are pinned first, always shown, and never treated as a one-off.
+    const self = all.find(isSelfEntity);
+    const entities = all.filter((e) => !isSelfEntity(e));
+
     // A name mentioned only ONCE across all entries is usually noise (a one-off or a mishear). Hide
     // those by default — but always keep ones you've engaged with (a note, a flag, or a profile).
     const keep = (e) => (counts.get(e.id) || 0) >= 2 || !!e.note || e.recognized === false || !!e.profile;
     const singles = entities.filter((e) => !keep(e));
     const visible = showSingles ? entities : entities.filter(keep);
+
+    // "Needs a description" = a shown name (you + the recurring ones) with no note of your own yet.
+    const undescribed = [self, ...visible].filter((e) => e && needsDescription(e));
+
+    const selfCard = self ? `
+      <h3 class="ent-kind">You</h3>
+      <div class="ent-grid"><div class="ent-card-wrap">
+        <button type="button" class="ent-card ent-card-self${needsDescription(self) ? " ent-card-flag" : ""}" data-open="${escapeHtml(self.id)}">
+          <span class="ent-name">${escapeHtml(self.canonical)}</span>
+          <span class="ent-aka">${needsDescription(self) ? "tap to say who you are" : "you"}</span>
+          <span class="ent-count">${counts.get(self.id) || 0}</span>
+        </button>
+      </div></div>` : "";
 
     const byKind = new Map();
     for (const e of visible) {
@@ -246,13 +266,13 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
             <button type="button" class="ent-scan" id="ent-scan">${entities.length ? "Scan new entries" : "Scan entries"}</button>
           </div>
         </div>
-        <p class="field-hint">Everyone and everything your journal names, each with every mention in time order. Merge two cards if they're the same individual under different names.</p>
+        <p class="field-hint">Everyone and everything your journal names — starting with you. Each has every mention in time order; merge two cards if they're the same individual.</p>
+        ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} name${undescribed.length === 1 ? "" : "s"} still need${undescribed.length === 1 ? "s" : ""} a description — start with you</button>` : ""}
         <div id="ent-status" class="ent-status" hidden></div>
-        ${total === 0
-          ? `<p class="ent-empty">No entries yet — write or imagine some days first.</p>`
-          : entities.length === 0
-            ? `<p class="ent-empty">Nothing scanned yet. Tap “Scan entries” to find the people and animals in your journal.</p>`
-            : sections
+        ${selfCard}
+        ${total === 0 && entities.length === 0
+          ? `<p class="ent-empty">Tell the app who you are (tap your card above). Then write or imagine some days and more names appear.</p>`
+          : sections
               + (singles.length ? `<button type="button" class="ent-singles-toggle" id="ent-singles">${showSingles ? "Hide" : "Show"} ${singles.length} name${singles.length === 1 ? "" : "s"} mentioned once</button>` : "")
               + (taggedCount < total ? `<p class="field-hint" style="margin-top:1rem">${total - taggedCount} entr${total - taggedCount === 1 ? "y" : "ies"} not yet scanned — tap “Scan new entries”.</p>` : "")}
       </div>`;
@@ -260,6 +280,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     root.querySelector("#ent-scan")?.addEventListener("click", () => scan(setStatus));
     root.querySelector("#ent-interview")?.addEventListener("click", () => startInterview());
     root.querySelector("#ent-singles")?.addEventListener("click", () => { showSingles = !showSingles; render(); });
+    root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) renderEntity(openId); }); // open the first undescribed name (you)
   }
 
   function setStatus(msg, cls) {

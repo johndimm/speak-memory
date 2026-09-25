@@ -1,7 +1,8 @@
 // "Settings" view — device preferences plus data import / export / delete, moved off the
 // Today writing screen. (The summary voice still lives on Today, next to where you write.)
 
-import { getEntry, putEntry, getAllEntries, clearAllEntries, getAllMemories, putMemory, clearAllMemories, getAllPeriods, putPeriod, clearAllPeriods, photoToStored, storedToBlob } from "./db.js";
+import { getEntry, putEntry, getAllEntries, clearAllEntries, getAllMemories, putMemory, clearAllMemories, getAllPeriods, putPeriod, clearAllPeriods, getAllEntities, putEntity, clearAllEntities, photoToStored, storedToBlob } from "./db.js";
+import { resetEntityIndex } from "./entityresolve.js";
 import { withMode } from "./entry.js";
 import { isOutlineText } from "./render.js";
 import { jkey } from "./journal.js";
@@ -99,19 +100,6 @@ function dataURLtoBlob(dataURL) {
 export function initSettings(root, { onImported, onOpenLives } = {}) {
   root.innerHTML = `
     <div class="settings">
-      <section class="settings-group">
-        <h2 class="settings-h">About you</h2>
-        <p class="field-hint">Who this journal belongs to. The app writes in your voice and draws on this to ground your summaries, your Names, and the futures it imagines.</p>
-        <label class="field">
-          <span class="field-label" for="about-name">Your name</span>
-          <input type="text" id="about-name" class="settings-input" autocomplete="name" placeholder="e.g. John">
-        </label>
-        <label class="field">
-          <span class="field-label" for="about-me">Who you are</span>
-          <textarea id="about-me" class="ent-note-input" rows="4" placeholder="A few lines: where you're from, family, work, what matters to you — anything that helps the app understand your world."></textarea>
-        </label>
-      </section>
-
       <section class="settings-group">
         <h2 class="settings-h">Journal</h2>
         <label class="field">
@@ -365,14 +353,6 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
   groupingEl.addEventListener("change", () => { localStorage.setItem(jkey("year-grouping"), groupingEl.value); syncGrouping(); });
   birthEl.addEventListener("input", () => save(jkey("birth-year"), birthEl.value));
 
-  // About you — name + a short self-description, grounding summaries, Names, and futures.
-  const nameEl = root.querySelector("#about-name");
-  const aboutEl = root.querySelector("#about-me");
-  nameEl.value = localStorage.getItem(jkey("about-name")) || "";
-  aboutEl.value = localStorage.getItem(jkey("about-me")) || "";
-  nameEl.addEventListener("input", () => save(jkey("about-name"), nameEl.value));
-  aboutEl.addEventListener("input", () => save(jkey("about-me"), aboutEl.value));
-
   // Summary voice — an author style applied to all generated prose (stored in localStorage).
   const styleSelect = root.querySelector("#summary-style-select");
   const styleCustom = root.querySelector("#summary-style-custom");
@@ -403,7 +383,11 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
     if (entries.length) parts.push(`${entries.length} ${entries.length === 1 ? "entry" : "entries"}`);
     if (mems.length) parts.push(`${mems.length} ${mems.length === 1 ? "memory" : "memories"}`);
     if (!confirm(`Delete ALL ${parts.join(" and ")} permanently? This cannot be undone.`)) return;
-    await Promise.all([clearAllEntries(), clearAllMemories()]);
+    // Clear names (entities) too — otherwise old Names linger after a wipe — and drop the resolver's
+    // in-memory cache and your self-description so nothing comes back.
+    await Promise.all([clearAllEntries(), clearAllMemories(), clearAllEntities()]);
+    resetEntityIndex();
+    try { localStorage.removeItem(jkey("about-name")); localStorage.removeItem(jkey("about-me")); } catch { /* */ }
     location.reload();
   });
 
@@ -411,7 +395,7 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
     importStatus.textContent = "Preparing export…";
     importStatus.className = "import-status";
     try {
-      const [entries, memories, periods] = await Promise.all([getAllEntries(), getAllMemories(), getAllPeriods()]);
+      const [entries, memories, periods, entities] = await Promise.all([getAllEntries(), getAllMemories(), getAllPeriods(), getAllEntities()]);
       if (!entries.length && !memories.length) { importStatus.textContent = "Nothing to export yet."; return; }
       // Export the whole entry (raw, prose, outline, levels, reps, mode…) so a round-trip
       // preserves every level of summarization. Only the binary photos need converting.
@@ -436,7 +420,7 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
       }
       // Include the rolled-up summaries (week/month/year/decade/life + category/subject) so a
       // restore doesn't have to re-summarize everything from scratch.
-      const bundle = { version: 1, exportedAt: new Date().toISOString(), entries: out, memories: memOut, periods };
+      const bundle = { version: 1, exportedAt: new Date().toISOString(), entries: out, memories: memOut, periods, entities };
       const blob = new Blob([JSON.stringify(bundle)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -468,6 +452,7 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
       const entries = Array.isArray(bundle) ? bundle : (Array.isArray(bundle.entries) ? bundle.entries : []);
       const memories = (!Array.isArray(bundle) && Array.isArray(bundle.memories)) ? bundle.memories : [];
       const periods = (!Array.isArray(bundle) && Array.isArray(bundle.periods)) ? bundle.periods : [];
+      const entities = (!Array.isArray(bundle) && Array.isArray(bundle.entities)) ? bundle.entities : [];
       if (!entries.length && !memories.length) throw new Error("Not a valid export file");
 
       const overwrite = root.querySelector("#import-overwrite")?.checked;
@@ -525,6 +510,17 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
       // Restore the rolled-up summaries (the derived cache) so a fresh restore is fully
       // summarized without re-running the model. Anything stale is recomputed on the next pass.
       for (const p of periods) { if (p && p.key) await putPeriod(p); }
+
+      // Restore the Names (entities) so a round-trip keeps them; matched by id, overwrite rule applies.
+      if (entities.length) {
+        const existingEnt = new Set((await getAllEntities()).map((e) => e.id));
+        for (const e of entities) {
+          if (!e || !e.id || !e.canonical) continue;
+          if (existingEnt.has(e.id) && !overwrite) continue;
+          await putEntity(e);
+        }
+        resetEntityIndex();
+      }
 
       const nothingNew = !added && !updated && !memAdded && !photosAdded;
       importStatus.textContent = nothingNew
