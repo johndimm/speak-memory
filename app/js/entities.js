@@ -266,8 +266,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     }
     const total = sources.filter((s) => s.raw || s.text).length;
 
-    // You (the self) are pinned first, always shown, and never treated as a one-off.
-    const self = all.find(isSelfEntity);
+    // You live in your own "Me" tab now — the Names roster is everyone ELSE.
     const entities = all.filter((e) => !isSelfEntity(e));
 
     // Names deliberately mentioned in someone's note (e.g. your self-description) — always show these.
@@ -282,18 +281,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const manySingles = singles.length > 20;
     const visible = (showSingles || !manySingles) ? entities : entities.filter(keep);
 
-    // "Needs a description" = a shown name (you + the recurring ones) with no note of your own yet.
-    const undescribed = [self, ...visible].filter((e) => e && needsDescription(e));
-
-    const selfCard = self ? `
-      <h3 class="ent-kind">You</h3>
-      <div class="ent-grid"><div class="ent-card-wrap">
-        <button type="button" class="ent-card ent-card-self${needsDescription(self) ? " ent-card-flag" : ""}" data-open="${escapeHtml(self.id)}">
-          <span class="ent-name">${escapeHtml(self.canonical)}</span>
-          <span class="ent-aka">${needsDescription(self) ? "tap to say who you are" : "you"}</span>
-          <span class="ent-count">${counts.get(self.id) || 0}</span>
-        </button>
-      </div></div>` : "";
+    // "Needs a description" = a shown name (the recurring ones) with no note of your own yet.
+    const undescribed = visible.filter((e) => e && needsDescription(e));
 
     const byKind = new Map();
     for (const e of visible) {
@@ -324,13 +313,12 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
             <button type="button" class="ent-scan" id="ent-scan">${entities.length ? "Scan new entries" : "Scan entries"}</button>
           </div>
         </div>
-        <p class="field-hint">Everyone and everything your journal names — starting with you. Each has every mention in time order; merge two cards if they're the same individual.</p>
+        <p class="field-hint">Everyone and everything your journal names. Each has every mention in time order; merge two cards if they're the same individual.</p>
         <button type="button" class="ent-onboard" id="ent-onboard">✨ Tell me about your life — I'll fill in your circle as you talk</button>
-        ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} name${undescribed.length === 1 ? "" : "s"} still need${undescribed.length === 1 ? "s" : ""} a description — start with you</button>` : ""}
+        ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} name${undescribed.length === 1 ? "" : "s"} still need${undescribed.length === 1 ? "s" : ""} a description</button>` : ""}
         <div id="ent-status" class="ent-status" hidden></div>
-        ${selfCard}
         ${total === 0 && entities.length === 0
-          ? `<p class="ent-empty">Tell the app who you are (tap your card above). Then write or imagine some days and more names appear.</p>`
+          ? `<p class="ent-empty">Write or imagine some days and the people, places and things you name will show up here.</p>`
           : sections
               + ((manySingles || showSingles) && singles.length ? `<button type="button" class="ent-singles-toggle" id="ent-singles">${showSingles ? "Hide" : "Show"} ${singles.length} name${singles.length === 1 ? "" : "s"} mentioned once</button>` : "")
               + (taggedCount < total ? `<p class="field-hint" style="margin-top:1rem">${total - taggedCount} entr${total - taggedCount === 1 ? "y" : "ies"} not yet scanned — tap “Scan new entries”.</p>` : "")}
@@ -339,7 +327,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     root.querySelector("#ent-scan")?.addEventListener("click", () => scan(setStatus));
     root.querySelector("#ent-interview")?.addEventListener("click", () => startInterview());
     root.querySelector("#ent-singles")?.addEventListener("click", () => { showSingles = !showSingles; render(); });
-    root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) renderEntity(openId); }); // open the first undescribed name (you)
+    root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) renderEntity(openId); }); // open the first name still missing a description
     root.querySelector("#ent-onboard")?.addEventListener("click", async () => {
       const { startOnboarding } = await import("./onboard.js");
       startOnboarding(() => render()); // refresh the roster with the names it found
@@ -375,7 +363,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
     root.innerHTML = `
       <div class="entities">
-        <button type="button" class="ent-back" id="ent-back">← All names</button>
+        ${isSelfEntity(ent) ? "" : `<button type="button" class="ent-back" id="ent-back">← All names</button>`}
         <!-- The name is editable right here — fixing a mishearing renames it everywhere at once. -->
         <input type="text" class="node-name ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" aria-label="Name" spellcheck="false">
         <p class="node-subtitle">${KIND_LABEL[ent.entityKind || "person"]}${(ent.aliases && ent.aliases.length) ? ` · also ${escapeHtml(ent.aliases.join(", "))}` : ""} · <span class="ent-rename-hint">edit the name above to fix a spelling — it updates every summary</span></p>
@@ -528,7 +516,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       }
     });
 
-    root.querySelector("#ent-back").addEventListener("click", () => { openId = null; render(); });
+    root.querySelector("#ent-back")?.addEventListener("click", () => { openId = null; render(); });
 
     // Inline rename — fix a mishearing here and it updates every summary (tokens re-render to the new
     // name) without re-summarizing anything.
@@ -784,7 +772,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   });
 
   return {
-    open() { render(); },
+    open() { openId = null; render(); }, // Names always lands on the roster (Me lives in its own tab)
     async openSelf() { const s = await ensureSelf(); openId = s.id; renderEntity(s.id); }, // the "Me" tab
     openEntity(id) { openId = id; renderEntity(id); }, // jump straight to one entity (from a name-link)
     close() { if (iv) { iv.active = false; endInterview(); } },
