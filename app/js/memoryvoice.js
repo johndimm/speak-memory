@@ -12,7 +12,7 @@ import { listenTurn as vListen, hasSpeechInput } from "./voiceinput.js";
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "m" + Date.now() + Math.random().toString(36).slice(2));
 
 // A sensible starter set — the user can also type any category in Write.
-export const DEFAULT_CATEGORIES = ["Homes", "Cities", "Family", "Relationships", "Friends", "Schools", "Jobs", "Successes", "Failures"];
+export const DEFAULT_CATEGORIES = ["Homes", "Cities", "Family", "Relationships", "Friends", "Schools", "Jobs", "Vacations", "Successes", "Failures"];
 
 async function postMemoryMeta(text, category) {
   const r = await fetch("/api/summarize", {
