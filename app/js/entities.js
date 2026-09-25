@@ -82,7 +82,8 @@ function renderAnswerText(t) {
 async function writeProfile(ent, mentions) {
   const entries = (mentions || []).map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
   if (ent.note) entries.unshift({ date: `My notes about ${ent.canonical}`, full: ent.note });
-  const sys = `Write a short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}, using the entries below (they include "My notes about ${ent.canonical}" — my own authoritative words — and the journal entries that mention them). In 2–4 sentences, first person from my view: who they are, our relationship, and how it changed over time; mention years where useful. My notes win where they conflict with the journal.`;
+  const sys = `Write a very short profile of "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}, using the entries below (they include "My notes about ${ent.canonical}" — my own authoritative words — and the journal entries that mention them). ONE or TWO sentences, first person from my view: who they are and our relationship. My notes win where they conflict.
+Just state what's known, plainly. Do NOT comment on the sources or how much is known — never write things like "based on the entries", "the journal only mentions", "that's all I know", "limited information", or "not much detail". No preamble, no caveats.`;
   const { reply } = await postChat([{ role: "user", content: `${sys}\n\nWrite the profile now.` }], entries);
   const fresh = (await getEntity(ent.id)) || ent;
   await putEntity({ ...fresh, profile: reply, profileAt: Date.now(), updatedAt: Date.now() });
