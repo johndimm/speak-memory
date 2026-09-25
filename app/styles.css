@@ -1406,6 +1406,13 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .iv-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.8rem; }
 .ent-note-existing { margin-bottom: 0.6rem; }
 .ent-detail-body { display: flex; flex-direction: column; gap: 0.6rem; }
+.ent-facts-list { list-style: none; margin: 0.2rem 0 1rem; padding: 0.7rem 0.9rem; background: var(--card); border: 1px solid var(--line); border-radius: 10px; display: flex; flex-direction: column; gap: 0.35rem; }
+.ent-fact { display: flex; align-items: baseline; gap: 0.55rem; font-size: 0.92rem; color: var(--ink-soft); }
+.ent-fact.ok { color: var(--ink); }
+.ent-fact .ob-check { width: 1.1rem; flex-shrink: 0; font-weight: 700; }
+.ent-fact.ok .ob-check { color: #3a7d44; }
+.ent-fact .ob-label { flex-shrink: 0; min-width: 5.5rem; color: var(--ink-soft); font-size: 0.8rem; }
+.ent-fact .ob-val { color: var(--accent); font-weight: 600; }
 .ent-summary { margin: 1rem 0; }
 .ent-summary-body { background: var(--paper-deep); border-radius: var(--radius); padding: 0.9rem 1.1rem; line-height: 1.6; color: var(--ink); }
 .ent-summary-body p { margin: 0 0 0.6rem; }

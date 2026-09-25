@@ -76,6 +76,27 @@ function renderAnswerText(t) {
   return "<p>" + esc.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>") + "</p>";
 }
 
+// Standard facts we like to know per kind — a light checklist on each card, filled from your notes.
+const FACT_FIELDS = {
+  person: [["relationship", "Relationship"], ["age", "Age"], ["job", "Work"], ["location", "Lives"], ["livesWith", "Lives with"]],
+  place: [["placeType", "What"], ["location", "Where"], ["years", "When"]],
+  org: [["orgType", "What"], ["role", "My role"], ["years", "When"]],
+};
+function factValue(f, k) {
+  if (k === "age") return f.age != null ? String(f.age) : (f.birthYear ? `b. ${f.birthYear}` : "");
+  return f[k] ? String(f[k]) : "";
+}
+function factsChecklist(ent) {
+  const fields = FACT_FIELDS[ent.entityKind || "person"];
+  if (!fields) return "";
+  const f = ent.facts || {};
+  const rows = fields.map(([k, label]) => {
+    const v = factValue(f, k); const ok = !!v.trim();
+    return `<li class="ent-fact${ok ? " ok" : ""}"><span class="ob-check">${ok ? "✓" : "○"}</span><span class="ob-label">${label}</span><b class="ob-val">${escapeHtml(v)}</b></li>`;
+  }).join("");
+  return `<ul class="ent-facts-list" id="ent-facts">${rows}</ul>`;
+}
+
 // Write (and save) an entity's profile from MY notes + the journal entries that mention it. The note
 // is passed AS AN ENTRY so /api/chat treats it as source-of-truth. Shared by the name page and the
 // hands-free interview. Returns the profile text.
@@ -91,6 +112,32 @@ async function writeProfile(ent, mentions) {
   const fresh = (await getEntity(ent.id)) || ent;
   await putEntity({ ...fresh, profile: reply, profileAt: Date.now(), updatedAt: Date.now() });
   return reply;
+}
+
+// Extract the standard facts for a name's kind from its notes + mentions, store them, refresh the
+// on-card checklist, and create/link any other names it mentions. Returns the names found.
+async function extractFacts(ent, mentions) {
+  if (!FACT_FIELDS[ent.entityKind || "person"]) return [];
+  const entries = (mentions || []).map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
+  const r = await fetch("/api/summarize", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...llmOverrides(), mode: "entityfacts", name: ent.canonical, kind: ent.entityKind || "person", note: ent.note || "", entries }),
+  });
+  if (!r.ok) return [];
+  const { facts, names } = await r.json();
+  const cur = (await getEntity(ent.id)) || ent;
+  await putEntity({ ...cur, facts: facts || {}, updatedAt: Date.now() });
+  ent.facts = facts || {};
+  const el = document.getElementById("ent-facts");
+  if (el) el.outerHTML = factsChecklist(ent);
+  const others = (names || []).filter((m) => m && m.name);
+  if (others.length) {
+    try {
+      const refs = (await resolveEntityNames(others)).filter((rid) => rid !== ent.id);
+      if (refs.length) { const c = (await getEntity(ent.id)) || ent; await putEntity({ ...c, noteRefs: [...new Set([...(c.noteRefs || []), ...refs])], updatedAt: Date.now() }); }
+    } catch { /* */ }
+  }
+  return others;
 }
 
 // A short date for a source item (day = its date; memory = its year range or label).
@@ -333,7 +380,6 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         <input type="text" class="node-name ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" aria-label="Name" spellcheck="false">
         <p class="node-subtitle">${KIND_LABEL[ent.entityKind || "person"]}${(ent.aliases && ent.aliases.length) ? ` · also ${escapeHtml(ent.aliases.join(", "))}` : ""} · <span class="ent-rename-hint">edit the name above to fix a spelling — it updates every summary</span></p>
         ${ent.recognized === false ? `<p class="ent-flag-banner">🕳 You didn't recognize this name — a possible mistake or a memory hole. Add anything you can below, or it stays flagged.</p>` : ""}
-        ${ent.recognized === false ? `<p class="ent-flag-banner">🕳 You didn't recognize this name — a possible mistake or a memory hole. Add anything you can below, or it stays flagged.</p>` : ""}
 
         <!-- Profile paragraph at the top — written from the mentions PLUS your own notes below. -->
         <div class="node-summary ent-summary" id="ent-summary">
@@ -341,6 +387,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
             ? `${renderAnswerText(ent.profile)}<button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`
             : mentions.length ? `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>` : `<p class="ent-empty">No mentions yet — add a note below to start a profile.</p>`}
         </div>
+
+        <!-- Standard facts for this kind (person/place/org), filled in from your notes as you add them. -->
+        ${factsChecklist(ent)}
 
         <!-- Your notes: a running transcript in your words, folded into the profile (like Write). -->
         <section class="node-comment">
@@ -408,6 +457,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     // notes (so it won't keep saying "little is known" above your detailed notes).
     const stale = (ent.profileAt || 0) < (ent.updatedAt || 0);
     if ((!ent.profile || stale) && (mentions.length || ent.note)) genProfile();
+    // Backfill the standard-facts checklist on open, when it's empty but there's something to read.
+    if (FACT_FIELDS[ent.entityKind || "person"] && !ent.facts && (ent.note || mentions.length)) extractFacts(ent, mentions);
 
     // Your notes — a growing transcript in your words. Adding appends to the note and rewrites the
     // profile (and, via the roster, folds into summaries that mention this name as they're rewritten).
@@ -426,19 +477,19 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       const box = root.querySelector(".ent-note-existing");
       if (box) box.innerHTML = renderAnswerText(note);
       else ta.closest(".node-comment-row")?.insertAdjacentHTML("beforebegin", `<div class="ent-note-existing">${renderAnswerText(note)}</div>`);
-      // A note (especially your self-description) names other people — extract them so they appear as
-      // Names too. They're recorded on the note (noteRefs) so they show even with no journal mentions.
+      // A note names other people and carries standard facts. For kinds with a fact checklist
+      // (person/place/org) extractFacts does both (facts + names); otherwise just pull the names.
       try {
-        const { mentions } = await postEntities(text);
-        if (mentions && mentions.length) {
-          const refs = (await resolveEntityNames(mentions)).filter((rid) => rid !== id); // don't self-link
-          if (refs.length) {
-            const cur = (await getEntity(id)) || ent;
-            const noteRefs = [...new Set([...(cur.noteRefs || []), ...refs])];
-            await putEntity({ ...cur, noteRefs, updatedAt: Date.now() });
-            pstatus(`Saved · found ${refs.length} name${refs.length === 1 ? "" : "s"}.`, "ok");
-          } else pstatus("", "");
-        } else pstatus("", "");
+        const fresh2 = (await getEntity(id)) || ent;
+        if (FACT_FIELDS[fresh2.entityKind || "person"]) {
+          const found = await extractFacts(fresh2, mentions);
+          pstatus(found.length ? `Saved · found ${found.length} name${found.length === 1 ? "" : "s"}.` : "Saved.", "ok");
+        } else {
+          const { mentions: mm } = await postEntities(text);
+          const refs = mm && mm.length ? (await resolveEntityNames(mm)).filter((rid) => rid !== id) : [];
+          if (refs.length) { const cur = (await getEntity(id)) || ent; await putEntity({ ...cur, noteRefs: [...new Set([...(cur.noteRefs || []), ...refs])], updatedAt: Date.now() }); }
+          pstatus(refs.length ? `Saved · found ${refs.length} name${refs.length === 1 ? "" : "s"}.` : "Saved.", "ok");
+        }
       } catch { pstatus("", ""); }
       genProfile();
     });

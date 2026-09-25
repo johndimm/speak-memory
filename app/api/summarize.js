@@ -643,6 +643,42 @@ Return ONLY valid JSON: {"subject":"...","fromYear":<int|null>,"toYear":<int|nul
       return;
     }
 
+    // Standard facts about one Name, by kind (person: relationship/age/job/where they live/who with;
+    // place: what kind/where/when). Extracted from MY notes + journal excerpts, for the card checklist.
+    if (mode === "entityfacts") {
+      const name = String(body.name || "").slice(0, 120);
+      const kind = ["person", "animal", "place", "org", "thing"].includes(body.kind) ? body.kind : "person";
+      const note = String(body.note || "").slice(0, 4000);
+      const entries = Array.isArray(body.entries) ? body.entries.slice(0, 60) : [];
+      const excerpts = entries.map((e) => `${e.date || ""}: ${String(e.full || e.brief || "").replace(/\s+/g, " ").slice(0, 300)}`).join("\n").slice(0, 10000);
+      const spec = kind === "place"
+        ? `- placeType: what kind of place (home, rental, city, school, workplace, …)
+- location: where it is (city/region)
+- years: when it was in my life (a year or a range like "1975–1982")`
+        : kind === "org"
+        ? `- orgType: what it is (employer, club, school, band, …)
+- role: my role or involvement
+- years: when it was in my life`
+        : `- relationship: who they are to me (e.g. "my brother", "a coworker", "childhood friend")
+- age: their age in years (integer) if stated, else null
+- birthYear: 4-digit year if stated, else null
+- job: what they do for work
+- location: where they live
+- livesWith: who they live with`;
+      const sys = `Extract standard facts about "${name}" (a ${kind}) from MY notes (authoritative) and the journal excerpts below. Only what is actually stated — use "" or null for anything not said. Fields:
+${spec}
+Also list "names": every OTHER named person/animal/place/org mentioned, as {"name","kind"}.
+Return ONLY valid JSON with a "facts" object holding those fields and a "names" array.`;
+      const user = `MY NOTES ABOUT ${name}:\n${note || "(none yet)"}\n\nJOURNAL EXCERPTS:\n${excerpts || "(none)"}`;
+      const r = await callJsonObject(sys, user, 0.2, cfg);
+      const KINDS = ["person", "animal", "place", "org", "thing"];
+      const facts = (r.facts && typeof r.facts === "object") ? r.facts : {};
+      if (facts.age != null) { const n = parseInt(facts.age, 10); facts.age = Number.isFinite(n) ? n : null; }
+      const names = Array.isArray(r.names) ? r.names.filter((m) => m && m.name).map((m) => ({ name: String(m.name).slice(0, 80), kind: KINDS.includes(m.kind) ? m.kind : "person" })) : [];
+      res.status(200).json({ facts, names });
+      return;
+    }
+
     // Onboarding: the reader talks freely about their life NOW; extract the target facts + names as
     // they go, so a checklist can fill in live (fingerprint-registration style). Cumulative transcript.
     if (mode === "onboard") {
