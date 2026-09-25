@@ -105,6 +105,12 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     <!-- The arc of the app: past · present · future. The present (this diary) is where you are. -->
     ${triptychHtml("present")}
     <form class="write-form" id="write-form">
+      <!-- Memoir mode: voice tools up front (shown when adding a memory, not for the daily diary). -->
+      <div class="memoir-handsfree-row" id="memoir-actions" hidden>
+        <button type="button" class="fut-interview" id="memoir-series">🎙 Add a series by voice</button>
+        <button type="button" class="fut-interview" id="memoir-handsfree">💬 Talk it through</button>
+        <span class="field-hint">Or just fill in the memory below — I won't interrupt.</span>
+      </div>
       <!-- The input leads: a big prompt + box, with Dictate right there. Everything else folds below. -->
       <label class="field write-main">
         <span class="field-label write-prompt" id="entry-label">What happened today?</span>
@@ -141,11 +147,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
 
       <details class="write-more" id="write-more">
         <summary>Date, or file as a past memory</summary>
-        <div class="memoir-handsfree-row">
-          <button type="button" class="fut-interview" id="memoir-series">🎙 Add a series by voice</button>
-          <button type="button" class="fut-interview" id="memoir-handsfree">💬 Talk it through</button>
-          <span class="field-hint">Or just type below — I won't interrupt.</span>
-        </div>
         <label class="field">
           <span class="field-label">Date</span>
           <input type="date" id="entry-date" value="${todayISO()}" max="${todayISO()}">
@@ -426,6 +427,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     editingText = false;
     headlineField.hidden = !editMode;
     entryLabel.textContent = promptForDate(date, editMode); // show the selected date (normally today)
+    root.querySelector("#memoir-actions").hidden = true; // diary mode — memoir voice tools hidden
     briefEl.value = entry?.brief ?? "";
     currentSummarized = entry ? entry.summarized !== false : true;
     saveBtn.textContent = editMode ? "Update entry" : "Save entry";
@@ -689,6 +691,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     // Leave day-edit mode (a day may have been loaded first) so the plain memory text box shows,
     // not the day's formatted entry-view.
     loadedEntry = null; inEditMode = false; editingText = false;
+    root.querySelector("#memoir-actions").hidden = true; // editing one memory — no series tools
     dateEl.value = ""; briefEl.value = ""; headlineField.hidden = true;
     entryLabel.textContent = "The memory";
     pendingPhotos = (mem.photos ?? []).map((ph) => { const b = storedToBlob(ph); return { blob: b, url: URL.createObjectURL(b) }; });
@@ -772,6 +775,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     renderCategoryChips(); renderSubjectChips();
     entryLabel.textContent = "The memory";
     saveBtn.textContent = "Save memory";
+    const actions = root.querySelector("#memoir-actions");
+    if (actions) { actions.hidden = false; actions.scrollIntoView({ behavior: "smooth", block: "start" }); } // voice tools up front
     applyEntryLayout();
     refreshSaveState();
     (seed.subject ? textEl : subjectEl).focus();
