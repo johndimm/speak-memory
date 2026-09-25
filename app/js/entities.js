@@ -9,7 +9,7 @@
 // Extraction runs against /api/summarize (mode:"entities"); each scan is logged to Activity.
 
 import { getAllEntries, getAllMemories, putEntry, putMemory, getAllEntities, getEntity, putEntity, deleteEntity } from "./db.js";
-import { escapeHtml } from "./render.js";
+import { escapeHtml, resolveEntityTokens, setEntityMap } from "./render.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { resolveEntityNames, resetEntityIndex } from "./entityresolve.js";
@@ -70,7 +70,7 @@ async function postChat(messages, entries) {
   } finally { clearTimeout(timer); }
 }
 function renderAnswerText(t) {
-  const esc = String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const esc = resolveEntityTokens(String(t)).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); // {{e:id|Name}} → the name
   return "<p>" + esc.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>") + "</p>";
 }
 
@@ -199,8 +199,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
   // ---- Roster (the entity list) --------------------------------------------------------------
   async function render() {
+    const all = await getAllEntities();
+    setEntityMap(new Map(all.map((e) => [e.id, e.canonical]))); // so {{e:id|Name}} tokens resolve to names here
     if (openId) { renderEntity(openId); return; }
-    const [entities, sources] = await Promise.all([getAllEntities(), allSources()]);
+    const [entities, sources] = [all, await allSources()];
     // Count mentions per entity from the tagged sources.
     const counts = new Map();
     let taggedCount = 0;
@@ -271,6 +273,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   // ---- One entity: profile + every mention in time order -------------------------------------
   async function renderEntity(id) {
     const [ent, sources, entities] = await Promise.all([getEntity(id), allSources(), getAllEntities()]);
+    setEntityMap(new Map(entities.map((e) => [e.id, e.canonical]))); // resolve {{e:id|Name}} tokens to names
     if (!ent) { openId = null; render(); return; }
     const mentions = sources.filter((s) => Array.isArray(s.entityRefs) && s.entityRefs.includes(id))
       .sort((a, b) => itemSortKey(a).localeCompare(itemSortKey(b)));
@@ -280,7 +283,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       const key = s.date || s.id;
       return `<button type="button" class="ent-mention" data-goto="${escapeHtml(key)}" data-kind="${kind}">
         <span class="ent-when">${escapeHtml(itemWhen(s))}</span>
-        <span class="ent-snip">${escapeHtml(brief)}</span>
+        <span class="ent-snip">${escapeHtml(resolveEntityTokens(brief))}</span>
       </button>`;
     }).join("");
     const others = entities.filter((e) => e.id !== id).sort((a, b) => a.canonical.localeCompare(b.canonical));

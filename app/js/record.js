@@ -4,7 +4,7 @@
 // and throw the raw text away.
 
 import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, deleteEntry, deleteMemory, photoToStored, storedToBlob } from "./db.js";
-import { renderReps, wireReps, isOutlineText, escapeHtml } from "./render.js";
+import { renderReps, wireReps, isOutlineText, escapeHtml, resolveEntityTokens } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { triptychHtml, wireTriptych } from "./triptych.js";
@@ -415,7 +415,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       return { blob: b, url: URL.createObjectURL(b) };
     });
     renderThumbs();
-    textEl.value = entry?.raw ?? entry?.full ?? ""; // edit the original words, not the summary
+    // Edit the original words; if raw was purged and we fall back to the summary, show names not tokens.
+    textEl.value = entry?.raw ?? resolveEntityTokens(entry?.full ?? "") ?? "";
 
     // Day has data → the editor (Re-summarize, literal save). No data → compose.
     const editMode = !!entry;
