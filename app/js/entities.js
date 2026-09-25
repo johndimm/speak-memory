@@ -223,11 +223,17 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const self = all.find(isSelfEntity);
     const entities = all.filter((e) => !isSelfEntity(e));
 
-    // A name mentioned only ONCE across all entries is usually noise (a one-off or a mishear). Hide
-    // those by default — but always keep ones you've engaged with (a note, a flag, or a profile).
-    const keep = (e) => (counts.get(e.id) || 0) >= 2 || !!e.note || e.recognized === false || !!e.profile;
+    // Names deliberately mentioned in someone's note (e.g. your self-description) — always show these.
+    const noteReffed = new Set();
+    for (const e of all) for (const rid of (e.noteRefs || [])) noteReffed.add(rid);
+
+    // A name mentioned only ONCE across all entries is usually noise in a BIG journal. Keep anything
+    // you've engaged with (note/flag/profile) or that you named in a note; and never hide when there
+    // are only a handful of one-offs (a new or small journal shows everyone).
+    const keep = (e) => (counts.get(e.id) || 0) >= 2 || !!e.note || e.recognized === false || !!e.profile || noteReffed.has(e.id);
     const singles = entities.filter((e) => !keep(e));
-    const visible = showSingles ? entities : entities.filter(keep);
+    const manySingles = singles.length > 20;
+    const visible = (showSingles || !manySingles) ? entities : entities.filter(keep);
 
     // "Needs a description" = a shown name (you + the recurring ones) with no note of your own yet.
     const undescribed = [self, ...visible].filter((e) => e && needsDescription(e));
@@ -278,7 +284,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         ${total === 0 && entities.length === 0
           ? `<p class="ent-empty">Tell the app who you are (tap your card above). Then write or imagine some days and more names appear.</p>`
           : sections
-              + (singles.length ? `<button type="button" class="ent-singles-toggle" id="ent-singles">${showSingles ? "Hide" : "Show"} ${singles.length} name${singles.length === 1 ? "" : "s"} mentioned once</button>` : "")
+              + ((manySingles || showSingles) && singles.length ? `<button type="button" class="ent-singles-toggle" id="ent-singles">${showSingles ? "Hide" : "Show"} ${singles.length} name${singles.length === 1 ? "" : "s"} mentioned once</button>` : "")
               + (taggedCount < total ? `<p class="field-hint" style="margin-top:1rem">${total - taggedCount} entr${total - taggedCount === 1 ? "y" : "ies"} not yet scanned — tap “Scan new entries”.</p>` : "")}
       </div>`;
 
@@ -405,7 +411,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       const ta = root.querySelector("#ent-note-input");
       const text = (ta && ta.value || "").trim();
       if (!text) return;
-      pstatus("Saving & updating profile…", "working");
+      pstatus("Saving & finding names…", "working");
       const fresh = (await getEntity(id)) || ent;
       const note = (fresh.note ? fresh.note + "\n" : "") + text;
       await putEntity({ ...fresh, note, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() }); // adding info clears a "didn't recognize" flag
@@ -415,7 +421,20 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       const box = root.querySelector(".ent-note-existing");
       if (box) box.innerHTML = renderAnswerText(note);
       else ta.closest(".node-comment-row")?.insertAdjacentHTML("beforebegin", `<div class="ent-note-existing">${renderAnswerText(note)}</div>`);
-      pstatus("", "");
+      // A note (especially your self-description) names other people — extract them so they appear as
+      // Names too. They're recorded on the note (noteRefs) so they show even with no journal mentions.
+      try {
+        const { mentions } = await postEntities(text);
+        if (mentions && mentions.length) {
+          const refs = (await resolveEntityNames(mentions)).filter((rid) => rid !== id); // don't self-link
+          if (refs.length) {
+            const cur = (await getEntity(id)) || ent;
+            const noteRefs = [...new Set([...(cur.noteRefs || []), ...refs])];
+            await putEntity({ ...cur, noteRefs, updatedAt: Date.now() });
+            pstatus(`Saved · found ${refs.length} name${refs.length === 1 ? "" : "s"}.`, "ok");
+          } else pstatus("", "");
+        } else pstatus("", "");
+      } catch { pstatus("", ""); }
       genProfile();
     });
 
