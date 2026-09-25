@@ -565,7 +565,7 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
     // Multi-level summary: one call returns word→phrase→sentence→paragraph→complete summary
     // + outline (+ a no-condense rewrite for leaf nodes). Used by every node in the Journal.
     if (mode === "levels") {
-      const { text = "", type = "node", label = "", style = "", subject = "", date = "", localTime = "", distilled = false, correction = "", thorough = false } = body;
+      const { text = "", type = "node", label = "", style = "", subject = "", date = "", localTime = "", distilled = false, correction = "", thorough = false, isLeaf = false } = body;
       if (!text.trim()) { res.status(400).json({ error: "No text provided" }); return; }
       const subjectNote = subject
         ? `\n\nSUBJECT — This is about "${subject}". Use exactly that name and spelling for it throughout, correcting any mis-transcription. It may be a person, place, or thing.`
@@ -588,10 +588,12 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
         res.status(200).json({ word: s(r.word), phrase: s(r.phrase), sentence: s(r.sentence), paragraph: s(r.paragraph), summary: "", outline: "" });
         return;
       }
-      // Full ladder (roll-ups): distilled rungs + complete summary + outline.
-      const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + entitiesNote(body.entities) + PRESERVE_TOKENS_NOTE + styleDirective(style);
+      // NER runs on VERBATIM leaf text only. Roll-ups summarize already-tokenized child summaries, so
+      // extracting entities there would scoop up {{e:…}} tokens — skip it entirely for roll-ups.
+      const nerNote = isLeaf ? entitiesNote(body.entities) : `\n\nDo NOT extract entities — return "entities": []. (This is a roll-up of already-processed summaries.)`;
+      const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + nerNote + PRESERVE_TOKENS_NOTE + styleDirective(style);
       const r = await callLLM(sys, user, style ? 0.8 : 0.4, ["word", "phrase", "sentence", "paragraph", "summary"], cfg);
-      const entities = Array.isArray(r.entities) ? r.entities.filter((x) => x && x.name).map((x) => ({
+      const entities = (isLeaf && Array.isArray(r.entities)) ? r.entities.filter((x) => x && x.name).map((x) => ({
         name: String(x.name).slice(0, 80),
         kind: ["person", "animal", "place", "org", "thing"].includes(x.kind) ? x.kind : "person",
       })) : [];
