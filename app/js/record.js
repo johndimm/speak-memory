@@ -9,6 +9,7 @@ import { deriveBrief, withMode, repsOf } from "./entry.js";
 import { setupDictation, setupHandsFree, IS_MOBILE } from "./dictation.js";
 import { triptychHtml, wireTriptych } from "./triptych.js";
 import { primeAudio } from "./voicetts.js";
+import { DEFAULT_CATEGORIES } from "./memoryvoice.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -141,7 +142,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <details class="write-more" id="write-more">
         <summary>Date, or file as a past memory</summary>
         <div class="memoir-handsfree-row">
-          <button type="button" class="fut-interview" id="memoir-handsfree">🎙 Talk it through, hands-free</button>
+          <button type="button" class="fut-interview" id="memoir-series">🎙 Add a series by voice</button>
+          <button type="button" class="fut-interview" id="memoir-handsfree">💬 Talk it through</button>
           <span class="field-hint">Or just type below — I won't interrupt.</span>
         </div>
         <label class="field">
@@ -353,7 +355,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   const uniq = (vals) => [...new Set(vals.filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const chipsHtml = (vals, current) => vals.map((v) =>
     `<button type="button" class="chip${v.toLowerCase() === current.toLowerCase() ? " chip-on" : ""}" data-val="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join("");
-  const renderCategoryChips = () => { catChips.innerHTML = chipsHtml(uniq(allMems.map((m) => m.category)), catEl.value.trim()); };
+  const renderCategoryChips = () => { catChips.innerHTML = chipsHtml(uniq([...DEFAULT_CATEGORIES, ...allMems.map((m) => m.category)]), catEl.value.trim()); };
   const renderSubjectChips = () => {
     const cat = catEl.value.trim().toLowerCase();
     // No category yet → no subject suggestions (subjects belong to a category); once one is
@@ -572,6 +574,12 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     primeAudio(); // unlock audio IN this tap, before the async import (mobile blocks post-gesture play)
     const { startLifeInterview } = await import("./lifeinterview.js");
     startLifeInterview(() => loadMemLists());
+  });
+  // Structured voice capture of a SERIES of memories (form-fill then record, category by category).
+  root.querySelector("#memoir-series")?.addEventListener("click", async () => {
+    primeAudio();
+    const { startMemoryVoice } = await import("./memoryvoice.js");
+    startMemoryVoice(catEl.value.trim() || undefined, () => loadMemLists());
   });
 
   // Generate BOTH a prose and an outline summary of the same text (voice applies to prose only).

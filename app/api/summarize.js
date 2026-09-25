@@ -621,6 +621,26 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       return;
     }
 
+    // Memory metadata: parse a spoken description of a memory into form fields (voice memory capture).
+    if (mode === "memorymeta") {
+      const text = String(body.text || "").slice(0, 2000).trim();
+      const category = String(body.category || "").slice(0, 60);
+      if (!text) { res.status(200).json({ subject: "", fromYear: null, toYear: null, location: "" }); return; }
+      const sys = `The reader is dictating the METADATA for a memory${category ? ` in the category "${category}"` : ""} — not the memory itself, just what it is and when/where. From what they say, extract:
+- subject: a short label or name for it (e.g. "the house on Elm Street", "my grandmother Rose", "Lincoln High"). "" if none.
+- fromYear, toYear: 4-digit years as integers, or null. A single year → fromYear only. "from X to Y" → both. Resolve "when I was N" only if a birth year is obvious; otherwise null.
+- location: a real place name for the map (city/address), or "".
+Return ONLY valid JSON: {"subject":"...","fromYear":<int|null>,"toYear":<int|null>,"location":"..."}.`;
+      const r = await callJsonObject(sys, text, 0.2, cfg);
+      const yr = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 1000 && n < 2200 ? n : null; };
+      res.status(200).json({
+        subject: String(r.subject || "").slice(0, 120),
+        fromYear: yr(r.fromYear), toYear: yr(r.toYear),
+        location: String(r.location || "").slice(0, 160),
+      });
+      return;
+    }
+
     // Life interview: an intelligent agent gathering the reader's life story to feed better Futures.
     // Given what's known + the conversation + the last answer, it (1) structures that answer into a
     // memory if it holds a concrete life fact, and (2) asks the next probing spoken question.
