@@ -30,14 +30,20 @@
         <button class="title-edit" id="title-edit" type="button" aria-label="Rename journal" title="Rename">✎</button>
       </div>
       <nav class="mode-nav" aria-label="Section">
+        <button class="mode-btn" data-mode="me">Me</button>
         <button class="mode-btn active" data-mode="diary">Diary</button>
         <button class="mode-btn" data-mode="memoir">Memoire</button>
         <button class="mode-btn" data-mode="people">Names</button>
         <button class="mode-btn" data-mode="browse">Journal</button>
         <button class="mode-btn" data-mode="futures">Futures</button>
-        <button class="mode-btn" data-mode="timeline">Timeline</button>
-        <button class="mode-btn" data-mode="places">Map</button>
-        <button class="mode-btn" data-mode="activity">Activity</button>
+        <div class="mode-more">
+          <button class="mode-btn" id="more-btn" aria-haspopup="true" aria-expanded="false">More ▾</button>
+          <div class="more-menu" id="more-menu" hidden>
+            <button class="more-item" data-mode="timeline">Timeline</button>
+            <button class="more-item" data-mode="places">Map</button>
+            <button class="more-item" data-mode="activity">Activity</button>
+          </div>
+        </div>
         <button class="mode-btn mode-btn-gear" data-mode="settings" aria-label="Settings" title="Settings">⚙</button>
       </nav>
     </div>

@@ -785,6 +785,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
   return {
     open() { render(); },
+    async openSelf() { const s = await ensureSelf(); openId = s.id; renderEntity(s.id); }, // the "Me" tab
     openEntity(id) { openId = id; renderEntity(id); }, // jump straight to one entity (from a name-link)
     close() { if (iv) { iv.active = false; endInterview(); } },
   };

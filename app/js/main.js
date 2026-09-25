@@ -124,9 +124,15 @@ const calendar = initCalendar({
 const LAST_MODE_KEY = jkey("last-mode");
 const activitySubnav = document.getElementById("activity-subnav");
 let activitySub = "queue"; // which face of the Activity tab: the queue list, or the node graph
+const MORE_MODES = new Set(["timeline", "places", "activity"]); // live under the "More" menu
 function setMode(mode, arg, zoom) {
   try { if (mode !== "settings") localStorage.setItem(LAST_MODE_KEY, mode); } catch { /* ignore */ } // remember the tab for reload
   modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
+  // The More button + its items reflect the current mode; close the menu after a pick.
+  const moreBtn = document.getElementById("more-btn"), moreMenu = document.getElementById("more-menu");
+  if (moreBtn) moreBtn.classList.toggle("active", MORE_MODES.has(mode));
+  if (moreMenu) { moreMenu.hidden = true; moreMenu.querySelectorAll(".more-item").forEach((b) => b.classList.toggle("active", b.dataset.mode === mode)); }
+  if (moreBtn) moreBtn.setAttribute("aria-expanded", "false");
   // Graph now lives inside the Activity tab as a sub-view (Queue | Graph).
   const showGraph = mode === "activity" && activitySub === "graph";
   const showQueue = mode === "activity" && activitySub === "queue";
@@ -139,7 +145,7 @@ function setMode(mode, arg, zoom) {
   timelineView.hidden = mode !== "timeline";
   futuresView.hidden = mode !== "futures";
   activityView.hidden = !showQueue;
-  peopleView.hidden = mode !== "people";
+  peopleView.hidden = !(mode === "people" || mode === "me"); // Me is your own card in the Names view
   if (activitySubnav) {
     activitySubnav.hidden = mode !== "activity";
     activitySubnav.querySelectorAll(".subnav-btn").forEach((b) => b.classList.toggle("active", b.dataset.sub === activitySub));
@@ -158,6 +164,7 @@ function setMode(mode, arg, zoom) {
   else if (mode === "futures") futures.open();
   else if (mode === "activity") { calendar.prime(); if (showGraph) { activity.close(); graph.open(); } else { activity.open(); } } // pass runs; show queue or graph
   else if (mode === "people") people.open();
+  else if (mode === "me") people.openSelf(); // your own card (facts + notes + "tell me about your life")
   else if (mode === "memoir") recorder.refresh(arg || {}); // Memoire: a memory (arg = memory to edit, else new)
   else recorder.refresh(arg); // Diary: arg = a date to edit, else today
 }
@@ -169,6 +176,14 @@ if (activitySubnav) activitySubnav.addEventListener("click", (e) => {
 });
 
 modeBtns.forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
+
+// The "More" menu (Timeline / Map / Activity) — toggle open, pick an item, close on outside click.
+const moreBtn = document.getElementById("more-btn"), moreMenu = document.getElementById("more-menu");
+if (moreBtn && moreMenu) {
+  moreBtn.addEventListener("click", (e) => { e.stopPropagation(); const open = moreMenu.hidden; moreMenu.hidden = !open; moreBtn.setAttribute("aria-expanded", String(open)); });
+  moreMenu.querySelectorAll(".more-item").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  document.addEventListener("click", (e) => { if (!moreMenu.hidden && !moreMenu.contains(e.target) && e.target !== moreBtn) { moreMenu.hidden = true; moreBtn.setAttribute("aria-expanded", "false"); } });
+}
 
 // The past·present·future band on the Journal — here none is "active"; all three navigate.
 const browseTriptych = document.getElementById("browse-triptych");
@@ -215,7 +230,7 @@ const settings = initSettings(settingsView, {
 let savedMode = (() => { try { return localStorage.getItem(LAST_MODE_KEY) || ""; } catch { return ""; } })();
 if (savedMode === "graph") { savedMode = "activity"; activitySub = "graph"; } // Graph moved inside Activity
 if (savedMode === "write") savedMode = "diary"; // Write split into Diary + Memoire
-const VALID_MODES = new Set(["diary", "memoir", "browse", "timeline", "futures", "places", "people", "activity"]);
+const VALID_MODES = new Set(["me", "diary", "memoir", "browse", "timeline", "futures", "places", "people", "activity"]);
 
 // Stepping into a future via its "▶ Reveal" button asks to auto-play the audio show on load.
 try {

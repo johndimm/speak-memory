@@ -101,6 +101,10 @@ body { position: relative; }
 }
 .mode-btn.active { background: var(--ink); color: var(--paper); }
 .mode-btn-gear { padding: 0.5rem 0.7rem; font-size: 1rem; }
+.mode-more { position: relative; display: inline-flex; }
+.more-menu { position: absolute; top: calc(100% + 0.35rem); right: 0; z-index: 60; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 0.3rem; display: flex; flex-direction: column; min-width: 8.5rem; }
+.more-item { text-align: left; border: none; background: transparent; color: var(--ink); font: inherit; font-size: 0.9rem; padding: 0.5rem 0.8rem; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.more-item:hover, .more-item.active { background: var(--ink); color: var(--paper); }
 
 /* Settings page */
 .settings { max-width: 40rem; display: flex; flex-direction: column; gap: 2.5rem; }
