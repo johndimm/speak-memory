@@ -1524,11 +1524,14 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
   .week-day-header { flex-direction: column; }
   /* Tab bar wraps to its own full-width row; text tabs share the space, gear stays put. */
   .app-bar-inner { gap: 0.6rem; }
-  /* Too many tabs for one row on a phone — WRAP to two rows so the whole bar fits the screen
-     (no horizontal scroll spilling past the edge). A gentler radius suits the multi-row block. */
-  .mode-nav { width: 100%; max-width: 100%; gap: 0.25rem; flex-wrap: wrap; justify-content: center; border-radius: 16px; box-sizing: border-box; }
-  .mode-btn { flex: 0 1 auto; min-width: 0; padding: 0.45rem 0.7rem; font-size: 0.8rem; white-space: nowrap; }
-  .mode-btn-gear { flex: 0 0 auto; padding: 0.45rem 0.6rem; font-size: 0.95rem; }
+  /* Six tabs — keep them on ONE row (never let the gear wrap to its own line). Tighten spacing so
+     they fit a 360px phone; if a narrower screen can't hold them, the row scrolls sideways. */
+  .mode-nav { width: 100%; max-width: 100%; gap: 0.1rem; padding: 0.22rem; flex-wrap: nowrap; justify-content: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; border-radius: 999px; box-sizing: border-box; }
+  .mode-nav::-webkit-scrollbar { display: none; }
+  .mode-btn { flex: 0 0 auto; min-width: 0; padding: 0.38rem 0.46rem; font-size: 0.74rem; white-space: nowrap; }
+  .mode-more { flex: 0 0 auto; }
+  #more-btn { padding-left: 0.4rem; padding-right: 0.4rem; }
+  .mode-btn-gear { flex: 0 0 auto; padding: 0.38rem 0.4rem; font-size: 0.92rem; }
 }
 
 /* Live summarization progress — a fixed toast showing the summary climbing the levels. */
