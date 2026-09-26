@@ -11,6 +11,7 @@ import { primeAudio } from "./voicetts.js";
 import { DEFAULT_CATEGORIES } from "./memoryvoice.js";
 import { attachLiveCapture } from "./capture.js";
 import { resolveEntityNames } from "./entityresolve.js";
+import { jkey } from "./journal.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -99,25 +100,37 @@ function nowContext() {
 
 export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate, onBrowse, onOpenName } = {}) {
   root.innerHTML = `
+    <!-- Same layout as every input page (docs/input-method-design.md):
+         breadcrumb → text box (EDIT) or ✎ Edit (READ) → title → content → Save/Cancel → Delete. -->
     <form class="write-form" id="write-form">
-      <!-- Where this entry sits in the time tree; tap a crumb to browse. -->
       <nav class="write-breadcrumb" id="write-breadcrumb" aria-label="Location"></nav>
-      <!-- Read mode (an existing entry): a single Edit button up top; tapping it reveals the box. -->
-      <button type="button" class="detail-nav-btn edit-text-btn" id="edit-text-toggle" hidden>✎ Edit</button>
-      <!-- Read mode: the day's headline, above its summary. -->
-      <h2 class="write-title" id="write-title" hidden></h2>
-      <!-- Start talking right away: a small box that GROWS as you write, pushing the form down. -->
-      <label class="field write-main">
-        <span class="field-label write-prompt" id="entry-label">What happened today?</span>
-        <textarea id="entry-text" rows="3"
-          placeholder="Just talk — tap 🎤 Dictate — or type…"></textarea>
-      </label>
-      <!-- Names (and, in memoir, dates/places) light up as you write; found ones collect here. -->
-      <div class="cap-found" id="entry-found" hidden></div>
 
-      <!-- Memories-only form: category/subject/span/place. BELOW the box — fill it in by hand (or, later,
-           it fills as you answer). Hidden in Journal (diary) mode. -->
-      <div id="memory-fields" hidden>
+      <button type="button" class="edit-text-btn read-only" id="edit-text-toggle">✎ Edit</button>
+      <div class="edit-only">
+        <label class="field write-main">
+          <span class="field-label write-prompt" id="entry-label">What happened today?</span>
+          <textarea id="entry-text" rows="3"
+            placeholder="Just talk — tap 🎤 Dictate — or type…"></textarea>
+        </label>
+        <div class="write-tools"><button type="button" class="mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button></div>
+        <div class="cap-found" id="entry-found" hidden></div>
+      </div>
+
+      <h2 class="write-title" id="write-title"></h2>
+
+      <div class="read-only">
+        <div class="entry-view" id="entry-view"></div>
+        <p class="entry-details" id="entry-details" hidden></p>
+      </div>
+
+      <!-- Journal only: the date. -->
+      <label class="field edit-only" id="write-more">
+        <span class="field-label">Date</span>
+        <input type="date" id="entry-date" value="${todayISO()}" max="${todayISO()}">
+      </label>
+
+      <!-- Stories only: category / subject / place / years. -->
+      <div id="memory-fields" class="edit-only" hidden>
         <div class="mem-row">
           <div class="field">
             <span class="field-label">Category</span>
@@ -150,38 +163,27 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
         </fieldset>
       </div>
 
-      <div class="write-actions">
-        <button type="button" class="mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button>
-        <button type="submit" class="save-btn" id="save-btn" disabled>Save entry</button>
-      </div>
-
-      <!-- Memories voice tools — below the form so they never push it off-screen. -->
-      <div class="memoir-handsfree-row" id="memoir-actions" hidden>
-        <button type="button" class="fut-interview" id="memoir-series">🎙 Add a series by voice</button>
-        <button type="button" class="fut-interview" id="memoir-handsfree">💬 Talk it through</button>
-      </div>
-
-      <div class="entry-view" id="entry-view" hidden></div>
-
       <div class="photo-row">
-        <button type="button" class="photo-add" id="entry-camera-btn"><span>📷 Camera</span></button>
-        <label class="photo-add">
+        <button type="button" class="photo-add edit-only" id="entry-camera-btn"><span>📷 Camera</span></button>
+        <label class="photo-add edit-only">
           <input type="file" id="entry-photo" accept="image/*,video/*" multiple hidden>
           <span>🖼 Photo / video</span>
         </label>
         <div class="photo-thumbs" id="photo-thumbs"></div>
       </div>
 
-      <!-- Diary-only: change the date. Hidden in Memoir mode (memories are placed by year). -->
-      <details class="write-more" id="write-more">
-        <summary>Change the date</summary>
-        <label class="field">
-          <span class="field-label">Date</span>
-          <input type="date" id="entry-date" value="${todayISO()}" max="${todayISO()}">
-        </label>
-      </details>
+      <div class="write-actions edit-only">
+        <button type="submit" class="save-btn" id="save-btn" disabled>Save</button>
+        <button type="button" class="cancel-btn" id="cancel-btn" hidden>Cancel</button>
+      </div>
 
-      <button type="button" class="delete-entry-btn" id="delete-entry-btn" hidden>Delete entry</button>
+      <!-- Stories voice tools. -->
+      <div class="memoir-handsfree-row edit-only" id="memoir-actions" hidden>
+        <button type="button" class="fut-interview" id="memoir-series">🎙 Add a series by voice</button>
+        <button type="button" class="fut-interview" id="memoir-handsfree">💬 Talk it through</button>
+      </div>
+
+      <button type="button" class="delete-entry-btn edit-only" id="delete-entry-btn" hidden>Delete</button>
       <p class="write-status" id="write-status"></p>
     </form>
 
@@ -268,31 +270,61 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   let inEditMode = false;
   let editingText = false; // in edit mode: showing the raw text box vs the formatted view
 
-  // A saved summary (prose/outline) shows as formatted rich text; the raw box is for
-  // capture and hand-editing. Verbatim/compose keep the plain box.
-  const writeMain = root.querySelector(".write-main");
-  const writeActions = root.querySelector(".write-actions");
+  // ONE layout for every input page (docs/input-method-design.md). `inEditMode` = there's a saved
+  // version (an existing day or story); `editingText` = the user tapped ✎ Edit. READ shows the summary;
+  // EDIT shows the transcript box + editable details + Save/Cancel. CSS keys off .reading.
+  const entryDetails = root.querySelector("#entry-details");
+  const cancelBtn = root.querySelector("#cancel-btn");
+  const isStory = () => formMode === "memory";
+  const currentItem = () => (isStory() ? editingMemOrig : loadedEntry); // what the READ view shows
+  function titleText() {
+    if (isStory()) {
+      const s = (root.querySelector("#entry-subject")?.value || "").trim();
+      const c = (root.querySelector("#entry-category")?.value || "").trim();
+      return s || c || "New story";
+    }
+    const d = new Date((dateEl.value || todayISO()) + "T12:00:00");
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", ...(sameYear ? {} : { year: "numeric" }) });
+  }
+  function detailsText() { // the story's facts, read-only: category · years · place
+    if (!isStory()) return "";
+    const m = editingMemOrig || {};
+    return [m.category !== titleText() ? m.category : null, m.label && m.label !== "sometime" ? m.label : null, m.place].filter(Boolean).join(" · ");
+  }
   function applyEntryLayout() {
-    // Same rule everywhere: EMPTY (new/blank entry) → the text box shows; an EXISTING entry → the read
-    // view + one "Edit" button at the top (box hidden until you tap it).
-    const showView = inEditMode && !editingText; // reading an existing entry
-    entryView.hidden = !showView;
-    if (writeMain) writeMain.hidden = showView;      // the box + prompt: edit only
-    if (writeActions) writeActions.hidden = showView; // Dictate + Save: edit only
-    root.querySelector("#write-form")?.classList.toggle("reading", showView); // hides the compose-only Found list in read mode (CSS)
-    // One toggle button on an existing entry: "✎ Edit" while reading, "✓ Done" while editing (so you
-    // can always cancel back to the read view). Hidden only when composing a brand-new entry.
-    if (editTextToggle) { editTextToggle.hidden = !inEditMode; editTextToggle.textContent = editingText ? "✓ Done" : "✎ Edit"; }
-    if (writeTitle) writeTitle.hidden = true; // no separate sentence-title — the full summary leads
-    if (showView) renderReadView();
+    const showView = inEditMode && !editingText; // reading a saved day/story
+    root.querySelector("#write-form")?.classList.toggle("reading", showView);
+    if (writeTitle) writeTitle.textContent = titleText();
+    if (showView) {
+      renderReadView();
+      const det = detailsText();
+      if (entryDetails) { entryDetails.textContent = det; entryDetails.hidden = !det; }
+    }
+    if (cancelBtn) cancelBtn.hidden = !inEditMode; // Cancel only when there's a saved version to go back to
     syncDeleteBtn();
     if (!showView) { requestAnimationFrame(autoGrow); setTimeout(autoGrow, 120); } // size the box now, and again once the layout settles
   }
+
+  // Drafts: what's in the box is kept (per day / per story) while you type, so leaving never loses it.
+  // Save or Cancel clears it.
+  const draftKey = () => jkey(isStory() ? `draft:mem:${editingMemId || "new"}` : `draft:day:${dateEl.value || todayISO()}`);
+  const saveDraftLocal = () => { try { localStorage.setItem(draftKey(), textEl.value); } catch { /* */ } };
+  const clearDraft = () => { try { localStorage.removeItem(draftKey()); } catch { /* */ } };
+  function restoreDraft() {
+    try {
+      const d = localStorage.getItem(draftKey());
+      if (d && d !== textEl.value) { textEl.value = d; capture.update(); autoGrow(); refreshSaveState(); }
+    } catch { /* */ }
+  }
+
   // Read view: the FULL summary, with a single-select toggle to swap it for the Outline (one at a
   // time). Verbatim lives in edit mode (the editable box IS the raw transcript, for fixing things).
   let repView = "prose";
   function renderReadView() {
-    const reps = loadedEntry ? repsOf(loadedEntry) : {};
+    const item = currentItem();
+    const reps = item ? repsOf(item) : {};
+    if (!reps.prose) { const t = reps.verbatim || item?.text || item?.full || ""; if (t) reps.prose = t; } // not summarized yet → your words
     const opts = [];
     if (reps.prose) opts.push(["prose", "Summary"]);
     if (reps.outline) opts.push(["outline", "Outline"]);
@@ -312,19 +344,26 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // existing memory (editingMemId). Composing something new has nothing to delete.
   function syncDeleteBtn() {
     if (!deleteBtn) return;
-    const editingDay = inEditMode && loadedEntry;
-    deleteBtn.hidden = !(editingDay || editingMemId);
-    deleteBtn.textContent = editingMemId ? "Delete story" : "Delete entry";
+    deleteBtn.hidden = !inEditMode; // only a saved day/story can be deleted
+    deleteBtn.textContent = "Delete";
   }
-  function toggleEditText() {
-    editingText = !editingText;
+  // ✎ Edit → the transcript box (plus any unsaved draft), cursor at the end, ready to add more.
+  function startEdit() {
+    if (!inEditMode) return;
+    editingText = true;
     applyEntryLayout();
-    if (editingText) {
-      textEl.focus();
-      const len = textEl.value.length;
-      textEl.setSelectionRange(len, len);
-    }
+    restoreDraft();
+    textEl.focus();
+    const len = textEl.value.length;
+    textEl.setSelectionRange(len, len);
   }
+  function toggleEditText() { startEdit(); }
+  // Cancel → throw away changes since Edit and go back to the saved version.
+  cancelBtn?.addEventListener("click", () => {
+    clearDraft();
+    if (isStory() && editingMemOrig) editMemory(editingMemOrig);
+    else loadDraft();
+  });
 
   // Summary voice is set in Settings; here we just read the current value.
   const currentStyle = () => localStorage.getItem("summary-style") || "";
@@ -434,8 +473,9 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   };
   async function loadMemLists() { allMems = await getAllMemories(); renderCategoryChips(); renderSubjectChips(); }
   loadMemLists();
-  catEl.addEventListener("input", () => { renderCategoryChips(); renderSubjectChips(); renderWriteBreadcrumb(); });
-  subjectEl.addEventListener("input", () => renderWriteBreadcrumb());
+  const syncHeader = () => { renderWriteBreadcrumb(); if (writeTitle) writeTitle.textContent = titleText(); };
+  catEl.addEventListener("input", () => { renderCategoryChips(); renderSubjectChips(); syncHeader(); });
+  subjectEl.addEventListener("input", syncHeader);
   subjectEl.addEventListener("input", renderSubjectChips);
   catChips.addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; catEl.value = b.dataset.val; renderCategoryChips(); renderSubjectChips(); });
   subChips.addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; subjectEl.value = b.dataset.val; renderSubjectChips(); });
@@ -477,16 +517,17 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     const editMode = !!entry;
     inEditMode = editMode;
     editingText = false;
-    entryLabel.textContent = promptForDate(date, editMode); // show the selected date (normally today)
+    entryLabel.textContent = editMode ? "Your words — add more, or fix anything" : promptForDate(date, false);
     setFormMode("diary"); // pure diary — no memory fields, no memoir voice tools
     renderWriteBreadcrumb(date);
     currentSummarized = entry ? entry.summarized !== false : true;
-    saveBtn.textContent = editMode ? "Update entry" : "Save entry";
+    saveBtn.textContent = "Save";
     updateModeUI();
     applyEntryLayout();
-    refreshSaveState();
     capture.reset(); capture.refresh(); // recolour the loaded text and rebuild the Found list for this day
-    if (focus && !textEl.hidden) {
+    if (!editMode) restoreDraft(); // composing: bring back anything typed before you left
+    refreshSaveState();
+    if (focus && textEl.offsetParent) {
       textEl.focus();
       const len = textEl.value.length;
       textEl.setSelectionRange(len, len);
@@ -599,7 +640,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // Re-measure at the moments a mobile layout can settle late (focus opening the keyboard, the viewport
   // resizing, fonts finishing) so the box height always matches its content and can't sit over the
   // buttons below it.
-  const onText = () => { refreshSaveState(); capture.update(); autoGrow(); };
+  const onText = () => { refreshSaveState(); capture.update(); autoGrow(); saveDraftLocal(); };
   textEl.addEventListener("input", onText);
   textEl.addEventListener("focus", autoGrow);
   window.addEventListener("resize", autoGrow);
@@ -692,6 +733,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   async function saveMemory() {
     const text = textEl.value.trim();
     if (!text) { statusEl.textContent = "Add the story text first."; statusEl.className = "write-status error"; return; }
+    clearDraft(); // (keyed to this story — clear before the id changes)
     saveBtn.disabled = true; statusEl.textContent = "Saving…"; statusEl.className = "write-status";
     try {
       const startYear = startYearEl.value.trim() ? parseInt(startYearEl.value, 10) : null;
@@ -736,14 +778,13 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   }
 
   // Load an existing memory into this form for editing (called from the Journal's ✎ button).
+  // A saved story opens in READ (like a saved day); ✎ Edit shows the box + fields.
   function editMemory(mem) {
     editingMemId = mem.id; editingMemOrig = mem;
-    // Leave day-edit mode (a day may have been loaded first) so the plain memory text box shows,
-    // not the day's formatted entry-view.
-    loadedEntry = null; inEditMode = false; editingText = false;
-    setFormMode("memory"); memoirActions.hidden = true; // editing one memory: show fields, hide series tools
+    loadedEntry = null; inEditMode = true; editingText = false;
+    setFormMode("memory"); memoirActions.hidden = true; // one story: fields, not the series tools
     dateEl.value = "";
-    entryLabel.textContent = "The story";
+    entryLabel.textContent = "Your words — add more, or fix anything";
     pendingPhotos = (mem.photos ?? []).map((ph) => { const b = storedToBlob(ph); return { blob: b, url: URL.createObjectURL(b) }; });
     renderThumbs();
     catEl.value = mem.category || ""; subjectEl.value = mem.subject || "";
@@ -752,13 +793,12 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     setLocHint(mem.place ? "✓ Location set." : "", !!mem.place);
     textEl.value = mem.text || "";
     renderCategoryChips(); renderSubjectChips();
-    applyEntryLayout(); // inEditMode is false now → shows the text box
+    renderWriteBreadcrumb();
+    applyEntryLayout(); // saved story → READ view
     refreshSaveState();
-    capture.reset(); capture.refresh(); // colour the memory's text + collect its names
-    saveBtn.textContent = "Update story";
-    statusEl.textContent = `Editing “${mem.subject || mem.category || mem.label || "story"}” — change anything, then Save.`;
-    statusEl.className = "write-status";
-    textEl.focus();
+    capture.reset(); capture.refresh(); // colour the story's text + collect its names
+    saveBtn.textContent = "Save";
+    statusEl.textContent = ""; statusEl.className = "write-status";
   }
 
   root.querySelector("#write-form").addEventListener("submit", async (e) => {
@@ -798,6 +838,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       // resolve, the DB is wedged (usually another tab of the app holding it open). Surface that
       // instead of hanging on "Saving…" forever, and DON'T reload the box — the typed text stays.
       await withTimeout(putEntry(withMode(toSave, mode)), 8000, "writing the entry");
+      clearDraft(); // saved — the in-progress draft is no longer needed
 
       await withTimeout(loadDraft(), 8000, "reloading");
       // Confirmation is seeing the entry land in the Journal, in its own day page.
@@ -822,26 +863,28 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false;
     setFormMode("memory"); // show memory fields + voice tools, hide the diary date
     renderCategoryChips(); renderSubjectChips();
-    entryLabel.textContent = "The story";
-    saveBtn.textContent = "Save story";
+    entryLabel.textContent = "Tell a story";
+    saveBtn.textContent = "Save";
+    renderWriteBreadcrumb();
     applyEntryLayout();
+    capture.reset(); // fresh story — clear the Found list
+    restoreDraft();  // bring back anything typed before you left
     refreshSaveState();
-    capture.reset(); // fresh memory — clear the Found list
-    // Stay at the top so the form AND the text box are both visible; focus the first empty field.
     window.scrollTo({ top: 0 });
-    const firstEmpty = !catEl.value.trim() ? catEl : !subjectEl.value.trim() ? subjectEl : textEl;
-    firstEmpty.focus({ preventScroll: true });
+    textEl.focus({ preventScroll: true }); // start talking/typing right away
   }
 
   return {
-    refresh: (arg) => {
+    // opts.edit → open straight into EDIT (the user tapped an Edit button elsewhere, e.g. in the browse).
+    refresh: (arg, opts = {}) => {
+      const then = () => { if (opts.edit) startEdit(); };
       if (arg && typeof arg === "object") {
-        // An object with an id → edit that memory; without → start a new memory pre-filled from it.
-        return loadDraft({ focus: false }).then(() => { loadMemLists(); arg.id ? editMemory(arg) : newMemory(arg); });
+        // An object with an id → that story; without → a new story pre-filled from it.
+        return loadDraft({ focus: false }).then(() => { loadMemLists(); arg.id ? editMemory(arg) : newMemory(arg); then(); });
       }
       resetMemoryFields();
       if (arg) dateEl.value = arg;
-      return loadDraft({ focus: true }).then(() => loadMemLists());
+      return loadDraft({ focus: true }).then(() => { loadMemLists(); then(); });
     },
     editMemory,
   };

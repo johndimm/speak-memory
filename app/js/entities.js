@@ -135,7 +135,7 @@ async function writeProfile(ent, mentions) {
   const entries = (mentions || []).map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
   const r = await fetch("/api/summarize", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...llmOverrides(), mode: "entityprofile", name: ent.canonical, aliases: ent.aliases || [], note: ent.note || "", entries }),
+    body: JSON.stringify({ ...llmOverrides(), mode: "entityprofile", name: ent.canonical, kind: ent.entityKind || "person", aliases: ent.aliases || [], note: ent.note || "", entries }),
   });
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `Server ${r.status}`); }
   const { profile } = await r.json();
@@ -193,6 +193,8 @@ function itemSortKey(it) {
 export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {}) {
   let openId = null; // entity being viewed, or null = the roster
   let entEditing = null; // browse (read) vs edit (write); null = decide by whether the card has content
+  let editSnapshot = null; // the saved version when ✎ Edit was tapped — Cancel restores it
+  const entDraftKey = (eid) => jkey(`draft:ent:${eid}`); // unsaved words in the box, kept while you're away
   let scanning = false;
   let showSingles = false; // one-off names (mentioned only once) are hidden until you ask for them
 
@@ -444,30 +446,29 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
 
     const askFrag = `<div class="ent-ask">
           <form class="ent-ask-form" id="ent-ask-form">
-            <input type="text" id="ent-ask-input" placeholder="Ask about ${escapeHtml(ent.canonical)} — “who is ${escapeHtml(ent.canonical)}?”, “when did we meet?”">
+            <input type="text" id="ent-ask-input" placeholder="Ask about ${escapeHtml(ent.canonical)}${(ent.entityKind || "person") === "person" ? ` — “when did we meet?”` : ""}">
             <button type="submit" class="ent-ask-btn">Ask</button>
           </form>
           <div id="ent-ask-answer" class="ent-ask-answer" hidden></div>
         </div>`;
 
-    // The notes editor — only in Edit mode (no pencil toggle needed; Edit IS the reveal).
-    const notesFrag = `<section class="node-comment">
-          <!-- The box holds your CURRENT notes so you can edit or clear them (fix bad dictation) — Save
-               replaces what's here; empty it and Save to remove the note entirely. -->
-          <div class="node-comment-row">
-            <textarea id="ent-note-input" class="node-comment-input" rows="4" placeholder="${selfMode ? "Anything in your own words — names and facts are picked up as you write…" : `Who they are, how you're connected, anything the journal gets wrong…`}">${escapeHtml(ent.note || "")}</textarea>
-            <button type="button" class="node-comment-mic" id="ent-note-mic" hidden aria-label="Dictate">🎙</button>
-          </div>
-          <div class="cap-found" id="ent-note-found" hidden></div>
-          <div class="node-comment-actions">
-            <button type="button" class="node-comment-add" id="ent-note-add">Save notes</button>
-            ${ent.note ? `<button type="button" class="node-comment-clear" id="ent-note-clear">Clear</button>` : ""}
-            <span class="node-comment-status" id="ent-pstatus"></span>
-          </div>
-        </section>`;
+    // Same layout as Journal/Stories (docs/input-method-design.md):
+    //   breadcrumb → text box (EDIT) or ✎ Edit (READ) → title → content → Save/Cancel → Delete.
+    const breadcrumb = `<nav class="write-breadcrumb" aria-label="Location">${selfMode
+      ? `<span class="crumb crumb-current">Me</span>`
+      : `<button type="button" class="crumb" id="ent-back">Names</button><span class="crumb-sep">›</span><span class="crumb crumb-current">${escapeHtml(ent.canonical)}</span>`}</nav>`;
 
+    // The transcript box: your own words, prefilled so you can add more below or fix anything.
+    const boxFrag = `<label class="field write-main">
+          <span class="field-label write-prompt">${hasContent ? "Your words — add more, or fix anything" : selfMode ? "Tell me about your life" : `Tell me about ${escapeHtml(ent.canonical)}`}</span>
+          <textarea id="ent-note-input" class="node-comment-input" rows="3" placeholder="${selfMode ? "Where you live, who with, your family and best friends…" : ({ person: "Who they are, how you're connected…", animal: "Whose pet, what they were like…", place: "What it is, when you were there…" })[ent.entityKind || "person"] || "What it is, how it fits in your life…"}">${escapeHtml(ent.note || "")}</textarea>
+        </label>
+        <div class="write-tools"><button type="button" class="mic-btn" id="ent-note-mic" hidden><span>🎤 Dictate</span></button></div>
+        <div class="cap-found" id="ent-note-found" hidden></div>`;
+
+    // Rename / kind / aliases are saved with Save; Merge is its own action.
     const kindFrag = `<details class="node-fold ent-details">
-          <summary>${selfMode ? "Details" : "Rename, kind, aliases &amp; merge"}</summary>
+          <summary>${selfMode ? "Details" : "Name, kind, aliases &amp; merge"}</summary>
           <div class="node-fold-body ent-detail-body">
             <label class="ent-field"><span>Name</span>
               <input type="text" class="ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" spellcheck="false"></label>
@@ -475,25 +476,19 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
               <select id="ent-kind" class="ent-kindsel">${KIND_ORDER.map((k) => `<option value="${k}"${(ent.entityKind || "person") === k ? " selected" : ""}>${KIND_LABEL[k]}</option>`).join("")}</select></label>
             <label class="ent-field"><span>Also known as (comma-separated)</span>
               <input type="text" id="ent-aliases" value="${escapeHtml((ent.aliases || []).join(", "))}" placeholder="Baby Kitty, Zay…"></label>
-            <div class="ent-profile-actions">
-              <button type="button" class="ent-save" id="ent-save">Save</button>
-              ${others.length ? `<span class="ent-merge"><span>Merge into</span><select id="ent-merge-sel"><option value="">choose…</option>${mergeOpts}</select><button type="button" id="ent-merge-btn">Merge</button></span>` : ""}
-              <button type="button" class="ent-del" id="ent-del">Delete</button>
-            </div>
+            ${others.length ? `<div class="ent-profile-actions"><span class="ent-merge"><span>Merge into</span><select id="ent-merge-sel"><option value="">choose…</option>${mergeOpts}</select><button type="button" id="ent-merge-btn">Merge</button></span></div>` : ""}
             <div id="ent-dstatus" class="ent-status" hidden></div>
           </div>
         </details>`;
 
-    // Two views, same rule as Journal/Stories: EDIT leads with the text box (empty cards open here);
-    // BROWSE reads what's known with an Edit button (cards that already have content open here).
-    // The Edit/Done toggle only makes sense once there's something to READ. An empty card opens straight
-    // into writing with no toggle (nothing is "done" yet).
-    const topbar = `<div class="ent-topbar">
-        ${selfMode ? "<span></span>" : `<button type="button" class="ent-back" id="ent-back">← All names</button>`}
-        ${hasContent ? `<button type="button" class="ent-edit-toggle" id="ent-edit-toggle">${entEditing ? "✓ Done" : "✎ Edit"}</button>` : "<span></span>"}
-      </div>`;
+    const actionsFrag = `<div class="write-actions">
+          <button type="button" class="save-btn" id="ent-note-add">Save</button>
+          ${hasContent ? `<button type="button" class="cancel-btn" id="ent-cancel">Cancel</button>` : ""}
+          <span class="node-comment-status" id="ent-pstatus"></span>
+        </div>`;
 
     const browseBody = `
+        <button type="button" class="edit-text-btn" id="ent-edit-toggle">✎ Edit</button>
         <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
         ${subtitle}${flag}
         ${profileFrag}
@@ -502,16 +497,17 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
         ${askFrag}`;
 
     const editBody = `
-        ${notesFrag}
+        ${boxFrag}
         <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
         ${subtitle}${flag}
         ${factChips(ent)}
         ${kindFrag}
-        ${selfMode ? "" : `<button type="button" class="ent-del-big" id="ent-del-big">🗑 Delete “${escapeHtml(ent.canonical)}”</button>`}`;
+        ${actionsFrag}
+        ${selfMode ? "" : `<button type="button" class="delete-entry-btn" id="ent-del-big">Delete</button>`}`;
 
     root.innerHTML = `
       <div class="entities${selfMode ? " ent-selfpage" : ""}${entEditing ? " ent-editing" : ""}">
-        ${topbar}
+        ${breadcrumb}
         ${entEditing ? editBody : browseBody}
       </div>`;
 
@@ -519,7 +515,21 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
     const dstatus = (msg, cls) => { const el = root.querySelector("#ent-dstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
 
     // Edit ⇄ Done toggles between writing and reading this card.
-    root.querySelector("#ent-edit-toggle")?.addEventListener("click", () => { entEditing = !entEditing; renderEntity(id); });
+    // ✎ Edit → remember the saved version (so Cancel can restore it), then show the box.
+    root.querySelector("#ent-edit-toggle")?.addEventListener("click", () => {
+      editSnapshot = { id, note: ent.note || "", facts: { ...(ent.facts || {}) }, canonical: ent.canonical, entityKind: ent.entityKind, aliases: [...(ent.aliases || [])] };
+      entEditing = true; renderEntity(id);
+    });
+    // Cancel → put the saved version back and return to READ.
+    root.querySelector("#ent-cancel")?.addEventListener("click", async () => {
+      try { localStorage.removeItem(entDraftKey(id)); } catch { /* */ }
+      if (editSnapshot && editSnapshot.id === id) {
+        const cur = (await getEntity(id)) || ent;
+        const { id: _i, ...snap } = editSnapshot;
+        await putEntity({ ...cur, ...snap });
+      }
+      editSnapshot = null; entEditing = false; renderEntity(id);
+    });
 
     // Each name gets an LLM-written profile, generated from its mentions and cached on the entity.
     const mentionEntries = () => mentions.map((s) => ({
@@ -608,31 +618,26 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       // Clicking a found name jumps to that person's page (in edit mode, to add info). Save the note
       // first so nothing you've typed is lost on the way.
       const onPick = async (name) => {
-        const text = (noteTa.value || "").trim();
-        if (text) { const fresh = (await getEntity(id)) || ent; const note = (fresh.note ? fresh.note + "\n" : "") + text; await putEntity({ ...fresh, note, updatedAt: Date.now() }); }
+        autoSaveNote(); // your words stay in the draft; nothing is lost by jumping to the name
         try {
           const ids = await resolveEntityNames([{ name, kind: "person" }]);
           const rid = (ids || []).find((x) => x && x !== id) || (ids || [])[0];
           if (rid) { openId = rid; entEditing = true; renderEntity(rid); }
         } catch { /* */ }
       };
-      const noteCap = attachLiveCapture(noteTa, { mount: root.querySelector("#ent-note-found"), buckets: ["names"], remote: hasFacts ? remote : undefined, onPick });
+      const noteCap = attachLiveCapture(noteTa, { mount: root.querySelector("#ent-note-found"), buckets: ["names"], remote: hasFacts ? remote : undefined, onPick, exclude: [ent.canonical, ...(ent.aliases || [])] });
       // Auto-grow the box to fit its content — new lines push what's below down (consistent with the
       // Journal/Stories boxes); all the text stays editable with the keyboard.
       const noteGrow = () => { noteTa.style.height = "auto"; noteTa.style.height = noteTa.scrollHeight + "px"; };
-      // Persist the raw transcript as you write (debounced), so what you typed is always there to see
-      // and edit later — not just the facts extracted from it.
-      let noteSaveTimer = null;
-      const autoSaveNote = () => {
-        clearTimeout(noteSaveTimer);
-        noteSaveTimer = setTimeout(async () => {
-          try { const fresh = (await getEntity(id)) || ent; await putEntity({ ...fresh, note: noteTa.value, updatedAt: Date.now() }); ent.note = noteTa.value; } catch { /* */ }
-        }, 1200);
-      };
+      // Keep a draft of the box as you write, so leaving never loses your words (Save or Cancel clears
+      // it). Restore any unsaved draft when the box opens.
+      const autoSaveNote = () => { try { localStorage.setItem(entDraftKey(id), noteTa.value); } catch { /* */ } };
+      try { const d = localStorage.getItem(entDraftKey(id)); if (d && d !== noteTa.value) noteTa.value = d; } catch { /* */ }
       const noteOnText = () => { noteCap.update(); noteGrow(); autoSaveNote(); };
       noteTa.addEventListener("input", noteOnText);
       setupDictation(root.querySelector("#ent-note-mic"), noteTa, root.querySelector("#ent-pstatus"), noteOnText);
       requestAnimationFrame(noteGrow); // fit the existing note on open
+      noteCap.update();
     }
 
     // Save = REPLACE the note with what's in the box (so you can correct or delete bad text).
@@ -640,7 +645,13 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       const fresh = (await getEntity(id)) || ent;
       await putEntity({ ...fresh, note: text, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() });
       ent.note = text; ent.recognized = true;
-      if (!text) { pstatus("Notes cleared.", "ok"); genProfile(); onProgress && onProgress(); return; }
+      if (!text) {
+        // Your words are gone → so are the facts and profile drawn from them (mentions can rewrite a profile).
+        const cur = (await getEntity(id)) || ent;
+        await putEntity({ ...cur, facts: {}, profile: "", profileAt: 0, updatedAt: Date.now() });
+        ent.facts = {}; ent.profile = "";
+        pstatus("Notes cleared.", "ok"); genProfile(); onProgress && onProgress(); return;
+      }
       // A note names other people and carries standard facts. For kinds with a fact checklist
       // (person/place/org) extractFacts does both (facts + names); otherwise just pull the names.
       try {
@@ -658,21 +669,24 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       genProfile();
       onProgress && onProgress(); // a note describes this name → the guided "Next" can move on
     }
+    // Save = keep everything you changed (your words + name/kind/aliases), re-summarize, back to READ.
     root.querySelector("#ent-note-add")?.addEventListener("click", async () => {
       const ta = root.querySelector("#ent-note-input");
       const text = (ta && ta.value || "").trim();
-      if (!text) { pstatus("Nothing to save yet.", ""); return; }
-      pstatus("Saving & finding names…", "working");
+      if (!text && !hasContent) { pstatus("Nothing to save yet.", ""); return; }
+      pstatus("Saving…", "working");
+      // Name / kind / aliases from the Details fold.
+      const newName = (root.querySelector("#ent-rename")?.value || "").trim();
+      const kindV = root.querySelector("#ent-kind")?.value;
+      const aliasesV = (root.querySelector("#ent-aliases")?.value || "").split(",").map((s) => s.trim()).filter(Boolean);
+      const cur = (await getEntity(id)) || ent;
+      const renamed = newName && newName !== cur.canonical;
+      await putEntity({ ...cur, canonical: newName || cur.canonical, entityKind: kindV || cur.entityKind, aliases: aliasesV, updatedAt: Date.now() });
+      Object.assign(ent, { canonical: newName || cur.canonical, entityKind: kindV || cur.entityKind, aliases: aliasesV });
+      if (renamed || kindV !== cur.entityKind) { resetEntityIndex(); setEntityMap(new Map((await getAllEntities()).map((e) => [e.id, e.canonical]))); }
       await saveNote(text);
-      entEditing = null; renderEntity(id); // show the result (profile + facts) in read mode; Edit to add more
-    });
-    root.querySelector("#ent-note-clear")?.addEventListener("click", async () => {
-      const ta = root.querySelector("#ent-note-input");
-      if (ta) ta.value = "";
-      root.querySelector("#ent-note-found") && (root.querySelector("#ent-note-found").hidden = true);
-      pstatus("Removing…", "working");
-      await saveNote("");
-      entEditing = null; renderEntity(id); // now empty → reopens ready to write
+      try { localStorage.removeItem(entDraftKey(id)); } catch { /* */ }
+      editSnapshot = null; entEditing = null; renderEntity(id); // show the result in READ; ✎ Edit to add more
     });
 
     // Ask about this entity — answered only from the entries that mention it.
@@ -711,45 +725,13 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
 
     root.querySelector("#ent-back")?.addEventListener("click", () => { openId = null; render(); });
 
-    // Inline rename (edit version only) — fix a mishearing here and it updates every summary (tokens
-    // re-render to the new name) without re-summarizing anything.
-    const renameEl = root.querySelector("#ent-rename");
-    if (renameEl) {
-      const doRename = async () => {
-        const v = renameEl.value.trim();
-        if (!v || v === ent.canonical) return;
-        const fresh = (await getEntity(id)) || ent;
-        await putEntity({ ...fresh, canonical: v, updatedAt: Date.now() });
-        ent.canonical = v;
-        resetEntityIndex();
-        setEntityMap(new Map((await getAllEntities()).map((e) => [e.id, e.canonical]))); // tokens → new name now
-        renderEntity(id);
-      };
-      renameEl.addEventListener("change", doRename);
-      renameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); renameEl.blur(); } });
-      renameEl.addEventListener("blur", doRename);
-    }
-    root.querySelector("#ent-save")?.addEventListener("click", async () => {
-      const fresh = (await getEntity(id)) || ent;
-      const next = {
-        ...fresh,
-        canonical: (root.querySelector("#ent-rename")?.value.trim()) || fresh.canonical, // name is edited at the top
-        entityKind: root.querySelector("#ent-kind").value,
-        aliases: root.querySelector("#ent-aliases").value.split(",").map((s) => s.trim()).filter(Boolean),
-        updatedAt: Date.now(),
-      };
-      await putEntity(next);
-      Object.assign(ent, next);
-      resetEntityIndex(); // name/aliases changed
-      dstatus("Saved.", "ok");
-    });
+    // (Name, kind and aliases are saved by the page's Save button, so Cancel can undo them too.)
     const deleteThisName = async () => {
       if (!confirm(`Delete “${ent.canonical}”? Its mentions stay in the entries; only the name is removed.`)) return;
       await removeEntity(id);
       openId = null; render();
     };
-    root.querySelector("#ent-del")?.addEventListener("click", deleteThisName);
-    root.querySelector("#ent-del-big")?.addEventListener("click", deleteThisName); // the prominent one, always visible in Edit
+    root.querySelector("#ent-del-big")?.addEventListener("click", deleteThisName); // Delete — at the bottom of Edit
     root.querySelector("#ent-merge-btn")?.addEventListener("click", async () => {
       const targetId = root.querySelector("#ent-merge-sel").value;
       if (!targetId || targetId === id) return;

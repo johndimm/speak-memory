@@ -362,8 +362,14 @@ button.tri:active { transform: translateY(1px); }
 .rep-tab { border: none; background: transparent; color: var(--ink-soft); font: inherit; font-size: 0.85rem; font-weight: 600; padding: 0.35rem 0.95rem; border-radius: 999px; cursor: pointer; }
 .rep-tab.active { background: var(--ink); color: var(--paper); }
 .rep-body { color: var(--ink); }
-/* The live "Found" list is a compose helper — hide it while reading a saved entry. */
-.write-form.reading #entry-found { display: none; }
+/* One layout for every input page: READ shows .read-only parts, EDIT shows .edit-only parts. */
+.write-form.reading .edit-only { display: none !important; }
+.write-form:not(.reading) .read-only { display: none !important; }
+.write-tools { margin-top: 0.45rem; }
+.entry-details { color: var(--ink-soft); font-size: 0.92rem; margin: 0.7rem 0 0; }
+.write-actions .cancel-btn { order: -1; }
+.cancel-btn { font: inherit; font-size: 0.92rem; background: none; border: 1px solid var(--line); color: var(--ink-soft); border-radius: 999px; padding: 0.6rem 1.3rem; cursor: pointer; }
+.cancel-btn:hover { border-color: var(--ink-soft); color: var(--ink); }
 
 .photo-row { display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
 .photo-add {

@@ -59,9 +59,11 @@ export function attachLiveCapture(textarea, {
   buckets = ["names"],         // which kinds to surface: "names","when","where","category","subject"
   remote = remoteNames,        // debounced LLM pass; return { names?:[{name,kind}], facts?:[{type,value}] }
   onPick,                      // if set, name chips become clickable links → onPick(name, kind)
+  exclude = [],                // names never shown as Found (e.g. the Name page's own name)
   debounceMs = 1100,
 } = {}) {
   const wantNames = buckets.includes("names");
+  const excluded = new Set(exclude.map(norm).filter(Boolean));
   const wantWhen = buckets.includes("when");
   const wantWhere = buckets.includes("where");
   const wantCat = buckets.includes("category");
@@ -119,7 +121,7 @@ export function attachLiveCapture(textarea, {
     if (!label) return false;
     if (type === "name") {
       const nl = norm(label);
-      if (STOP_NAMES.has(nl)) return false;
+      if (STOP_NAMES.has(nl) || excluded.has(nl)) return false;
       // Prefer the fuller name: skip a substring of one we already have; drop a shorter one it contains.
       for (const [k, c] of chips) {
         if (c.type !== "name") continue;

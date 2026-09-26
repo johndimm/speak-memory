@@ -121,7 +121,7 @@ function renderLives() {
 }
 const places = initPlaces(placesView); // map of a life; opened lazily (loads Leaflet on first open)
 const timeline = initTimeline(timelineView, {
-  onEditMemory: (mem) => setMode("memoir-edit", mem),      // "Edit full ›" opens the memory in Memoire
+  onEditMemory: (mem) => setMode("memoir-edit", mem, "edit"), // "Edit full ›" → that story, straight into Edit
   onOpenMemory: (mem) => openMemoryInJournal(mem),   // tap a bar → read that state's full page (works read-only)
   onChanged: () => { /* memories changed inline; Journal reloads on its next open */ },
 });
@@ -173,7 +173,7 @@ const calendar = initCalendar({
   closeDetail: document.getElementById("close-detail"),
 }, {
   onEdit: (date) => setMode("diary-edit", date), // Journal "Edit" opens the day in the Diary editor
-  onEditMemory: (mem) => setMode("memoir-edit", mem), // edit a memory in the Memoire form
+  onEditMemory: (mem) => setMode("memoir-edit", mem, "edit"), // Edit on a story → that story, straight into Edit
   onAddMemory: (seed) => setMode("memoir-edit", seed), // "Add another" → Memoire, pre-filled category/subject
   onOpenEntity: (id) => { setMode("people"); people.openEntity(id); }, // tap a name in a summary → its page
 });
@@ -240,8 +240,8 @@ function setMode(mode, arg, zoom) {
   if (mode === "diary") { recorder.refresh(arg); calendar.goPresent(); }        // write today (top) + recent days (below)
   else if (mode === "memoir") { recorder.refresh(typeof arg === "object" ? arg : {}); calendar.goMemoir(); } // new story (top) + categories (below)
   else if (mode === "browse") calendar.reload(arg, zoom);                                             // internal: a saved day / graph node
-  else if (mode === "diary-edit") recorder.refresh(arg);                                              // write today (or edit a day)
-  else if (mode === "memoir-edit") recorder.refresh(arg || {});                                       // add / edit a memory
+  else if (mode === "diary-edit") recorder.refresh(arg, { edit: true });                              // an Edit button elsewhere → that day, in Edit
+  else if (mode === "memoir-edit") recorder.refresh(arg || {}, { edit: zoom === "edit" });            // a story: READ, or Edit when asked
   else if (mode === "settings") settings.refresh();
   else if (mode === "lives") renderLives();
   else if (mode === "places") places.open();
@@ -273,7 +273,7 @@ if (moreBtn && moreMenu) {
 
 const recorder = initRecord(writeView, {
   onSaved: (date) => { setMode("diary", date, "day"); offerNext(); }, // completed the day → nudge to the next step
-  onSavedMemory: (mem) => { openMemoryInJournal(mem); offerNext(); },  // a story → its page, then the next nudge
+  onSavedMemory: (mem) => { setMode("memoir-edit", mem); offerNext(); },  // saved story → its READ view, then the next nudge
   onDeleted: (date) => setMode("diary", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
   onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode
