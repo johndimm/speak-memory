@@ -620,7 +620,16 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       // Auto-grow the box to fit its content — new lines push what's below down (consistent with the
       // Journal/Stories boxes); all the text stays editable with the keyboard.
       const noteGrow = () => { noteTa.style.height = "auto"; noteTa.style.height = noteTa.scrollHeight + "px"; };
-      const noteOnText = () => { noteCap.update(); noteGrow(); };
+      // Persist the raw transcript as you write (debounced), so what you typed is always there to see
+      // and edit later — not just the facts extracted from it.
+      let noteSaveTimer = null;
+      const autoSaveNote = () => {
+        clearTimeout(noteSaveTimer);
+        noteSaveTimer = setTimeout(async () => {
+          try { const fresh = (await getEntity(id)) || ent; await putEntity({ ...fresh, note: noteTa.value, updatedAt: Date.now() }); ent.note = noteTa.value; } catch { /* */ }
+        }, 1200);
+      };
+      const noteOnText = () => { noteCap.update(); noteGrow(); autoSaveNote(); };
       noteTa.addEventListener("input", noteOnText);
       setupDictation(root.querySelector("#ent-note-mic"), noteTa, root.querySelector("#ent-pstatus"), noteOnText);
       requestAnimationFrame(noteGrow); // fit the existing note on open
