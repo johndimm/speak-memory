@@ -243,15 +243,13 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // A saved summary (prose/outline) shows as formatted rich text; the raw box is for
   // capture and hand-editing. Verbatim/compose keep the plain box.
   function applyEntryLayout() {
-    // In edit mode, show the entry exactly like the Journal view (all representations).
-    const showView = inEditMode && !editingText;
-    entryView.hidden = !showView;
-    textEl.hidden = showView;
-    editTextToggle.hidden = !inEditMode;
-    editTextToggle.textContent = editingText ? "Done editing" : "✎ Edit text";
-    if (showView) entryView.innerHTML = renderReps(loadedEntry ? repsOf(loadedEntry) : {});
+    // The editable text box is ALWAYS shown at the top — original or additional input, no extra click.
+    // (The old read-only "formatted view" is gone; the browse/time-tree below is the reader now.)
+    entryView.hidden = true;
+    textEl.hidden = false;
+    editTextToggle.hidden = true;
     syncDeleteBtn();
-    if (!textEl.hidden) requestAnimationFrame(autoGrow); // size the box to its content once it's visible
+    requestAnimationFrame(autoGrow); // size the box to its content
   }
   // Delete lives only here, in the editor: shown when editing an existing day (inEditMode) or an
   // existing memory (editingMemId). Composing something new has nothing to delete.

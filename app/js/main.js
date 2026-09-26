@@ -209,10 +209,12 @@ function setMode(mode, arg, zoom) {
   // Graph now lives inside the Activity tab as a sub-view (Queue | Graph).
   const showGraph = mode === "activity" && activitySub === "graph";
   const showQueue = mode === "activity" && activitySub === "queue";
-  // Journal/Memories BROWSE (the time tree) share #browse-view; their EDIT forms use #write-view.
-  const isEdit = mode === "diary-edit" || mode === "memoir-edit";
+  // Journal & Memories lead with the WRITE box (#write-view) and show the browse/time-tree
+  // (#browse-view) beneath it — so there's always a text box at the top, no extra click. The *-edit
+  // modes focus a single past entry (write only, no browse).
+  const showWrite = mode === "diary" || mode === "memoir" || mode === "diary-edit" || mode === "memoir-edit";
   const showBrowse = mode === "browse" || mode === "diary" || mode === "memoir";
-  writeView.hidden = !isEdit;
+  writeView.hidden = !showWrite;
   browseView.hidden = !showBrowse;
   settingsView.hidden = mode !== "settings";
   graphView.hidden = !showGraph;
@@ -226,17 +228,17 @@ function setMode(mode, arg, zoom) {
     activitySubnav.hidden = mode !== "activity";
     activitySubnav.querySelectorAll(".subnav-btn").forEach((b) => b.classList.toggle("active", b.dataset.sub === activitySub));
   }
-  // The browse's own Write/Add button — shown on the tree, labelled for the current tab.
+  // The old browse "Write/Add" button is no longer needed — the write box is always at the top.
   const browseAdd = document.getElementById("browse-add");
-  if (browseAdd) { browseAdd.hidden = !showBrowse; browseAdd.textContent = inputTab === "memoir" ? "✎ Add a story" : "✎ Write today"; }
+  if (browseAdd) browseAdd.hidden = true;
   if (!showGraph) graph.close(); // stop live graph updates when its sub-view isn't showing
   if (mode !== "places") places.close(); // tear down the map when leaving
   if (mode !== "timeline") timeline.close(); // drop the timeline's tooltip/observer when leaving
   if (mode !== "futures") futures.close();
   if (mode !== "activity") activity.close();
   if (mode !== "people") people.close();
-  if (mode === "diary") { if (arg) calendar.reload(arg, zoom || "day"); else calendar.goPresent(); } // Journal = the day tree
-  else if (mode === "memoir") calendar.goMemoir();                                                    // Memories = category/subject tree
+  if (mode === "diary") { recorder.refresh(arg); calendar.goPresent(); }        // write today (top) + recent days (below)
+  else if (mode === "memoir") { recorder.refresh(typeof arg === "object" ? arg : {}); calendar.goMemoir(); } // new story (top) + categories (below)
   else if (mode === "browse") calendar.reload(arg, zoom);                                             // internal: a saved day / graph node
   else if (mode === "diary-edit") recorder.refresh(arg);                                              // write today (or edit a day)
   else if (mode === "memoir-edit") recorder.refresh(arg || {});                                       // add / edit a memory

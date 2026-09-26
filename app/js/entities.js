@@ -941,7 +941,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       return;
     }
     const card = e.target.closest(".ent-card[data-open]");
-    if (card) { openId = card.dataset.open; entEditing = false; renderEntity(openId); return; }
+    if (card) { openId = card.dataset.open; entEditing = true; renderEntity(openId); return; }
     const m = e.target.closest(".ent-mention[data-goto]");
     if (!m) return;
     if (m.dataset.kind === "day") onOpenDay?.(m.dataset.goto);
@@ -950,8 +950,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
 
   return {
     open() { openId = null; render(); }, // Names always lands on the roster (Me lives in its own tab)
-    async openSelf() { const s = await ensureSelf(); openId = s.id; entEditing = false; renderEntity(s.id); }, // the "Me" tab
-    openEntity(id) { openId = id; entEditing = false; renderEntity(id); }, // jump straight to one entity (from a name-link)
+    async openSelf() { const s = await ensureSelf(); openId = s.id; entEditing = true; renderEntity(s.id); }, // the "Me" tab — opens ready to write (text box on top)
+    openEntity(id) { openId = id; entEditing = true; renderEntity(id); }, // a name page opens ready to write (text box on top)
     async nextUndescribed() { // a name still needing a word (not the one already open) — for the guided "Next"
       const all = (await getAllEntities()).filter((e) => !isSelfEntity(e) && needsDescription(e) && e.id !== openId);
       return all.length ? all[0].id : null;
