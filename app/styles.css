@@ -357,6 +357,14 @@ button.tri:active { transform: translateY(1px); }
 .entry-view p:last-child { margin-bottom: 0; }
 .edit-text-btn { align-self: flex-start; }
 
+/* Single-select toggle: show ONE representation at a time (Summary ⇄ Outline). */
+.rep-toggle { display: inline-flex; gap: 0.2rem; background: var(--paper-deep); border: 1px solid var(--line); border-radius: 999px; padding: 0.2rem; margin: 0 0 1rem; }
+.rep-tab { border: none; background: transparent; color: var(--ink-soft); font: inherit; font-size: 0.85rem; font-weight: 600; padding: 0.35rem 0.95rem; border-radius: 999px; cursor: pointer; }
+.rep-tab.active { background: var(--ink); color: var(--paper); }
+.rep-body { color: var(--ink); }
+/* The live "Found" list is a compose helper — hide it while reading a saved entry. */
+.write-form.reading #entry-found { display: none; }
+
 .photo-row { display: flex; align-items: flex-start; gap: 1rem; flex-wrap: wrap; }
 .photo-add {
   display: inline-flex;

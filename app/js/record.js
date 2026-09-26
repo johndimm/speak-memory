@@ -4,7 +4,7 @@
 // and throw the raw text away.
 
 import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, deleteEntry, deleteMemory, photoToStored, storedToBlob } from "./db.js";
-import { renderReps, wireReps, isOutlineText, escapeHtml, resolveEntityTokens } from "./render.js";
+import { renderReps, renderRep, wireReps, isOutlineText, escapeHtml, resolveEntityTokens } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { primeAudio } from "./voicetts.js";
@@ -279,21 +279,35 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     entryView.hidden = !showView;
     if (writeMain) writeMain.hidden = showView;      // the box + prompt: edit only
     if (writeActions) writeActions.hidden = showView; // Dictate + Save: edit only
-    const found = root.querySelector("#entry-found"); // the live "Found" list is a compose helper, not read content
-    if (found && showView) found.hidden = true;
+    root.querySelector("#write-form")?.classList.toggle("reading", showView); // hides the compose-only Found list in read mode (CSS)
     // One toggle button on an existing entry: "✎ Edit" while reading, "✓ Done" while editing (so you
     // can always cancel back to the read view). Hidden only when composing a brand-new entry.
     if (editTextToggle) { editTextToggle.hidden = !inEditMode; editTextToggle.textContent = editingText ? "✓ Done" : "✎ Edit"; }
-    // Read mode: a title line = the day's headline, above the summary.
-    if (writeTitle) {
-      const brief = showView ? (loadedEntry?.brief || (loadedEntry?.prose && loadedEntry.prose.brief) || "") : "";
-      writeTitle.textContent = brief;
-      writeTitle.hidden = !brief;
-    }
-    if (showView) entryView.innerHTML = renderReps(loadedEntry ? repsOf(loadedEntry) : {});
+    if (writeTitle) writeTitle.hidden = true; // no separate sentence-title — the full summary leads
+    if (showView) renderReadView();
     syncDeleteBtn();
     if (!showView) { requestAnimationFrame(autoGrow); setTimeout(autoGrow, 120); } // size the box now, and again once the layout settles
   }
+  // Read view: the FULL summary, with a single-select toggle to swap it for the Outline (one at a
+  // time). Verbatim lives in edit mode (the editable box IS the raw transcript, for fixing things).
+  let repView = "prose";
+  function renderReadView() {
+    const reps = loadedEntry ? repsOf(loadedEntry) : {};
+    const opts = [];
+    if (reps.prose) opts.push(["prose", "Summary"]);
+    if (reps.outline) opts.push(["outline", "Outline"]);
+    if (!opts.find((o) => o[0] === repView)) repView = opts[0]?.[0] || "prose";
+    const toggle = opts.length > 1
+      ? `<div class="rep-toggle">${opts.map(([k, l]) => `<button type="button" class="rep-tab${repView === k ? " active" : ""}" data-rep="${k}">${l}</button>`).join("")}</div>`
+      : "";
+    entryView.innerHTML = toggle + `<div class="rep-body">${renderRep(reps, repView)}</div>`;
+  }
+  entryView.addEventListener("click", (e) => {
+    const t = e.target.closest(".rep-tab[data-rep]");
+    if (!t) return;
+    repView = t.dataset.rep;
+    renderReadView();
+  });
   // Delete lives only here, in the editor: shown when editing an existing day (inEditMode) or an
   // existing memory (editingMemId). Composing something new has nothing to delete.
   function syncDeleteBtn() {

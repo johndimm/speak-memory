@@ -118,6 +118,14 @@ export function renderVerbatim(text) {
   return `<div class="verbatim">${escapeHtml(String(text ?? "")).replace(/\r/g, "").replace(/\n/g, "<br>")}</div>`;
 }
 
+// Render ONE representation (used by the Journal's single-select Summary/Outline/Verbatim toggle).
+export function renderRep(reps, which) {
+  if (!reps) return "";
+  if (which === "outline") return renderOutlineLinked(reps.outline || "", proseParagraphs(reps.prose));
+  if (which === "verbatim") return renderVerbatim(reps.verbatim || reps.prose || "");
+  return resolveEntityLinks(proseParagraphs(reps.prose).map((p, idx) => `<p data-p="${idx}">${escapeHtml(p)}</p>`).join("")); // prose (full summary)
+}
+
 // Render an entry's representations: the first is shown, the rest fold away (on demand).
 // Shared by the Journal detail and the Write edit view.
 export function renderReps(reps, leadingHtml = "") {
