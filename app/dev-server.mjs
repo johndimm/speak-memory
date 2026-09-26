@@ -1,7 +1,12 @@
 // Minimal local dev server — serves the static app and runs /api functions directly.
 // Avoids `vercel dev` (which fails on Node 25). Loads the key from .env.local.
-//   node dev-server.mjs        → http://localhost:3000
+//   node --watch app/dev-server.mjs   → auto-restarts on any file change (picks up API edits too)
+//   node app/dev-server.mjs           → no restart (static changes still apply on refresh)
 import { createServer } from "http";
+
+// Never let a single bad request or a stray edit take the whole server down.
+process.on("uncaughtException", (e) => console.error("uncaughtException:", e));
+process.on("unhandledRejection", (e) => console.error("unhandledRejection:", e));
 import { readFile } from "fs/promises";
 import { existsSync } from "fs";
 import { extname, join, normalize, dirname } from "path";
@@ -50,6 +55,7 @@ async function runApi(name, req, res) {
 }
 
 createServer(async (req, res) => {
+ try {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   let path = decodeURIComponent(url.pathname);
 
@@ -65,6 +71,10 @@ createServer(async (req, res) => {
   const data = await readFile(file);
   res.writeHead(200, { "Content-Type": MIME[extname(file)] || "application/octet-stream" });
   res.end(data);
+ } catch (err) {
+  console.error("request error:", err);
+  try { res.writeHead(500); res.end("Server error"); } catch { /* headers already sent */ }
+ }
 }).listen(PORT, () => {
   console.log(`Local dev server → http://localhost:${PORT}`);
   console.log(process.env.DEEPSEEK_API_KEY ? "DEEPSEEK_API_KEY loaded ✓" : "⚠ DEEPSEEK_API_KEY missing — add it to app/.env.local");

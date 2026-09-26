@@ -484,9 +484,11 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
 
     // Two views, same rule as Journal/Stories: EDIT leads with the text box (empty cards open here);
     // BROWSE reads what's known with an Edit button (cards that already have content open here).
+    // The Edit/Done toggle only makes sense once there's something to READ. An empty card opens straight
+    // into writing with no toggle (nothing is "done" yet).
     const topbar = `<div class="ent-topbar">
         ${selfMode ? "<span></span>" : `<button type="button" class="ent-back" id="ent-back">← All names</button>`}
-        <button type="button" class="ent-edit-toggle" id="ent-edit-toggle">${entEditing ? "✓ Done" : "✎ Edit"}</button>
+        ${hasContent ? `<button type="button" class="ent-edit-toggle" id="ent-edit-toggle">${entEditing ? "✓ Done" : "✎ Edit"}</button>` : "<span></span>"}
       </div>`;
 
     const browseBody = `
