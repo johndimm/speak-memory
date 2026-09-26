@@ -617,19 +617,26 @@ button.tri:active { transform: translateY(1px); }
 .chip-row:empty { display: none; }
 
 /* Memories: a compact two-up form ABOVE the text box, so both fit above the fold on a narrow phone. */
-#memory-fields { display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 0.7rem; }
+#memory-fields { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 0.6rem; }
 .mem-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; align-items: start; }
 .mem-row > * { min-width: 0; }        /* let columns be equal — don't let no-wrap chips stretch one */
 #memory-fields .field { margin: 0; gap: 0.25rem; min-width: 0; }
 #memory-fields .field-label { font-size: 0.72rem; }
 #memory-fields input[type="text"], #memory-fields input[type="number"] { width: 100%; box-sizing: border-box; padding: 0.5rem 0.6rem; font-size: 0.95rem; }
 /* Keep suggestion chips to a single scrollable line so they don't grow the form's height. */
-#memory-fields .chip-row { flex-wrap: nowrap; overflow-x: auto; margin-top: 0.3rem; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+#memory-fields .chip-row { flex-wrap: nowrap; overflow-x: auto; margin-top: 0.3rem; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  /* soft right-edge fade so the strip reads as "swipe for more", not chopped off */
+  -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
 #memory-fields .chip-row::-webkit-scrollbar { display: none; }
 #memory-fields .chip { flex: 0 0 auto; }
-#memory-fields .mem-years { gap: 0.4rem; }
+/* Year range on its own full-width row — fits comfortably, so give the year
+   inputs a real width (no clipping to "19") instead of squeezing two 6rem
+   fields into half the row. */
+#memory-fields .mem-years { gap: 0.5rem; flex-wrap: wrap; }
+#memory-fields .mem-year-field { flex: 0 0 auto; min-width: 0; }
+#memory-fields .mem-year-field input[type="number"] { width: 5rem; }
 #memory-fields .mem-year-dash { padding-bottom: 0.6rem; }
-#memory-fields .mem-ongoing { padding-bottom: 0.5rem; font-size: 0.82rem; }
+#memory-fields .mem-ongoing { padding-bottom: 0.5rem; font-size: 0.82rem; margin-left: 0.15rem; }
 /* A shorter text box in Memories (the form takes the top), taller in the Journal. */
 .form-memoir .write-main #entry-text { min-height: 6rem; }
 .form-memoir .write-prompt { margin-bottom: 0.25rem; }

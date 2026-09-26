@@ -118,26 +118,24 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
             <div class="chip-row" id="entry-subject-chips"></div>
           </div>
         </div>
-        <div class="mem-row">
-          <div class="field loc-field">
-            <span class="field-label">Location <em>(optional)</em></span>
-            <input type="text" id="entry-location" autocomplete="off" placeholder="a city or address">
-            <div class="loc-suggest" id="entry-location-suggest" hidden></div>
-            <span class="field-hint" id="entry-location-hint"></span>
-          </div>
-          <fieldset class="mem-years">
-            <label class="field mem-year-field">
-              <span class="field-label">Year</span>
-              <input type="number" id="entry-start-year" min="1900" max="2100" inputmode="numeric" placeholder="1971">
-            </label>
-            <span class="mem-year-dash">–</span>
-            <label class="field mem-year-field">
-              <span class="field-label">End</span>
-              <input type="number" id="entry-end-year" min="1900" max="2100" inputmode="numeric" placeholder="1974">
-            </label>
-            <label class="mem-ongoing"><input type="checkbox" id="entry-ongoing"> now</label>
-          </fieldset>
+        <div class="field loc-field">
+          <span class="field-label">Location <em>(optional)</em></span>
+          <input type="text" id="entry-location" autocomplete="off" placeholder="a city or address">
+          <div class="loc-suggest" id="entry-location-suggest" hidden></div>
+          <span class="field-hint" id="entry-location-hint"></span>
         </div>
+        <fieldset class="mem-years">
+          <label class="field mem-year-field">
+            <span class="field-label">Year</span>
+            <input type="number" id="entry-start-year" min="1900" max="2100" inputmode="numeric" placeholder="1971">
+          </label>
+          <span class="mem-year-dash">–</span>
+          <label class="field mem-year-field">
+            <span class="field-label">End</span>
+            <input type="number" id="entry-end-year" min="1900" max="2100" inputmode="numeric" placeholder="1974">
+          </label>
+          <label class="mem-ongoing"><input type="checkbox" id="entry-ongoing"> now</label>
+        </fieldset>
       </div>
 
       <!-- The input leads: a prompt + box, with Dictate right there. -->
