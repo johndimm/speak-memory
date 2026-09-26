@@ -1,1 +1,1 @@
-node app/dev-server.mjs
+node --watch app/dev-server.mjs

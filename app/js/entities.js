@@ -652,15 +652,18 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
     root.querySelector("#ent-note-add")?.addEventListener("click", async () => {
       const ta = root.querySelector("#ent-note-input");
       const text = (ta && ta.value || "").trim();
+      if (!text) { pstatus("Nothing to save yet.", ""); return; }
       pstatus("Saving & finding names…", "working");
       await saveNote(text);
+      entEditing = null; renderEntity(id); // show the result (profile + facts) in read mode; Edit to add more
     });
     root.querySelector("#ent-note-clear")?.addEventListener("click", async () => {
       const ta = root.querySelector("#ent-note-input");
       if (ta) ta.value = "";
       root.querySelector("#ent-note-found") && (root.querySelector("#ent-note-found").hidden = true);
       pstatus("Removing…", "working");
-      await saveNote("");   // clears the note; the Clear button disappears on next open
+      await saveNote("");
+      entEditing = null; renderEntity(id); // now empty → reopens ready to write
     });
 
     // Ask about this entity — answered only from the entries that mention it.
