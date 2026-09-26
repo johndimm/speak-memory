@@ -190,7 +190,7 @@ function itemSortKey(it) {
   return "0000";
 }
 
-export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
+export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {}) {
   let openId = null; // entity being viewed, or null = the roster
   let entEditing = false; // an entity page has two versions: browse (read) and edit (form + notes)
   let scanning = false;
@@ -547,6 +547,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       else if (val) facts[k] = val; else delete facts[k];
       await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() });
       ent.facts = facts; refreshChips();
+      onProgress && onProgress();
     }
     // Merge extracted facts in — only fills a topic that's still blank, so live extraction can't
     // clobber something you corrected by hand.
@@ -558,7 +559,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         const has = facts[k] != null && String(facts[k]).trim() !== "";
         if (!has && v != null && String(v).trim() !== "") { facts[k] = v; changed = true; }
       }
-      if (changed) { await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() }); ent.facts = facts; refreshChips(); }
+      if (changed) { await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() }); ent.facts = facts; refreshChips(); onProgress && onProgress(); }
     }
     function refreshChips() { const w = root.querySelector("#fact-chips"); if (w) w.innerHTML = factChipsInner(ent); }
     // Tap a chip → correct that one field inline (the only "manual" path; talking is the main one).
@@ -634,6 +635,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
         }
       } catch { pstatus("", ""); }
       genProfile();
+      onProgress && onProgress(); // a note describes this name → the guided "Next" can move on
     });
 
     // Ask about this entity — answered only from the entries that mention it.
@@ -931,6 +933,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     open() { openId = null; render(); }, // Names always lands on the roster (Me lives in its own tab)
     async openSelf() { const s = await ensureSelf(); openId = s.id; entEditing = false; renderEntity(s.id); }, // the "Me" tab
     openEntity(id) { openId = id; entEditing = false; renderEntity(id); }, // jump straight to one entity (from a name-link)
+    async nextUndescribed() { // a name still needing a word (not the one already open) — for the guided "Next"
+      const all = (await getAllEntities()).filter((e) => !isSelfEntity(e) && needsDescription(e) && e.id !== openId);
+      return all.length ? all[0].id : null;
+    },
     close() { if (iv) { iv.active = false; endInterview(); } },
   };
 }

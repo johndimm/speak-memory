@@ -86,6 +86,32 @@ const modeBtns = [...document.querySelectorAll(".mode-btn")];
 // one we're in, so the browse's Write/Add button and the tab highlight stay correct.
 let inputTab = "diary";
 
+// The guided "Next" button: after you complete a step, point you at the next page in the workflow.
+const nextBtn = document.getElementById("next-step");
+const DEST_LABEL = { diary: "Journal", me: "Me", people: "Names", memoir: "Stories" };
+async function offerNext() {
+  if (!nextBtn) return;
+  let mode = await guidedStart();
+  const activeTab = document.querySelector(".mode-nav .mode-btn.active")?.dataset.mode;
+  delete nextBtn.dataset.entid;
+  if (mode === "people") {
+    // Chain through the names that still need a word, one at a time (skip the one you just did).
+    const nextId = people.nextUndescribed ? await people.nextUndescribed() : null;
+    if (nextId) { nextBtn.dataset.entid = nextId; nextBtn.dataset.mode = "people"; nextBtn.textContent = "Next name to describe →"; nextBtn.hidden = false; return; }
+    mode = "memoir"; // every name has a word → on to Stories
+  }
+  if (mode === activeTab) { nextBtn.hidden = true; return; } // already here — nothing to nudge toward
+  nextBtn.dataset.mode = mode;
+  nextBtn.textContent = `Next: ${DEST_LABEL[mode] || "Journal"} →`;
+  nextBtn.hidden = false;
+}
+nextBtn?.addEventListener("click", () => {
+  const m = nextBtn.dataset.mode, eid = nextBtn.dataset.entid;
+  nextBtn.hidden = true;
+  if (eid) { setMode("people"); people.openEntity(eid); }
+  else setMode(m);
+});
+
 // The "Lives" tab: your own journal + the sample-lives gallery (switching journals reloads).
 function renderLives() {
   livesView.innerHTML = renderJournalsSection();
@@ -102,10 +128,12 @@ const activity = initActivity(activityView, { onRetry: () => calendar.prime() })
 const people = initEntities(peopleView, {
   onOpenDay: (date) => setMode("browse", date, "day"),          // a mention → open that day in the Journal
   onOpenMemory: async (id) => { const m = (await getAllMemories()).find((x) => x.id === id); if (m) openMemoryInJournal(m); },
+  onProgress: () => offerNext(),                                // described yourself / a name → nudge to what's next
 });
 
 // Open a memory's page in the Journal (after saving/editing it in Write).
 function openMemoryInJournal(mem) {
+  if (nextBtn) nextBtn.hidden = true;
   inputTab = "memoir"; // a memory lives in the Memories tree
   modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "memoir"));
   writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true; placesView.hidden = true; timelineView.hidden = true;
@@ -165,6 +193,7 @@ let activitySub = "queue"; // which face of the Activity tab: the queue list, or
 const MORE_MODES = new Set(["futures", "timeline", "places", "activity"]); // live under the "More" menu
 function setMode(mode, arg, zoom) {
   try { if (mode !== "settings") localStorage.setItem(LAST_MODE_KEY, mode); } catch { /* ignore */ } // remember the tab for reload
+  if (nextBtn) nextBtn.hidden = true; // clear the Next nudge on any navigation; a save re-offers it
   if (mode === "diary" || mode === "diary-edit") inputTab = "diary";
   else if (mode === "memoir" || mode === "memoir-edit") inputTab = "memoir";
   // An edit form or an internal browse page still highlights its owning tab (Journal or Memories).
@@ -239,8 +268,8 @@ if (moreBtn && moreMenu) {
 }
 
 const recorder = initRecord(writeView, {
-  onSaved: (date) => setMode("diary", date, "day"), // a dated entry → its own day page in the Journal tree
-  onSavedMemory: (mem) => openMemoryInJournal(mem),   // a memory → its category/subject page
+  onSaved: (date) => { setMode("diary", date, "day"); offerNext(); }, // completed the day → nudge to the next step
+  onSavedMemory: (mem) => { openMemoryInJournal(mem); offerNext(); },  // a story → its page, then the next nudge
   onDeleted: (date) => setMode("diary", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
   onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode
