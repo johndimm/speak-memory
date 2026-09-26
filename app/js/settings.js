@@ -423,7 +423,10 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
       }
       // Include the rolled-up summaries (week/month/year/decade/life + category/subject) so a
       // restore doesn't have to re-summarize everything from scratch.
-      const bundle = { version: 1, exportedAt: new Date().toISOString(), entries: out, memories: memOut, periods, entities };
+      // The summary style travels too: it's folded into every period's staleness hash, so a restore
+      // under a different style would treat every rolled-up summary as stale and redo them all.
+      const summaryStyle = localStorage.getItem("summary-style") || "";
+      const bundle = { version: 1, exportedAt: new Date().toISOString(), summaryStyle, entries: out, memories: memOut, periods, entities };
       const blob = new Blob([JSON.stringify(bundle)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -436,7 +439,8 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
       const parts = [];
       if (entries.length) parts.push(`${entries.length} ${entries.length === 1 ? "day" : "days"}`);
       if (memories.length) parts.push(`${memories.length} ${memories.length === 1 ? "memory" : "memories"}`);
-      importStatus.textContent = `Exported ${parts.join(" and ")}.`;
+      if (entities.length) parts.push(`${entities.length} ${entities.length === 1 ? "name" : "names"}`);
+      importStatus.textContent = `Exported ${parts.join(", ")}.`;
       importStatus.className = "import-status ok";
     } catch (err) {
       importStatus.textContent = `Export failed: ${err.message}`;
@@ -513,6 +517,10 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
       // Restore the rolled-up summaries (the derived cache) so a fresh restore is fully
       // summarized without re-running the model. Anything stale is recomputed on the next pass.
       for (const p of periods) { if (p && p.key) await putPeriod(p); }
+      // …and adopt the style they were written in (if this device has none), so they still count as fresh.
+      if (typeof bundle.summaryStyle === "string" && bundle.summaryStyle && !localStorage.getItem("summary-style")) {
+        localStorage.setItem("summary-style", bundle.summaryStyle);
+      }
 
       // Restore the Names (entities) so a round-trip keeps them; matched by id, overwrite rule applies.
       if (entities.length) {

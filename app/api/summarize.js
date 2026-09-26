@@ -251,6 +251,9 @@ function extractFields(content) {
   return null;
 }
 
+// A reply that isn't the JSON we asked for — the one failure callLLM retries itself.
+class BadJSONError extends Error { constructor() { super("Model returned invalid JSON"); } }
+
 function hasKeys(o, keys) { return o && keys.every((k) => typeof o[k] === "string" && o[k].trim()); }
 
 function parseJsonResponse(content, keys = ["brief", "full"]) {
@@ -271,7 +274,7 @@ function parseJsonResponse(content, keys = ["brief", "full"]) {
     if (hasKeys(extracted, keys)) return extracted;
   }
 
-  throw new Error("Model returned invalid JSON");
+  throw new BadJSONError();
 }
 
 // Resolve the model/key/endpoint/provider for a request: the caller's own (from Settings) takes
@@ -332,6 +335,10 @@ async function callLLM(system, user, temperature = 0.3, keys = ["brief", "full"]
   let firstErr;
   try { return await callLLMOnce(system, user, temperature, keys, cfg); }
   catch (e) { firstErr = e; }
+  // Only a malformed reply is worth retrying here. An API error (429 rate limit, 5xx) or a timeout
+  // goes straight back to the client, whose backoff retry waits before trying again — retrying it
+  // here at once would just hammer the provider and blow past the client's wait.
+  if (!(firstErr instanceof BadJSONError)) throw firstErr;
   // Two more attempts with a stricter instruction — intermittent malformed JSON usually clears on a retry.
   const strictSys = `${system}\n\nIMPORTANT: Return compact valid JSON only with exactly these keys: ${keys.map((k) => `"${k}"`).join(", ")}. No markdown fences.`;
   for (let i = 0; i < 2; i++) {
@@ -355,7 +362,7 @@ function parseJsonObject(raw) {
   for (const a of attempts) {
     try { return JSON.parse(a); } catch { /* try next */ }
   }
-  throw new Error("Model returned invalid JSON");
+  throw new BadJSONError();
 }
 
 async function callJsonObjectOnce(system, user, temperature, cfg = {}) {

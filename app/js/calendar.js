@@ -1311,7 +1311,10 @@ async function postSummarizeOnce(body, timeoutMs) {
 // Retry transient failures — a network drop ("Failed to fetch"), an abort, or a 429/5xx — with
 // backoff. These hit en masse when a redeploy lands mid-pass or connections saturate; retrying lets
 // the pass heal itself instead of leaving a wall of failures.
-async function postSummarize(body, timeoutMs = 60000) {
+// The wait must outlast the server's own budget for one call (LLM_TIMEOUT_MS in api/summarize.js):
+// giving up sooner abandons a call that is still running and succeeds on the server, then the
+// retry stacks a second one on top — the pass ends up competing with itself.
+async function postSummarize(body, timeoutMs = 150000) {
   let lastErr;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await new Promise((res) => setTimeout(res, 500 * 2 ** attempt + Math.random() * 400));
