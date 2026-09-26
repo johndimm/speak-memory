@@ -7,8 +7,8 @@ import { initTimeline } from "./timeline.js";
 import { initFutures } from "./futures.js";
 import { initActivity } from "./activity.js";
 import { initEntities } from "./entities.js";
-import { purgeRaw, getAllMemories, getEntry, getAllEntities } from "./db.js";
-import { ensureSelf, isSelfEntity, needsDescription } from "./self.js";
+import { purgeRaw, getAllMemories, getEntry } from "./db.js";
+import { ensureSelf } from "./self.js";
 import { jkey, isSampleJournal, activeJournalId } from "./journal.js";
 
 // The guided daily workflow: on open, land on the first unfinished step —
@@ -27,8 +27,8 @@ async function guidedStart() {
     const self = await ensureSelf();
     const meDone = !!(self && ((self.note && self.note.trim()) || (self.facts && Object.keys(self.facts).length)));
     if (!meDone) return "me";                                                                      // 2) describe yourself
-    const others = (await getAllEntities()).filter((e) => !isSelfEntity(e));
-    if (others.some((e) => needsDescription(e))) return "people";                                  // 3) describe the names
+    // Only the thinly-mentioned names need you — the rest get described from the journal.
+    if (await people.nextUndescribed()) return "people";                                          // 3) describe the names
     return "memoir";                                                                               // 4) tell your stories
   } catch { return "diary"; }
 }

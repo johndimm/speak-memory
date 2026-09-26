@@ -128,6 +128,15 @@ function factChips(ent) {
   return `<div class="fact-chips" id="fact-chips">${factChipsInner(ent)}</div>`;
 }
 
+// Read-modify-write one entity, serialized — so a profile and its facts landing at the same moment
+// can't overwrite each other.
+let entWrite = Promise.resolve();
+function updateEntity(id, fallback, change) {
+  const run = entWrite.then(async () => { const cur = (await getEntity(id)) || fallback; await putEntity(change(cur)); });
+  entWrite = run.catch(() => {});
+  return run;
+}
+
 // Write (and save) an entity's profile from MY notes + the journal entries that mention it. The note
 // is passed AS AN ENTRY so /api/chat treats it as source-of-truth. Shared by the name page and the
 // hands-free interview. Returns the profile text.
@@ -140,8 +149,7 @@ async function writeProfile(ent, mentions) {
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `Server ${r.status}`); }
   const { profile } = await r.json();
   const reply = profile || "";
-  const fresh = (await getEntity(ent.id)) || ent;
-  await putEntity({ ...fresh, profile: reply, profileAt: Date.now(), updatedAt: Date.now() });
+  await updateEntity(ent.id, ent, (cur) => ({ ...cur, profile: reply, profileAt: Date.now(), updatedAt: Date.now() }));
   return reply;
 }
 
@@ -156,15 +164,17 @@ async function extractFacts(ent, mentions) {
   });
   if (!r.ok) return [];
   const { facts, names } = await r.json();
-  const cur = (await getEntity(ent.id)) || ent;
   // MERGE, don't overwrite: a value you typed/said in the keyword game is authoritative — the LLM
   // only fills topics you haven't answered yet, so extracting from a new note can't wipe your answers.
-  const merged = { ...(cur.facts || {}) };
-  for (const [k, v] of Object.entries(facts || {})) {
-    const has = merged[k] != null && String(merged[k]).trim() !== "";
-    if (!has && v != null && String(v).trim() !== "") merged[k] = v;
-  }
-  await putEntity({ ...cur, facts: merged, updatedAt: Date.now() });
+  let merged = {};
+  await updateEntity(ent.id, ent, (cur) => {
+    merged = { ...(cur.facts || {}) };
+    for (const [k, v] of Object.entries(facts || {})) {
+      const has = merged[k] != null && String(merged[k]).trim() !== "";
+      if (!has && v != null && String(v).trim() !== "") merged[k] = v;
+    }
+    return { ...cur, facts: merged, updatedAt: Date.now() };
+  });
   ent.facts = merged;
   const el = document.getElementById("ent-facts");
   if (el) el.outerHTML = factsChecklist(ent);
@@ -190,10 +200,28 @@ function itemSortKey(it) {
   return "0000";
 }
 
+// A name the journal mentions this often gets its description written FROM those entries; only the
+// thinly-mentioned ones (≤ ASK_MAX) are left for you to describe.
+const ASK_MAX = 2;
+function mentionIndex(sources) {
+  const byId = new Map(); // entity id → the sources that mention it
+  for (const s of sources) for (const id of (Array.isArray(s.entityRefs) ? s.entityRefs : [])) {
+    if (!byId.has(id)) byId.set(id, []);
+    byId.get(id).push(s);
+  }
+  return byId;
+}
+// Still needs YOUR words: no note of your own, and too few mentions to write one from.
+const needsYou = (e, count) => !isSelfEntity(e) && needsDescription(e) && e.recognized !== false && count <= ASK_MAX;
+// Can be described from the journal: no note, no profile yet, and mentioned often enough.
+// Tried once (profileTriedAt) → never retried automatically, so an empty or failing reply can't loop.
+const canAutoDescribe = (e, count) => !isSelfEntity(e) && needsDescription(e) && e.recognized !== false && !e.profile && !e.profileTriedAt && count > ASK_MAX;
+
 export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShown } = {}) {
   let openId = null; // entity being viewed, or null = the roster
   let entEditing = null; // browse (read) vs edit (write); null = decide by whether the card has content
   let needOrder = null;    // ids of the names still needing a description, in the roster's order
+  let autoRunning = false; // the background describer (one name at a time) is working
   let editSnapshot = null; // the saved version when ✎ Edit was tapped — Cancel restores it
   const entDraftKey = (eid) => jkey(`draft:ent:${eid}`); // unsaved words in the box, kept while you're away
   let scanning = false;
@@ -292,6 +320,36 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     } finally { scanning = false; }
   }
 
+  // ---- Describe the well-mentioned names from the journal, in the background ----------------
+  // One at a time (it shares the model with the summarizing pass). Each gets a profile + its facts;
+  // the roster redraws as they land so those names stop showing as "needs a description".
+  async function autoDescribe() {
+    if (autoRunning) return;
+    autoRunning = true;
+    try {
+      for (;;) {
+        const [all, sources] = await Promise.all([getAllEntities(), allSources()]);
+        const idx = mentionIndex(sources);
+        const next = all.filter((e) => canAutoDescribe(e, (idx.get(e.id) || []).length))
+          .sort((a, b) => (idx.get(b.id) || []).length - (idx.get(a.id) || []).length)[0];
+        if (!next) break;
+        const mentions = idx.get(next.id) || [];
+        const jid = logAdd(`Describe ${next.canonical}`, "profile");
+        logSet(jid, "running");
+        let ok = true;
+        try {
+          // Profile and facts read the same entries — run them side by side.
+          await Promise.all([writeProfile(next, mentions), extractFacts(next, mentions).catch(() => [])]);
+          logSet(jid, "done");
+        } catch (e) { ok = false; logSet(jid, "error", (e && e.message) || "failed"); }
+        if (!ok) break; // the model is failing — stop; the next visit to Names tries again
+        // Done → never picked again automatically (even if the reply came back empty); its page can Refresh.
+        await updateEntity(next.id, next, (cur) => ({ ...cur, profileTriedAt: Date.now() }));
+        if (!openId && root.isConnected && !root.hidden) render(); // show it land on the list
+      }
+    } finally { autoRunning = false; }
+  }
+
   // ---- Roster (the entity list) --------------------------------------------------------------
   async function render() {
     await sanitizeEntities(); // repair any names that are leftover {{tokens}}
@@ -332,7 +390,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     }
     const sections = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => {
       const list = byKind.get(k).sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.canonical.localeCompare(b.canonical));
-      const cards = list.map((e) => { const empty = e.recognized !== false && !isSelfEntity(e) && needsDescription(e); return `
+      const cards = list.map((e) => { const empty = needsYou(e, counts.get(e.id) || 0); return `
         <div class="ent-card-wrap">
           <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}${empty ? " ent-card-empty" : ""}" data-open="${escapeHtml(e.id)}">
             <span class="ent-name">${escapeHtml(e.canonical)}</span>
@@ -345,7 +403,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     }).join("");
     // "Needs a description" = a shown name with no note of your own yet — in the order the list shows
     // them, so the count, the marked cards, and the guided Next all walk the same names.
-    const undescribed = KIND_ORDER.flatMap((k) => byKind.get(k) || []).filter((e) => e && !isSelfEntity(e) && needsDescription(e));
+    const undescribed = KIND_ORDER.flatMap((k) => byKind.get(k) || []).filter((e) => e && needsYou(e, counts.get(e.id) || 0));
+    const describing = entities.filter((e) => canAutoDescribe(e, counts.get(e.id) || 0)).length;
     needOrder = undescribed.map((e) => e.id);
 
     root.innerHTML = `
@@ -358,6 +417,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
           </div>
         </div>
         ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} still need${undescribed.length === 1 ? "s" : ""} a description <span class="ent-needs-key">(dashed below) — tap to start</span></button>` : ""}
+        ${describing ? `<p class="field-hint">◷ Writing descriptions for ${describing} name${describing === 1 ? "" : "s"} from your journal…</p>` : ""}
         <div id="ent-status" class="ent-status" hidden></div>
         ${total === 0 && entities.length === 0
           ? `<p class="ent-empty">Write or imagine some days and the people, places and things you name will show up here.</p>`
@@ -371,6 +431,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     root.querySelector("#ent-singles")?.addEventListener("click", () => { showSingles = !showSingles; render(); });
     root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) { entEditing = true; renderEntity(openId); } }); // jump straight into editing the first name that needs a description
     onShown && onShown(); // the roster is up → the guided Next can point at the first empty name
+    if (describing) autoDescribe();
   }
 
   function setStatus(msg, cls) {
@@ -962,8 +1023,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     async openSelf() { const s = await ensureSelf(); openId = s.id; entEditing = null; renderEntity(s.id); }, // Me: write if empty, else read + Edit
     openEntity(id) { openId = id; entEditing = null; renderEntity(id); }, // a name: write if empty, else read + Edit
     async nextUndescribed() { // the next name still needing a word, in the list's order — for the guided "Next"
-      const all = await getAllEntities();
-      const empty = new Set(all.filter((e) => !isSelfEntity(e) && needsDescription(e)).map((e) => e.id));
+      const [all, sources] = await Promise.all([getAllEntities(), allSources()]);
+      const idx = mentionIndex(sources);
+      const empty = new Set(all.filter((e) => needsYou(e, (idx.get(e.id) || []).length)).map((e) => e.id));
       // Walk the list's order from just past the open name (wrapping), so Next moves forward through it.
       // Before the list has been drawn, any empty name will do. (Names described since it was drawn
       // drop out via `empty`; hidden once-mentioned names are never suggested.)
