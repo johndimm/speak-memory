@@ -59,6 +59,9 @@ const futuresView = document.getElementById("futures-view");
 const activityView = document.getElementById("activity-view");
 const peopleView = document.getElementById("people-view");
 const modeBtns = [...document.querySelectorAll(".mode-btn")];
+// Journal (diary) and Memories (memoir) each browse their slice of the time tree; this tracks which
+// one we're in, so the browse's Write/Add button and the tab highlight stay correct.
+let inputTab = "diary";
 
 // The "Lives" tab: your own journal + the sample-lives gallery (switching journals reloads).
 function renderLives() {
@@ -67,7 +70,7 @@ function renderLives() {
 }
 const places = initPlaces(placesView); // map of a life; opened lazily (loads Leaflet on first open)
 const timeline = initTimeline(timelineView, {
-  onEditMemory: (mem) => setMode("memoir", mem),      // "Edit full ›" opens the memory in Memoire
+  onEditMemory: (mem) => setMode("memoir-edit", mem),      // "Edit full ›" opens the memory in Memoire
   onOpenMemory: (mem) => openMemoryInJournal(mem),   // tap a bar → read that state's full page (works read-only)
   onChanged: () => { /* memories changed inline; Journal reloads on its next open */ },
 });
@@ -80,11 +83,13 @@ const people = initEntities(peopleView, {
 
 // Open a memory's page in the Journal (after saving/editing it in Write).
 function openMemoryInJournal(mem) {
-  modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "browse"));
+  inputTab = "memoir"; // a memory lives in the Memories tree
+  modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "memoir"));
   writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true; placesView.hidden = true; timelineView.hidden = true;
   futuresView.hidden = true; activityView.hidden = true; peopleView.hidden = true;
   if (activitySubnav) activitySubnav.hidden = true;
   browseView.hidden = false;
+  const browseAdd = document.getElementById("browse-add"); if (browseAdd) { browseAdd.hidden = false; browseAdd.textContent = "✎ Add a memory"; }
   graph.close(); timeline.close();
   calendar.showMemory(mem);
 }
@@ -114,9 +119,9 @@ const calendar = initCalendar({
   detailEdit: document.getElementById("detail-edit"),
   closeDetail: document.getElementById("close-detail"),
 }, {
-  onEdit: (date) => setMode("diary", date), // Journal "Edit" opens the day in the Diary editor
-  onEditMemory: (mem) => setMode("memoir", mem), // edit a memory in the Memoire form
-  onAddMemory: (seed) => setMode("memoir", seed), // "Add another" → Memoire, pre-filled category/subject
+  onEdit: (date) => setMode("diary-edit", date), // Journal "Edit" opens the day in the Diary editor
+  onEditMemory: (mem) => setMode("memoir-edit", mem), // edit a memory in the Memoire form
+  onAddMemory: (seed) => setMode("memoir-edit", seed), // "Add another" → Memoire, pre-filled category/subject
   onOpenEntity: (id) => { setMode("people"); people.openEntity(id); }, // tap a name in a summary → its page
 });
 
@@ -137,7 +142,11 @@ let activitySub = "queue"; // which face of the Activity tab: the queue list, or
 const MORE_MODES = new Set(["timeline", "places", "activity"]); // live under the "More" menu
 function setMode(mode, arg, zoom) {
   try { if (mode !== "settings") localStorage.setItem(LAST_MODE_KEY, mode); } catch { /* ignore */ } // remember the tab for reload
-  modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === mode));
+  if (mode === "diary" || mode === "diary-edit") inputTab = "diary";
+  else if (mode === "memoir" || mode === "memoir-edit") inputTab = "memoir";
+  // An edit form or an internal browse page still highlights its owning tab (Journal or Memories).
+  const navMode = mode === "diary-edit" ? "diary" : mode === "memoir-edit" ? "memoir" : mode === "browse" ? inputTab : mode;
+  modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === navMode));
   // The More button + its items reflect the current mode; close the menu after a pick.
   const moreBtn = document.getElementById("more-btn"), moreMenu = document.getElementById("more-menu");
   if (moreBtn) moreBtn.classList.toggle("active", MORE_MODES.has(mode));
@@ -146,8 +155,11 @@ function setMode(mode, arg, zoom) {
   // Graph now lives inside the Activity tab as a sub-view (Queue | Graph).
   const showGraph = mode === "activity" && activitySub === "graph";
   const showQueue = mode === "activity" && activitySub === "queue";
-  writeView.hidden = !(mode === "diary" || mode === "memoir"); // one view, two tabs
-  browseView.hidden = mode !== "browse";
+  // Journal/Memories BROWSE (the time tree) share #browse-view; their EDIT forms use #write-view.
+  const isEdit = mode === "diary-edit" || mode === "memoir-edit";
+  const showBrowse = mode === "browse" || mode === "diary" || mode === "memoir";
+  writeView.hidden = !isEdit;
+  browseView.hidden = !showBrowse;
   settingsView.hidden = mode !== "settings";
   graphView.hidden = !showGraph;
   livesView.hidden = mode !== "lives";
@@ -160,13 +172,20 @@ function setMode(mode, arg, zoom) {
     activitySubnav.hidden = mode !== "activity";
     activitySubnav.querySelectorAll(".subnav-btn").forEach((b) => b.classList.toggle("active", b.dataset.sub === activitySub));
   }
+  // The browse's own Write/Add button — shown on the tree, labelled for the current tab.
+  const browseAdd = document.getElementById("browse-add");
+  if (browseAdd) { browseAdd.hidden = !showBrowse; browseAdd.textContent = inputTab === "memoir" ? "✎ Add a memory" : "✎ Write today"; }
   if (!showGraph) graph.close(); // stop live graph updates when its sub-view isn't showing
   if (mode !== "places") places.close(); // tear down the map when leaving
   if (mode !== "timeline") timeline.close(); // drop the timeline's tooltip/observer when leaving
   if (mode !== "futures") futures.close();
   if (mode !== "activity") activity.close();
   if (mode !== "people") people.close();
-  if (mode === "browse") calendar.reload(arg, zoom);
+  if (mode === "diary") { if (arg) calendar.reload(arg, zoom || "day"); else calendar.goPresent(); } // Journal = the day tree
+  else if (mode === "memoir") calendar.goMemoir();                                                    // Memories = category/subject tree
+  else if (mode === "browse") calendar.reload(arg, zoom);                                             // internal: a saved day / graph node
+  else if (mode === "diary-edit") recorder.refresh(arg);                                              // write today (or edit a day)
+  else if (mode === "memoir-edit") recorder.refresh(arg || {});                                       // add / edit a memory
   else if (mode === "settings") settings.refresh();
   else if (mode === "lives") renderLives();
   else if (mode === "places") places.open();
@@ -175,8 +194,6 @@ function setMode(mode, arg, zoom) {
   else if (mode === "activity") { calendar.prime(); if (showGraph) { activity.close(); graph.open(); } else { activity.open(); } } // pass runs; show queue or graph
   else if (mode === "people") people.open();
   else if (mode === "me") people.openSelf(); // your own card (facts + notes + "tell me about your life")
-  else if (mode === "memoir") recorder.refresh(arg || {}); // Memoire: a memory (arg = memory to edit, else new)
-  else recorder.refresh(arg); // Diary: arg = a date to edit, else today
 }
 if (activitySubnav) activitySubnav.addEventListener("click", (e) => {
   const b = e.target.closest(".subnav-btn");
@@ -187,6 +204,9 @@ if (activitySubnav) activitySubnav.addEventListener("click", (e) => {
 
 modeBtns.forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
 
+// The browse's Write/Add button opens the edit form for the tab you're browsing.
+document.getElementById("browse-add")?.addEventListener("click", () => setMode(inputTab === "memoir" ? "memoir-edit" : "diary-edit"));
+
 // The "More" menu (Timeline / Map / Activity) — toggle open, pick an item, close on outside click.
 const moreBtn = document.getElementById("more-btn"), moreMenu = document.getElementById("more-menu");
 if (moreBtn && moreMenu) {
@@ -196,9 +216,9 @@ if (moreBtn && moreMenu) {
 }
 
 const recorder = initRecord(writeView, {
-  onSaved: (date) => setMode("browse", date, "day"), // a dated entry → its own day page
+  onSaved: (date) => setMode("diary", date, "day"), // a dated entry → its own day page in the Journal tree
   onSavedMemory: (mem) => openMemoryInJournal(mem),   // a memory → its category/subject page
-  onDeleted: (date) => setMode("browse", date, "week"), // day is gone → land on its week
+  onDeleted: (date) => setMode("diary", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
   onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode
 });
@@ -225,7 +245,7 @@ const settings = initSettings(settingsView, {
 let savedMode = (() => { try { return localStorage.getItem(LAST_MODE_KEY) || ""; } catch { return ""; } })();
 if (savedMode === "graph") { savedMode = "activity"; activitySub = "graph"; } // Graph moved inside Activity
 if (savedMode === "write") savedMode = "diary"; // Write split into Diary + Memoire
-const VALID_MODES = new Set(["me", "diary", "memoir", "browse", "timeline", "futures", "places", "people", "activity"]);
+const VALID_MODES = new Set(["me", "diary", "diary-edit", "memoir", "memoir-edit", "browse", "timeline", "futures", "places", "people", "activity"]);
 
 // Stepping into a future via its "▶ Reveal" button asks to auto-play the audio show on load.
 try {

@@ -101,6 +101,10 @@ body { position: relative; }
 }
 .mode-btn.active { background: var(--ink); color: var(--paper); }
 .nav-sep { align-self: center; width: 1px; height: 1.1rem; background: var(--line); margin: 0 0.25rem; flex: 0 0 auto; }
+/* Write/Add straight from the browse tree (Journal → today, Memories → a memory). */
+.browse-add { display: inline-block; margin: 0 0 0.9rem; font: inherit; font-size: 0.95rem; font-weight: 500; color: #fff; background: var(--accent); border: none; border-radius: 999px; padding: 0.55rem 1.2rem; cursor: pointer; }
+.browse-add[hidden] { display: none; }
+.browse-add:hover { filter: brightness(1.06); }
 .mode-btn-gear { padding: 0.5rem 0.7rem; font-size: 1rem; }
 .mode-more { position: relative; display: inline-flex; }
 .more-menu { position: absolute; top: calc(100% + 0.35rem); right: 0; z-index: 60; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 0.3rem; display: flex; flex-direction: column; min-width: 8.5rem; }

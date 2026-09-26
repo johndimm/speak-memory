@@ -38,9 +38,6 @@
         <!-- The people: you, then everyone else. -->
         <button class="mode-btn" data-mode="me">Me</button>
         <button class="mode-btn" data-mode="people">Names</button>
-        <span class="nav-sep" aria-hidden="true"></span>
-        <!-- The whole life, summarized over time (its own thing). -->
-        <button class="mode-btn" data-mode="browse">Chronicle</button>
         <div class="mode-more">
           <button class="mode-btn" id="more-btn" aria-haspopup="true" aria-expanded="false">More ▾</button>
           <div class="more-menu" id="more-menu" hidden>
@@ -78,6 +75,8 @@
     <section id="settings-view" class="view" hidden></section>
 
     <section id="browse-view" class="view" hidden>
+      <!-- Write/Add from wherever you are in the tree (label set by the current tab). -->
+      <button type="button" id="browse-add" class="browse-add" hidden>✎ Write today</button>
       <div class="browse-header">
         <nav class="breadcrumb" id="breadcrumb" aria-label="Location"></nav>
         <div class="period-nav">
