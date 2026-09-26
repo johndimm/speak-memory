@@ -494,8 +494,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
         <input type="text" class="node-name ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" aria-label="Name" spellcheck="false">
         ${subtitle}${flag}
         <p class="cap-lead">${selfMode ? "Tell me about your life — where you live, who with, your family and best friends. Names you mention become cards to describe in Names." : `Just talk or type about ${escapeHtml(ent.canonical)} — these fill in as you go.`}</p>
-        ${factChips(ent)}
         ${notesFrag}
+        ${factChips(ent)}
         ${kindFrag}
         ${selfMode ? "" : `<button type="button" class="ent-del-big" id="ent-del-big">🗑 Delete “${escapeHtml(ent.canonical)}”</button>`}`;
 
@@ -607,9 +607,13 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
         } catch { /* */ }
       };
       const noteCap = attachLiveCapture(noteTa, { mount: root.querySelector("#ent-note-found"), buckets: ["names"], remote: hasFacts ? remote : undefined, onPick });
-      const noteOnText = () => noteCap.update();
+      // Auto-grow the box to fit its content — new lines push what's below down (consistent with the
+      // Journal/Stories boxes); all the text stays editable with the keyboard.
+      const noteGrow = () => { noteTa.style.height = "auto"; noteTa.style.height = noteTa.scrollHeight + "px"; };
+      const noteOnText = () => { noteCap.update(); noteGrow(); };
       noteTa.addEventListener("input", noteOnText);
       setupDictation(root.querySelector("#ent-note-mic"), noteTa, root.querySelector("#ent-pstatus"), noteOnText);
+      requestAnimationFrame(noteGrow); // fit the existing note on open
     }
 
     // Save = REPLACE the note with what's in the box (so you can correct or delete bad text).
