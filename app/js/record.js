@@ -279,6 +279,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     entryView.hidden = !showView;
     if (writeMain) writeMain.hidden = showView;      // the box + prompt: edit only
     if (writeActions) writeActions.hidden = showView; // Dictate + Save: edit only
+    const found = root.querySelector("#entry-found"); // the live "Found" list is a compose helper, not read content
+    if (found && showView) found.hidden = true;
     // One toggle button on an existing entry: "✎ Edit" while reading, "✓ Done" while editing (so you
     // can always cancel back to the read view). Hidden only when composing a brand-new entry.
     if (editTextToggle) { editTextToggle.hidden = !inEditMode; editTextToggle.textContent = editingText ? "✓ Done" : "✎ Edit"; }

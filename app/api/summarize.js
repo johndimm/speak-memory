@@ -13,11 +13,15 @@ The source is messy speech-to-text. Your job is to compress and polish it — NO
 Return ONLY valid JSON: {"brief":"...","full":"..."}
 
 - brief: one sentence, past tense, max 20 words — the headline of what happened
-- full: 3-4 SHORT paragraphs (2-4 sentences each). Separate with \\n\\n in the JSON string.
-  Calm, lightly-edited voice.
-  Cut repetition, filler, false starts, and meta-commentary about journaling itself.
-  Keep: people, events, places, decisions, emotions, and specific details worth remembering.
-  Target 150-250 words total for full.
+- full: a clean, lightly-edited retelling of THIS entry — nothing more.
+  Separate paragraphs with \\n\\n in the JSON string.
+  BE FAITHFUL: include only what the entry actually says. NEVER invent people, events, places,
+  details, or feelings that were not stated, and never embellish to sound fuller. If the entry is
+  one line, "full" is one or two clean sentences — do NOT pad it into paragraphs.
+  LENGTH FOLLOWS THE SOURCE: match the amount of what was said; "full" should be about as long as the
+  transcript or shorter, never longer. There is no target word count.
+  Calm, lightly-edited voice. Cut repetition, filler, false starts, and meta-commentary about
+  journaling itself. Keep: people, events, places, decisions, emotions, and specific details.
 
 TENSE — you are given the entry's date and the local time it was written. Match tense to when
 things actually occur relative to that moment; do not force everything into one tense:
@@ -167,6 +171,9 @@ function outlineDirective() {
 }
 
 const FIRST_PERSON_NOTE = `\n\nPERSON — Write the prose ("brief" and "full") in the FIRST PERSON, as the person whose journal this is ("I went…", "I felt…", "I decided…"). Never refer to them as "the speaker", "the writer", or "the author".`;
+
+// Shared across the summarizers: stay true to the source, never pad or invent.
+const FAITHFUL_NOTE = `\n\nFAITHFUL — Include ONLY what the source actually says. Never add people, events, places, times, details, or feelings that were not stated, and never embellish to make it read fuller. When the source is brief, the output is brief; it is better to omit than to invent.`;
 
 // Roll-ups summarize their children's summaries, which already carry {{e:id|Name}} tokens — keep them.
 const PRESERVE_TOKENS_NOTE = `\n\nENTITY TOKENS — The input may contain references of the form {{e:<id>|<Name>}}. Keep any such token EXACTLY as written wherever you refer to that individual (in every output field); never rewrite it to a plain name or change its id.`;
@@ -591,7 +598,7 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       // NER runs on VERBATIM leaf text only. Roll-ups summarize already-tokenized child summaries, so
       // extracting entities there would scoop up {{e:…}} tokens — skip it entirely for roll-ups.
       const nerNote = isLeaf ? entitiesNote(body.entities) : `\n\nDo NOT extract entities — return "entities": []. (This is a roll-up of already-processed summaries.)`;
-      const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + nerNote + PRESERVE_TOKENS_NOTE + styleDirective(style);
+      const sys = LEVELS_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + thoroughNote + nerNote + PRESERVE_TOKENS_NOTE + FAITHFUL_NOTE + styleDirective(style);
       const r = await callLLM(sys, user, style ? 0.8 : 0.4, ["word", "phrase", "sentence", "paragraph", "summary"], cfg);
       const entities = (isLeaf && Array.isArray(r.entities)) ? r.entities.filter((x) => x && x.name).map((x) => ({
         name: String(x.name).slice(0, 80),
@@ -615,7 +622,7 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
       const correctionNote = correction
         ? `\n\nCORRECTION — The reader flagged a previous summary as wrong. Apply and honor this correction: ${String(correction).slice(0, 1000)}`
         : "";
-      const sys = DETAIL_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + entitiesNote(body.entities) + PRESERVE_TOKENS_NOTE + styleDirective(style);
+      const sys = DETAIL_SYSTEM + OUTLINE_LEAF_EXAMPLE + FIRST_PERSON_NOTE + subjectNote + correctionNote + entitiesNote(body.entities) + PRESERVE_TOKENS_NOTE + FAITHFUL_NOTE + styleDirective(style);
       const ctx = `Context: ${type}${label ? ` — ${label}` : ""}${date ? `, ${date}` : ""}${localTime ? ` (written ${localTime})` : ""}.`;
       const r = await callLLM(sys, `${ctx}\n\nText:\n\n${String(text).slice(0, 16000)}`, style ? 0.8 : 0.4, ["summary", "outline"], cfg);
       const s = (v) => (typeof v === "string" ? v.trim() : "");
@@ -847,7 +854,7 @@ Return ONLY valid JSON: {"mentions":[{"name":"<name>","kind":"person|animal|plac
       ? `\n\nSUBJECT — This is about "${subject}". Use exactly that name and spelling for it throughout, correcting any misspelling or mis-transcription of it in the source text. Do not invent a different name.`
       : "";
     // Prose is first person; the outline stays neutral (subjectless bullets).
-    const sys = DAY_SYSTEM + (format === "outline" ? outlineDirective() : FIRST_PERSON_NOTE) + subjectNote + styleDirective(style);
+    const sys = DAY_SYSTEM + (format === "outline" ? outlineDirective() : FIRST_PERSON_NOTE) + subjectNote + FAITHFUL_NOTE + styleDirective(style);
     const result = await callLLM(sys, user, style ? 0.8 : 0.3, undefined, cfg);
     // Don't run prose paragraph-splitting on an outline — keep its bullets/newlines intact.
     const full = format === "outline" ? result.full : structureFull(result.full);
