@@ -1,0 +1,35 @@
+Journal
+
+  - text input box overlaps Update button
+  
+  - remove user-controlled headkine.  that is like a summary, automatic
+  
+  - if today is empty, show the text input.  Do not show the Edit button since we are in Edit mode.
+
+  - if today is not empty, do not show text input bux until user clicks Edit.
+
+  - remove second Edit button below the summary or outline
+
+  - not sure we need Regenerate Summaries. If you change anything, it haopens automatically.
+
+  - show prose by default, not outline
+
+  - menu, breadcrumbs, text input ot Edit button, title, date (editable), summary paragraph, option to show outline or verbatim transcript, camera, photo.  In edit mode, show Delete button at bottom.
+
+Me
+
+  - put the text input box above the title (the name)
+
+  - If I click Edit, an empty text input should appear.  The results will be added to the existing transcript.   The existing transcript is also editable for maanual fixes.
+
+Name
+
+  - put the text input box above the title (the name)
+
+  - if the description is not empty, there should be an Edit button.  Instead, there is a Done button.
+
+Stories
+
+  - need some kind of breadcrumbs, a way to jump to Life and see all categories, or see all entries for a given category.
+
+  - each input UI servers two purposes:  edit for new input, navigation to view other entries

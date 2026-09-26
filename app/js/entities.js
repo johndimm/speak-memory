@@ -498,10 +498,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
         ${askFrag}`;
 
     const editBody = `
-        <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
         ${notesFrag}
-        ${factChips(ent)}
+        <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
         ${subtitle}${flag}
+        ${factChips(ent)}
         ${kindFrag}
         ${selfMode ? "" : `<button type="button" class="ent-del-big" id="ent-del-big">🗑 Delete “${escapeHtml(ent.canonical)}”</button>`}`;
 

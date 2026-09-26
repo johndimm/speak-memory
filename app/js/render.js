@@ -121,7 +121,7 @@ export function renderVerbatim(text) {
 // Render an entry's representations: the first is shown, the rest fold away (on demand).
 // Shared by the Journal detail and the Write edit view.
 export function renderReps(reps, leadingHtml = "") {
-  const order = ["outline", "prose", "verbatim"]; // outline is the starting point (detail on its leaves)
+  const order = ["prose", "outline", "verbatim"]; // prose is the default read; outline & verbatim fold below
   const present = order.filter((m) => reps?.[m]);
   if (present.length <= 1) {
     if (present[0] === "verbatim") return leadingHtml + renderVerbatim(reps.verbatim);

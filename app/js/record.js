@@ -103,6 +103,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <p class="app-intro-lead"><strong>Speak, Memory</strong> — just talk, and it becomes your life story. Private to this device; no account.</p>
     </aside>
     <form class="write-form" id="write-form">
+      <!-- Read mode (an existing entry): a single Edit button up top; tapping it reveals the box. -->
+      <button type="button" class="detail-nav-btn edit-text-btn" id="edit-text-toggle" hidden>✎ Edit</button>
       <!-- Start talking right away: a small box that GROWS as you write, pushing the form down. -->
       <label class="field write-main">
         <span class="field-label write-prompt" id="entry-label">What happened today?</span>
@@ -158,18 +160,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
         <button type="button" class="fut-interview" id="memoir-handsfree">💬 Talk it through</button>
       </div>
 
-      <label class="field" id="headline-field" hidden>
-        <span class="field-label">Headline</span>
-        <input type="text" id="entry-brief">
-      </label>
-
       <div class="entry-view" id="entry-view" hidden></div>
-      <button type="button" class="detail-nav-btn edit-text-btn" id="edit-text-toggle" hidden>✎ Edit text</button>
-
-      <div class="edit-tools" id="write-edit-tools" hidden>
-        <button type="button" class="detail-nav-btn" id="write-resummarize">↻ Re-summarize into prose</button>
-        <span class="edit-hint">Dictated something rough? This rewrites the whole entry into clean prose.</span>
-      </div>
 
       <div class="photo-row">
         <button type="button" class="photo-add" id="entry-camera-btn"><span>📷 Camera</span></button>
@@ -223,10 +214,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   const saveBtn = root.querySelector("#save-btn");
   const deleteBtn = root.querySelector("#delete-entry-btn");
   const statusEl = root.querySelector("#write-status");
-  const briefEl = root.querySelector("#entry-brief");
-  const headlineField = root.querySelector("#headline-field");
   const entryLabel = root.querySelector("#entry-label");
-  const editTools = root.querySelector("#write-edit-tools");
   const entryView = root.querySelector("#entry-view");
   const editTextToggle = root.querySelector("#edit-text-toggle");
   wireReps(entryView);
@@ -242,17 +230,19 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
 
   // A saved summary (prose/outline) shows as formatted rich text; the raw box is for
   // capture and hand-editing. Verbatim/compose keep the plain box.
+  const writeMain = root.querySelector(".write-main");
+  const writeActions = root.querySelector(".write-actions");
   function applyEntryLayout() {
-    // Same rule as every page: EMPTY (composing a new/blank entry) → show the text box; already has
-    // content (an existing entry) → show the read view + an "Edit" button, box hidden until you tap it.
-    const showView = inEditMode && !editingText;
+    // Same rule everywhere: EMPTY (new/blank entry) → the text box shows; an EXISTING entry → the read
+    // view + one "Edit" button at the top (box hidden until you tap it).
+    const showView = inEditMode && !editingText; // reading an existing entry
     entryView.hidden = !showView;
-    textEl.hidden = showView;
-    editTextToggle.hidden = !inEditMode;
-    editTextToggle.textContent = editingText ? "Done editing" : "✎ Edit";
+    if (writeMain) writeMain.hidden = showView;      // the box + prompt: edit only
+    if (writeActions) writeActions.hidden = showView; // Dictate + Save: edit only
+    if (editTextToggle) { editTextToggle.hidden = !showView; editTextToggle.textContent = "✎ Edit"; }
     if (showView) entryView.innerHTML = renderReps(loadedEntry ? repsOf(loadedEntry) : {});
     syncDeleteBtn();
-    if (!textEl.hidden) requestAnimationFrame(autoGrow); // size the box to its content when it's showing
+    if (!showView) { requestAnimationFrame(autoGrow); setTimeout(autoGrow, 120); } // size the box now, and again once the layout settles
   }
   // Delete lives only here, in the editor: shown when editing an existing day (inEditMode) or an
   // existing memory (editingMemId). Composing something new has nothing to delete.
@@ -275,24 +265,9 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // Summary voice is set in Settings; here we just read the current value.
   const currentStyle = () => localStorage.getItem("summary-style") || "";
 
-  // One control, three ways to capture: verbatim (no LLM), prose, or outline.
-  const resummarizeBtn = root.querySelector("#write-resummarize");
-  const editHint = root.querySelector("#write-edit-tools .edit-hint");
-
-  // The source Re-summarize regenerates from: the original raw text (kept ~1 week),
-  // or a verbatim entry's own words. Empty when neither is available.
-  function resummarizeSource() {
-    if (rawFresh(loadedEntry)) return loadedEntry.raw;
-    if (loadedEntry && loadedEntry.summarized === false) return loadedEntry.full || "";
-    return "";
-  }
-
-  function updateModeUI() {
-    editTools.hidden = !inEditMode || !rawFresh(loadedEntry); // regeneration needs the raw source
-    resummarizeBtn.textContent = "↻ Regenerate summaries";
-    if (editHint) editHint.textContent = "Regenerates prose and outline from your original words.";
-  }
-  updateModeUI();
+  // The manual "Regenerate summaries" control is gone — editing an entry re-summarizes automatically
+  // (the background pass runs on save). updateModeUI is kept as a no-op so existing callers are safe.
+  function updateModeUI() { /* nothing to toggle now */ }
 
   let pendingPhotos = []; // { blob, url }
   let loadedEntry = null; // the saved entry for the currently selected date
@@ -436,10 +411,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     const editMode = !!entry;
     inEditMode = editMode;
     editingText = false;
-    headlineField.hidden = !editMode;
     entryLabel.textContent = promptForDate(date, editMode); // show the selected date (normally today)
     setFormMode("diary"); // pure diary — no memory fields, no memoir voice tools
-    briefEl.value = entry?.brief ?? "";
     currentSummarized = entry ? entry.summarized !== false : true;
     saveBtn.textContent = editMode ? "Update entry" : "Save entry";
     updateModeUI();
@@ -552,12 +525,19 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // Auto-grow the text box to fit its content, so it starts at a few lines and grows as you write
   // (pushing the memory form below it down), instead of scrolling inside a fixed box.
   function autoGrow() {
-    if (!textEl || textEl.hidden) return;
+    if (!textEl || !textEl.offsetParent) return; // skip when the box (or its container) is hidden
     textEl.style.height = "auto";
     textEl.style.height = textEl.scrollHeight + "px";
   }
+  // Re-measure at the moments a mobile layout can settle late (focus opening the keyboard, the viewport
+  // resizing, fonts finishing) so the box height always matches its content and can't sit over the
+  // buttons below it.
   const onText = () => { refreshSaveState(); capture.update(); autoGrow(); };
   textEl.addEventListener("input", onText);
+  textEl.addEventListener("focus", autoGrow);
+  window.addEventListener("resize", autoGrow);
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", autoGrow);
+  try { document.fonts && document.fonts.ready.then(autoGrow); } catch { /* */ }
   dateEl.addEventListener("change", () => loadDraft({ focus: true }));
 
   // Delete the thing being edited (a day entry or a memory), then hand navigation back to the caller.
@@ -616,41 +596,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     return { prose: { brief: prose.brief, full: prose.full }, outline: { brief: outline.brief, full: outline.full } };
   }
 
-  // Regenerate both summaries from the original raw text, then save.
-  async function resummarizeWrite() {
-    const btn = root.querySelector("#write-resummarize");
-    const source = resummarizeSource().trim();
-    if (!source) {
-      statusEl.textContent = "The original text for this day is no longer available.";
-      statusEl.className = "write-status error";
-      return;
-    }
-    const date = dateEl.value || todayISO();
-    btn.disabled = true;
-    statusEl.textContent = "Regenerating prose + outline…";
-    statusEl.className = "write-status";
-    try {
-      const { prose, outline } = await summarizeBoth(date, source);
-      const existing = loadedEntry ?? (await getEntry(date));
-      const updated = {
-        ...(existing || {}),
-        date, dayOfWeek: dayOfWeek(date),
-        raw: source, rawSavedAt: existing?.rawSavedAt ?? Date.now(),
-        prose, outline, updatedAt: Date.now(),
-      };
-      await putEntry(withMode(updated, existing?.mode || "prose"));
-      statusEl.textContent = "Regenerated ✓";
-      statusEl.className = "write-status ok";
-      await loadDraft();
-    } catch (err) {
-      statusEl.textContent = `Couldn't regenerate: ${err.message}`;
-      statusEl.className = "write-status error";
-    } finally {
-      btn.disabled = false;
-    }
-  }
-  root.querySelector("#write-resummarize").addEventListener("click", resummarizeWrite);
-
   // Save as a memory (category filled) — stored whole; the Journal's background pass summarizes.
   async function saveMemory() {
     const text = textEl.value.trim();
@@ -705,7 +650,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     // not the day's formatted entry-view.
     loadedEntry = null; inEditMode = false; editingText = false;
     setFormMode("memory"); memoirActions.hidden = true; // editing one memory: show fields, hide series tools
-    dateEl.value = ""; briefEl.value = ""; headlineField.hidden = true;
+    dateEl.value = "";
     entryLabel.textContent = "The story";
     pendingPhotos = (mem.photos ?? []).map((ph) => { const b = storedToBlob(ph); return { blob: b, url: URL.createObjectURL(b) }; });
     renderThumbs();
@@ -780,7 +725,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     textEl.value = "";
     pendingPhotos = []; renderThumbs();
     dateEl.value = "";
-    briefEl.value = ""; headlineField.hidden = true;
     catEl.value = seed.category || "";
     subjectEl.value = seed.subject || "";
     startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false;
