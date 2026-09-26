@@ -445,13 +445,18 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
 
     // The notes editor — only in Edit mode (no pencil toggle needed; Edit IS the reveal).
     const notesFrag = `<section class="node-comment">
-          ${ent.note ? `<div class="ent-note-existing">${renderAnswerText(ent.note)}</div>` : ""}
+          <!-- The box holds your CURRENT notes so you can edit or clear them (fix bad dictation) — Save
+               replaces what's here; empty it and Save to remove the note entirely. -->
           <div class="node-comment-row">
-            <textarea id="ent-note-input" class="node-comment-input" rows="3" placeholder="${selfMode ? "Anything in your own words — names and facts are picked up as you write…" : `Who they are, how you're connected, anything the journal gets wrong…`}"></textarea>
+            <textarea id="ent-note-input" class="node-comment-input" rows="4" placeholder="${selfMode ? "Anything in your own words — names and facts are picked up as you write…" : `Who they are, how you're connected, anything the journal gets wrong…`}">${escapeHtml(ent.note || "")}</textarea>
             <button type="button" class="node-comment-mic" id="ent-note-mic" hidden aria-label="Dictate">🎙</button>
           </div>
           <div class="cap-found" id="ent-note-found" hidden></div>
-          <div class="node-comment-actions"><button type="button" class="node-comment-add" id="ent-note-add">Add &amp; update profile</button><span class="node-comment-status" id="ent-pstatus"></span></div>
+          <div class="node-comment-actions">
+            <button type="button" class="node-comment-add" id="ent-note-add">Save notes</button>
+            ${ent.note ? `<button type="button" class="node-comment-clear" id="ent-note-clear">Clear</button>` : ""}
+            <span class="node-comment-status" id="ent-pstatus"></span>
+          </div>
         </section>`;
 
     const kindFrag = `<details class="node-fold ent-details">
@@ -606,20 +611,12 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       setupDictation(root.querySelector("#ent-note-mic"), noteTa, root.querySelector("#ent-pstatus"), noteOnText);
     }
 
-    root.querySelector("#ent-note-add")?.addEventListener("click", async () => {
-      const ta = root.querySelector("#ent-note-input");
-      const text = (ta && ta.value || "").trim();
-      if (!text) return;
-      pstatus("Saving & finding names…", "working");
+    // Save = REPLACE the note with what's in the box (so you can correct or delete bad text).
+    async function saveNote(text) {
       const fresh = (await getEntity(id)) || ent;
-      const note = (fresh.note ? fresh.note + "\n" : "") + text;
-      await putEntity({ ...fresh, note, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() }); // adding info clears a "didn't recognize" flag
-      ent.note = note; ent.recognized = true;
-      ta.value = "";
-      // Show the appended note immediately, then regenerate the profile from mentions + notes.
-      const box = root.querySelector(".ent-note-existing");
-      if (box) box.innerHTML = renderAnswerText(note);
-      else ta.closest(".node-comment-row")?.insertAdjacentHTML("beforebegin", `<div class="ent-note-existing">${renderAnswerText(note)}</div>`);
+      await putEntity({ ...fresh, note: text, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() });
+      ent.note = text; ent.recognized = true;
+      if (!text) { pstatus("Notes cleared.", "ok"); genProfile(); onProgress && onProgress(); return; }
       // A note names other people and carries standard facts. For kinds with a fact checklist
       // (person/place/org) extractFacts does both (facts + names); otherwise just pull the names.
       try {
@@ -636,6 +633,19 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       } catch { pstatus("", ""); }
       genProfile();
       onProgress && onProgress(); // a note describes this name → the guided "Next" can move on
+    }
+    root.querySelector("#ent-note-add")?.addEventListener("click", async () => {
+      const ta = root.querySelector("#ent-note-input");
+      const text = (ta && ta.value || "").trim();
+      pstatus("Saving & finding names…", "working");
+      await saveNote(text);
+    });
+    root.querySelector("#ent-note-clear")?.addEventListener("click", async () => {
+      const ta = root.querySelector("#ent-note-input");
+      if (ta) ta.value = "";
+      root.querySelector("#ent-note-found") && (root.querySelector("#ent-note-found").hidden = true);
+      pstatus("Removing…", "working");
+      await saveNote("");   // clears the note; the Clear button disappears on next open
     });
 
     // Ask about this entity — answered only from the entries that mention it.
@@ -897,7 +907,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       // Done ends the current answer; Skip moves to the next name; Stop ends the interview.
       ov.querySelector("#iv-done").addEventListener("click", () => { if (iv && iv.finishTurn) iv.finishTurn(); });
       ov.querySelector("#iv-skip").addEventListener("click", () => { if (iv && iv.finishTurn) iv.finishTurn("__skip__"); });
-      ov.querySelector("#iv-stop").addEventListener("click", () => { if (iv) { iv.active = false; if (iv.finishTurn) iv.finishTurn("__stop__"); else endInterview(); } });
+      // Stop ALWAYS closes the overlay, even if the interview loop is wedged (e.g. speech recognition
+      // died) — so it can never get stuck open.
+      ov.querySelector("#iv-stop").addEventListener("click", () => { if (iv) { iv.active = false; try { iv.finishTurn && iv.finishTurn("__stop__"); } catch { /* */ } } endInterview(); });
       ov.querySelector("#iv-voice-sel").addEventListener("change", (e) => localStorage.setItem("tts-character", e.target.value));
     }
     if (s.name != null) { ov.querySelector("#iv-name").textContent = s.name; ov.querySelector("#iv-profile").innerHTML = ""; } // new name → clear old profile

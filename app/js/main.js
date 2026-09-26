@@ -88,6 +88,7 @@ let inputTab = "diary";
 
 // The guided "Next" button: after you complete a step, point you at the next page in the workflow.
 const nextBtn = document.getElementById("next-step");
+const nextGo = document.getElementById("next-step-go");
 const DEST_LABEL = { diary: "Journal", me: "Me", people: "Names", memoir: "Stories" };
 async function offerNext() {
   if (!nextBtn) return;
@@ -97,20 +98,21 @@ async function offerNext() {
   if (mode === "people") {
     // Chain through the names that still need a word, one at a time (skip the one you just did).
     const nextId = people.nextUndescribed ? await people.nextUndescribed() : null;
-    if (nextId) { nextBtn.dataset.entid = nextId; nextBtn.dataset.mode = "people"; nextBtn.textContent = "Next name to describe →"; nextBtn.hidden = false; return; }
+    if (nextId) { nextBtn.dataset.entid = nextId; nextBtn.dataset.mode = "people"; nextGo.textContent = "Next name to describe →"; nextBtn.hidden = false; return; }
     mode = "memoir"; // every name has a word → on to Stories
   }
   if (mode === activeTab) { nextBtn.hidden = true; return; } // already here — nothing to nudge toward
   nextBtn.dataset.mode = mode;
-  nextBtn.textContent = `Next: ${DEST_LABEL[mode] || "Journal"} →`;
+  nextGo.textContent = `Next: ${DEST_LABEL[mode] || "Journal"} →`;
   nextBtn.hidden = false;
 }
-nextBtn?.addEventListener("click", () => {
+nextGo?.addEventListener("click", () => {
   const m = nextBtn.dataset.mode, eid = nextBtn.dataset.entid;
   nextBtn.hidden = true;
   if (eid) { setMode("people"); people.openEntity(eid); }
   else setMode(m);
 });
+document.getElementById("next-step-x")?.addEventListener("click", () => { nextBtn.hidden = true; }); // dismiss the nudge
 
 // The "Lives" tab: your own journal + the sample-lives gallery (switching journals reloads).
 function renderLives() {

@@ -106,10 +106,16 @@ body { position: relative; }
 .browse-add[hidden] { display: none; }
 .browse-add:hover { filter: brightness(1.06); }
 
-/* The guided "Next" button — appears after you complete a step, floating bottom-right. */
-.next-step { position: fixed; right: 16px; bottom: 16px; z-index: 80; font: inherit; font-weight: 600; font-size: 0.95rem; color: #fff; background: var(--accent); border: none; border-radius: 999px; padding: 0.7rem 1.3rem; box-shadow: var(--shadow); cursor: pointer; animation: cap-pop 0.3s ease; }
+/* The guided "Next" button — appears after you complete a step, floating bottom-right, with a ✕ to
+   dismiss it so it never blocks the page. */
+.next-step { position: fixed; right: 16px; bottom: 16px; z-index: 80; display: inline-flex; align-items: stretch; background: var(--accent); border-radius: 999px; box-shadow: var(--shadow); overflow: hidden; animation: cap-pop 0.3s ease; }
 .next-step[hidden] { display: none; }
-.next-step:hover { filter: brightness(1.06); }
+.next-step-go { font: inherit; font-weight: 600; font-size: 0.95rem; color: #fff; background: transparent; border: none; padding: 0.7rem 0.8rem 0.7rem 1.3rem; cursor: pointer; }
+.next-step-go:hover { filter: brightness(1.08); }
+.next-step-x { font: inherit; font-size: 1.15rem; line-height: 1; color: #fff; background: transparent; border: none; border-left: 1px solid rgba(255,255,255,0.35); padding: 0 0.85rem; cursor: pointer; }
+.next-step-x:hover { background: rgba(0,0,0,0.12); }
+/* Leave room at the bottom so the floating button can't sit on top of a page's own controls. */
+.app-main { padding-bottom: 5.5rem; }
 .mode-btn-gear { padding: 0.5rem 0.7rem; font-size: 1rem; }
 .mode-more { position: relative; display: inline-flex; }
 .more-menu { position: absolute; top: calc(100% + 0.35rem); right: 0; z-index: 60; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 0.3rem; display: flex; flex-direction: column; min-width: 8.5rem; }

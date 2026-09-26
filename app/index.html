@@ -110,7 +110,10 @@
   <div class="detail-backdrop" id="detail-backdrop" hidden></div>
 
   <!-- After you finish a step, this points you to the page we think you should look at next. -->
-  <button type="button" id="next-step" class="next-step" hidden></button>
+  <div id="next-step" class="next-step" hidden>
+    <button type="button" class="next-step-go" id="next-step-go"></button>
+    <button type="button" class="next-step-x" id="next-step-x" aria-label="Dismiss">×</button>
+  </div>
 
   <footer style="text-align:center;padding:24px 0;margin-top:24px;font-size:12px;color:#8a8173;">© 2026 John Dimm</footer>
 
