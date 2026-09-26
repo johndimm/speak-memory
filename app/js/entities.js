@@ -177,7 +177,7 @@ async function extractFacts(ent, mentions) {
   });
   ent.facts = merged;
   const el = document.getElementById("ent-facts");
-  if (el) el.outerHTML = factsChecklist(ent);
+  if (el && el.closest("[data-ent]")?.dataset.ent === ent.id) el.outerHTML = factsChecklist(ent); // only on its own page
   const others = (names || []).filter((m) => m && m.name);
   if (others.length) {
     try {
@@ -222,6 +222,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
   let entEditing = null; // browse (read) vs edit (write); null = decide by whether the card has content
   let needOrder = null;    // ids of the names still needing a description, in the roster's order
   let autoRunning = false; // the background describer (one name at a time) is working
+  // Which page is on screen. Every render bumps viewSeq; slow background work checks it before it
+  // touches the page, so finishing late can never redraw — or pull you back to — a page you've left.
+  let viewSeq = 0;
+  const processing = new Set(); // ids whose saved words are still being turned into facts + a profile
   let editSnapshot = null; // the saved version when ✎ Edit was tapped — Cancel restores it
   const entDraftKey = (eid) => jkey(`draft:ent:${eid}`); // unsaved words in the box, kept while you're away
   let scanning = false;
@@ -407,6 +411,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     const describing = entities.filter((e) => canAutoDescribe(e, counts.get(e.id) || 0)).length;
     needOrder = undescribed.map((e) => e.id);
 
+    viewSeq++;
     root.innerHTML = `
       <div class="entities">
         <div class="ent-head">
@@ -502,7 +507,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
 
     // Profile paragraph — written from the mentions PLUS your notes.
     const profileFrag = `<div class="node-summary ent-summary" id="ent-summary">
-          ${ent.profile
+          ${processing.has(id) ? `<p class="ent-ask-working">◷ Updating ${escapeHtml(ent.canonical)}'s description…</p>`
+            : ent.profile
             ? `${renderAnswerText(ent.profile)}<button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`
             : mentions.length ? `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>` : `<p class="ent-empty">Nothing yet — tap Edit to add a few facts or notes.</p>`}
         </div>`;
@@ -571,14 +577,16 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         ${actionsFrag}
         ${selfMode ? "" : `<button type="button" class="delete-entry-btn" id="ent-del-big">Delete</button>`}`;
 
+    const mySeq = ++viewSeq;
+    const live = () => viewSeq === mySeq; // still this page, in this mode?
     root.innerHTML = `
-      <div class="entities${selfMode ? " ent-selfpage" : ""}${entEditing ? " ent-editing" : ""}">
+      <div class="entities${selfMode ? " ent-selfpage" : ""}${entEditing ? " ent-editing" : ""}" data-ent="${escapeHtml(id)}">
         ${breadcrumb}
         ${entEditing ? editBody : browseBody}
       </div>`;
 
-    const pstatus = (msg, cls) => { const el = root.querySelector("#ent-pstatus"); if (!el) return; el.textContent = msg; el.className = "node-comment-status" + (cls ? " " + cls : ""); };
-    const dstatus = (msg, cls) => { const el = root.querySelector("#ent-dstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
+    const pstatus = (msg, cls) => { const el = live() && root.querySelector("#ent-pstatus"); if (!el) return; el.textContent = msg; el.className = "node-comment-status" + (cls ? " " + cls : ""); };
+    const dstatus = (msg, cls) => { const el = live() && root.querySelector("#ent-dstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
 
     // Edit ⇄ Done toggles between writing and reading this card.
     // ✎ Edit → remember the saved version (so Cancel can restore it), then show the box.
@@ -609,9 +617,11 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       try {
         const reply = await writeProfile(ent, mentions);
         ent.profile = reply;
+        if (!live()) return; // you've moved on — it's saved; don't touch the page you're on now
         box.innerHTML = `${renderAnswerText(reply)}<button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`;
         root.querySelector("#ent-summary-refresh")?.addEventListener("click", genProfile);
       } catch (err) {
+        if (!live()) return;
         box.innerHTML = `<p class="ent-ask-err">Couldn't write a profile: ${escapeHtml((err && err.message) || String(err))}</p><button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Try again</button>`;
         root.querySelector("#ent-summary-refresh")?.addEventListener("click", genProfile);
       }
@@ -620,9 +630,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     // Auto-write on first open, OR refresh a profile that's now stale — written before you added
     // notes (so it won't keep saying "little is known" above your detailed notes).
     const stale = (ent.profileAt || 0) < (ent.updatedAt || 0);
-    if ((!ent.profile || stale) && (mentions.length || ent.note)) genProfile();
+    if (!processing.has(id) && (!ent.profile || stale) && (mentions.length || ent.note)) genProfile();
     // Backfill the standard-facts checklist on open, when it's empty but there's something to read.
-    if (FACT_FIELDS[ent.entityKind || "person"] && !ent.facts && (ent.note || mentions.length)) extractFacts(ent, mentions);
+    if (!processing.has(id) && FACT_FIELDS[ent.entityKind || "person"] && !ent.facts && (ent.note || mentions.length)) extractFacts(ent, mentions);
 
     // Edit/Done toggle — flip between the browse and edit versions of the page.
     // (defined once; see above)
@@ -644,7 +654,11 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     // Merge extracted facts in — only fills a topic that's still blank, so live extraction can't
     // clobber something you corrected by hand.
     async function applyFacts(newFacts) {
+      // A live reading that lands after you saved or left belongs to text that's gone — drop it
+      // (otherwise clearing your words and saving quickly would bring the old facts back).
+      if (!live()) return;
       const fresh = (await getEntity(id)) || ent;
+      if (!live()) return;
       const facts = { ...(fresh.facts || {}) };
       let changed = false;
       for (const [k, v] of Object.entries(newFacts || {})) {
@@ -653,7 +667,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       }
       if (changed) { await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() }); ent.facts = facts; refreshChips(); onProgress && onProgress(); }
     }
-    function refreshChips() { const w = root.querySelector("#fact-chips"); if (w) w.innerHTML = factChipsInner(ent); }
+    function refreshChips() { const w = live() && root.querySelector("#fact-chips"); if (w) w.innerHTML = factChipsInner(ent); }
     // Tap a chip → correct that one field inline (the only "manual" path; talking is the main one).
     const chipsWrap = root.querySelector("#fact-chips");
     const chipLabels = new Map(factFields(ent));
@@ -706,53 +720,57 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       noteCap.update();
     }
 
-    // Save = REPLACE the note with what's in the box (so you can correct or delete bad text).
-    async function saveNote(text) {
-      const fresh = (await getEntity(id)) || ent;
-      await putEntity({ ...fresh, note: text, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() });
-      ent.note = text; ent.recognized = true;
+    // After Save: turn your words into facts, linked names, and a fresh profile. Runs in the
+    // BACKGROUND with no page access — you may be on another name by the time it finishes.
+    async function processNote(text) {
       if (!text) {
         // Your words are gone → so are the facts and profile drawn from them (mentions can rewrite a profile).
-        const cur = (await getEntity(id)) || ent;
-        await putEntity({ ...cur, facts: {}, profile: "", profileAt: 0, updatedAt: Date.now() });
-        ent.facts = {}; ent.profile = "";
-        pstatus("Notes cleared.", "ok"); genProfile(); onProgress && onProgress(); return;
+        await updateEntity(id, ent, (cur) => ({ ...cur, facts: {}, profile: "", profileAt: 0, updatedAt: Date.now() }));
+      } else {
+        // A note names other people and carries standard facts. For kinds with a fact checklist
+        // (person/place/org) extractFacts does both (facts + names); otherwise just pull the names.
+        try {
+          const fresh = (await getEntity(id)) || ent;
+          if (FACT_FIELDS[fresh.entityKind || "person"]) await extractFacts(fresh, mentions);
+          else {
+            const { mentions: mm } = await postEntities(text);
+            const refs = mm && mm.length ? (await resolveEntityNames(mm)).filter((rid) => rid !== id) : [];
+            if (refs.length) await updateEntity(id, ent, (cur) => ({ ...cur, noteRefs: [...new Set([...(cur.noteRefs || []), ...refs])], updatedAt: Date.now() }));
+          }
+        } catch { /* the words are saved; facts can be refreshed later */ }
       }
-      // A note names other people and carries standard facts. For kinds with a fact checklist
-      // (person/place/org) extractFacts does both (facts + names); otherwise just pull the names.
-      try {
-        const fresh2 = (await getEntity(id)) || ent;
-        if (FACT_FIELDS[fresh2.entityKind || "person"]) {
-          const found = await extractFacts(fresh2, mentions);
-          pstatus(found.length ? `Saved · found ${found.length} name${found.length === 1 ? "" : "s"}.` : "Saved.", "ok");
-        } else {
-          const { mentions: mm } = await postEntities(text);
-          const refs = mm && mm.length ? (await resolveEntityNames(mm)).filter((rid) => rid !== id) : [];
-          if (refs.length) { const cur = (await getEntity(id)) || ent; await putEntity({ ...cur, noteRefs: [...new Set([...(cur.noteRefs || []), ...refs])], updatedAt: Date.now() }); }
-          pstatus(refs.length ? `Saved · found ${refs.length} name${refs.length === 1 ? "" : "s"}.` : "Saved.", "ok");
-        }
-      } catch { pstatus("", ""); }
-      genProfile();
-      onProgress && onProgress(); // a note describes this name → the guided "Next" can move on
+      const fresh = (await getEntity(id)) || ent;
+      if (fresh.note || mentions.length) { try { await writeProfile(fresh, mentions); } catch { /* Refresh on its page */ } }
     }
-    // Save = keep everything you changed (your words + name/kind/aliases), re-summarize, back to READ.
+    // Save = keep everything you changed (your words + name/kind/aliases) and go straight to READ.
+    // The slow part (facts, names, profile) follows in the background — it never pulls you back here.
     root.querySelector("#ent-note-add")?.addEventListener("click", async () => {
       const ta = root.querySelector("#ent-note-input");
       const text = (ta && ta.value || "").trim();
       if (!text && !hasContent) { pstatus("Nothing to save yet.", ""); return; }
       pstatus("Saving…", "working");
-      // Name / kind / aliases from the Details fold.
+      // Name / kind / aliases from the Details fold, plus your words (REPLACES the note, so you can
+      // correct or delete bad text).
       const newName = (root.querySelector("#ent-rename")?.value || "").trim();
       const kindV = root.querySelector("#ent-kind")?.value;
       const aliasesV = (root.querySelector("#ent-aliases")?.value || "").split(",").map((s) => s.trim()).filter(Boolean);
       const cur = (await getEntity(id)) || ent;
       const renamed = newName && newName !== cur.canonical;
-      await putEntity({ ...cur, canonical: newName || cur.canonical, entityKind: kindV || cur.entityKind, aliases: aliasesV, updatedAt: Date.now() });
-      Object.assign(ent, { canonical: newName || cur.canonical, entityKind: kindV || cur.entityKind, aliases: aliasesV });
+      await putEntity({ ...cur, canonical: newName || cur.canonical, entityKind: kindV || cur.entityKind, aliases: aliasesV, note: text, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() });
+      Object.assign(ent, { canonical: newName || cur.canonical, entityKind: kindV || cur.entityKind, aliases: aliasesV, note: text, recognized: true });
       if (renamed || kindV !== cur.entityKind) { resetEntityIndex(); setEntityMap(new Map((await getAllEntities()).map((e) => [e.id, e.canonical]))); }
-      await saveNote(text);
       try { localStorage.removeItem(entDraftKey(id)); } catch { /* */ }
-      editSnapshot = null; entEditing = null; renderEntity(id); // show the result in READ; ✎ Edit to add more
+      onProgress && onProgress(); // a note describes this name → the guided "Next" can move on
+      processing.add(id);
+      editSnapshot = null; entEditing = null;
+      await renderEntity(id); // your result, in READ, right away
+      const shown = viewSeq;
+      processNote(text).finally(() => {
+        processing.delete(id);
+        // Still reading this very page, untouched? Then show the finished facts + profile in place.
+        // Anywhere else — another name, Edit, another tab — leave you alone.
+        if (viewSeq === shown && openId === id && !root.hidden) renderEntity(id);
+      });
     });
 
     // Ask about this entity — answered only from the entries that mention it.
@@ -772,6 +790,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         if (ent.note) entries.unshift({ date: `My notes about ${ent.canonical}`, dayOfWeek: "", brief: "", full: ent.note });
         const sys = `Answer only about "${ent.canonical}"${(ent.aliases && ent.aliases.length) ? ` (also known as ${ent.aliases.join(", ")})` : ""}. Use only the entries below (they include "My notes about ${ent.canonical}", my own authoritative words, plus the journal entries mentioning them). Be concise and cite dates.`;
         const { reply } = await postChat([{ role: "user", content: `${sys}\n\n${q}` }], entries);
+        if (!live()) return; // you've left this page
         ans.innerHTML = renderAnswerText(reply)
           + `<button type="button" class="ent-ask-save" id="ent-ask-save">Save as background</button>`;
         root.querySelector("#ent-ask-save")?.addEventListener("click", async () => {
@@ -785,6 +804,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
           genProfile();
         });
       } catch (err) {
+        if (!live()) return;
         ans.innerHTML = `<p class="ent-ask-err">Couldn't answer: ${escapeHtml((err && err.message) || String(err))}</p>`;
       }
     });
