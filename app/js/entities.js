@@ -407,8 +407,11 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
             : mentions.length ? `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>` : `<p class="ent-empty">No mentions yet — add a note below to start a profile.</p>`}
         </div>`;
 
-    // Your notes — a running transcript in your words, folded into the profile.
-    const notesFrag = `<section class="node-comment">
+    // Your notes — a running transcript in your words, folded into the profile. Hidden by default
+    // behind a pencil; the page stays clean until you choose to write.
+    const notesFrag = `<div class="node-comment-wrap">
+        <button type="button" class="ent-notes-toggle" id="ent-notes-toggle" aria-expanded="false">✎ ${selfMode ? "Add notes about you" : `Add notes about ${escapeHtml(ent.canonical)}`}</button>
+        <section class="node-comment" id="ent-notes-section" hidden>
           <p class="nav-hint">${selfMode ? "Anything else in your own words — the app finds names and facts as you write." : `Your notes about ${escapeHtml(ent.canonical)} — added to the profile and to summaries that mention them.`}</p>
           ${ent.note ? `<div class="ent-note-existing">${renderAnswerText(ent.note)}</div>` : ""}
           <div class="node-comment-row">
@@ -417,7 +420,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           </div>
           <div class="cap-found" id="ent-note-found" hidden></div>
           <div class="node-comment-actions"><button type="button" class="node-comment-add" id="ent-note-add">Add &amp; update profile</button><span class="node-comment-status" id="ent-pstatus"></span></div>
-        </section>`;
+        </section></div>`;
 
     const askFrag = `<div class="ent-ask">
           <form class="ent-ask-form" id="ent-ask-form">
@@ -506,6 +509,17 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const noteOnText = () => noteCap.update();
     noteTa.addEventListener("input", noteOnText);
     setupDictation(root.querySelector("#ent-note-mic"), noteTa, root.querySelector("#ent-pstatus"), noteOnText);
+
+    // Notes stay hidden behind the pencil until you choose to write; opening focuses the box.
+    const notesToggle = root.querySelector("#ent-notes-toggle");
+    const notesSection = root.querySelector("#ent-notes-section");
+    notesToggle?.addEventListener("click", () => {
+      const open = notesSection.hidden;
+      notesSection.hidden = !open;
+      notesToggle.setAttribute("aria-expanded", String(open));
+      notesToggle.classList.toggle("open", open);
+      if (open) { noteTa.focus(); noteCap.refresh(); }
+    });
 
     // ---- The keyword game: tap (or say) a topic → answer it → it ticks off and moves to the next --
     function wireKeywordGame() {

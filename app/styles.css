@@ -1459,6 +1459,13 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-more > summary::before { content: "▸ "; }
 .ent-more[open] > summary::before { content: "▾ "; }
 .ent-more-body { margin-top: 0.4rem; }
+
+/* Notes hidden behind a pencil on Me / Name pages — the page stays clean until you choose to write. */
+.node-comment-wrap { margin: 0.6rem 0; }
+.ent-notes-toggle { font: inherit; font-size: 0.92rem; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 999px; padding: 0.4rem 0.9rem; cursor: pointer; }
+.ent-notes-toggle:hover { border-color: var(--accent); }
+.ent-notes-toggle.open { color: var(--ink-soft); }
+.node-comment-wrap .node-comment { margin-top: 0.6rem; }
 .mv-phase { font-size: 1.05rem; color: var(--ink); min-height: 1.4em; margin-bottom: 0.4rem; }
 .iv-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.8rem; }
 .ent-note-existing { margin-bottom: 0.6rem; }
