@@ -98,30 +98,30 @@ function factsChecklist(ent) {
   return `<ul class="ent-facts-list" id="ent-facts">${rows}</ul>`;
 }
 
-// The keyword-game fields for an entity: the topics we're collecting. "You" gets a life-focused set;
-// anyone else gets their kind's standard facts. These are single, punchy labels — a topic you tap (or
-// say), then answer.
+// The fact fields for an entity. "You" gets a life-focused set; anyone else gets their kind's facts.
 const SELF_FIELDS = [["age", "Age"], ["location", "Home"], ["livesWith", "Lives with"], ["job", "Work"], ["friends", "Friends"]];
-function gameFields(ent) {
+function factFields(ent) {
   if (isSelfEntity(ent)) return SELF_FIELDS;
   return FACT_FIELDS[ent.entityKind || "person"] || [];
 }
-// The compact "say a topic, then answer" panel — a chip per keyword (✓ once answered), and a slot for
-// the one you're filling. Brief up top; the profile/notes/timeline live below, out of the way.
-function keywordGame(ent) {
-  const fields = gameFields(ent);
+// Read-only facts, for the BROWSE view — a clean "Label: value" list of what's known (empties hidden).
+function factsView(ent) {
+  const fields = factFields(ent);
   if (!fields.length) return "";
   const f = ent.facts || {};
-  const chips = fields.map(([k, label]) => {
-    const v = factValue(f, k);
-    return `<button type="button" class="kw-chip${v ? " filled" : ""}" data-k="${escapeHtml(k)}">
-      <span class="kw-check">${v ? "✓" : "+"}</span><span class="kw-k">${escapeHtml(label)}</span>${v ? `<span class="kw-v">${escapeHtml(v)}</span>` : ""}</button>`;
-  }).join("");
-  return `<div class="kw-game" id="kw-game">
-    <p class="kw-instr">Tap a topic, then say or type the answer.</p>
-    <div class="kw-chips">${chips}</div>
-    <div class="kw-active" id="kw-active" hidden></div>
-  </div>`;
+  const rows = fields.map(([k, label]) => [label, factValue(f, k)]).filter(([, v]) => v && v.trim());
+  if (!rows.length) return "";
+  return `<dl class="ent-facts-view">${rows.map(([label, v]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl>`;
+}
+// Editable facts, for the EDIT view — one labelled input per field, saved as you change them.
+function factsForm(ent) {
+  const fields = factFields(ent);
+  if (!fields.length) return "";
+  const f = ent.facts || {};
+  const rows = fields.map(([k, label]) =>
+    `<label class="ent-fact-edit"><span>${escapeHtml(label)}</span>
+      <input type="text" class="ent-fact-input" data-fk="${escapeHtml(k)}" value="${escapeHtml(factValue(f, k))}" autocomplete="off"></label>`).join("");
+  return `<div class="ent-facts-form" id="ent-facts-form">${rows}</div>`;
 }
 
 // Write (and save) an entity's profile from MY notes + the journal entries that mention it. The note
@@ -188,6 +188,7 @@ function itemSortKey(it) {
 
 export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
   let openId = null; // entity being viewed, or null = the roster
+  let entEditing = false; // an entity page has two versions: browse (read) and edit (form + notes)
   let scanning = false;
   let showSingles = false; // one-off names (mentioned only once) are hidden until you ask for them
 
@@ -361,7 +362,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     root.querySelector("#ent-scan")?.addEventListener("click", () => scan(setStatus));
     root.querySelector("#ent-interview")?.addEventListener("click", () => startInterview());
     root.querySelector("#ent-singles")?.addEventListener("click", () => { showSingles = !showSingles; render(); });
-    root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) renderEntity(openId); }); // open the first name still missing a description
+    root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) { entEditing = true; renderEntity(openId); } }); // jump straight into editing the first name that needs a description
     root.querySelector("#ent-onboard")?.addEventListener("click", async () => {
       const { startOnboarding } = await import("./onboard.js");
       startOnboarding(() => render()); // refresh the roster with the names it found
@@ -396,31 +397,18 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const mergeOpts = others.map((e) => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.canonical)}</option>`).join("");
 
     const selfMode = isSelfEntity(ent);
+    const subtitle = `<p class="node-subtitle">${KIND_LABEL[ent.entityKind || "person"]}${(!selfMode && ent.aliases && ent.aliases.length) ? ` · also ${escapeHtml(ent.aliases.join(", "))}` : ""}</p>`;
+    const flag = ent.recognized === false ? `<p class="ent-flag-banner">🕳 You didn't recognize this name — a possible mistake or a memory hole. Add anything you can in Edit, or it stays flagged.</p>` : "";
 
-    // The interactive keyword game — the topics we're collecting, tap/say → answer.
-    const gameFrag = keywordGame(ent);
-
-    // Profile paragraph — written from the mentions PLUS your own notes below.
+    // Profile paragraph — written from the mentions PLUS your notes.
     const profileFrag = `<div class="node-summary ent-summary" id="ent-summary">
           ${ent.profile
             ? `${renderAnswerText(ent.profile)}<button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`
-            : mentions.length ? `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>` : `<p class="ent-empty">No mentions yet — add a note below to start a profile.</p>`}
+            : mentions.length ? `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>` : `<p class="ent-empty">Nothing yet — tap Edit to add a few facts or notes.</p>`}
         </div>`;
 
-    // Your notes — a running transcript in your words, folded into the profile. Hidden by default
-    // behind a pencil; the page stays clean until you choose to write.
-    const notesFrag = `<div class="node-comment-wrap">
-        <button type="button" class="ent-notes-toggle" id="ent-notes-toggle" aria-expanded="false">✎ ${selfMode ? "Add notes about you" : `Add notes about ${escapeHtml(ent.canonical)}`}</button>
-        <section class="node-comment" id="ent-notes-section" hidden>
-          <p class="nav-hint">${selfMode ? "Anything else in your own words — the app finds names and facts as you write." : `Your notes about ${escapeHtml(ent.canonical)} — added to the profile and to summaries that mention them.`}</p>
-          ${ent.note ? `<div class="ent-note-existing">${renderAnswerText(ent.note)}</div>` : ""}
-          <div class="node-comment-row">
-            <textarea id="ent-note-input" class="node-comment-input" rows="2" placeholder="Speak or type — who they are, how you're connected, anything the journal gets wrong…"></textarea>
-            <button type="button" class="node-comment-mic" id="ent-note-mic" hidden aria-label="Dictate">🎙</button>
-          </div>
-          <div class="cap-found" id="ent-note-found" hidden></div>
-          <div class="node-comment-actions"><button type="button" class="node-comment-add" id="ent-note-add">Add &amp; update profile</button><span class="node-comment-status" id="ent-pstatus"></span></div>
-        </section></div>`;
+    const mentionsFrag = `<h3 class="ent-kind">${mentions.length} mention${mentions.length === 1 ? "" : "s"}, in time order</h3>
+        <div class="ent-mentions">${rows || '<p class="ent-empty">No mentions tagged yet.</p>'}</div>`;
 
     const askFrag = `<div class="ent-ask">
           <form class="ent-ask-form" id="ent-ask-form">
@@ -430,8 +418,16 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           <div id="ent-ask-answer" class="ent-ask-answer" hidden></div>
         </div>`;
 
-    const mentionsFrag = `<h3 class="ent-kind">${mentions.length} mention${mentions.length === 1 ? "" : "s"}, in time order</h3>
-        <div class="ent-mentions">${rows || '<p class="ent-empty">No mentions tagged yet.</p>'}</div>`;
+    // The notes editor — only in Edit mode (no pencil toggle needed; Edit IS the reveal).
+    const notesFrag = `<section class="node-comment">
+          ${ent.note ? `<div class="ent-note-existing">${renderAnswerText(ent.note)}</div>` : ""}
+          <div class="node-comment-row">
+            <textarea id="ent-note-input" class="node-comment-input" rows="3" placeholder="${selfMode ? "Anything in your own words — names and facts are picked up as you write…" : `Who they are, how you're connected, anything the journal gets wrong…`}"></textarea>
+            <button type="button" class="node-comment-mic" id="ent-note-mic" hidden aria-label="Dictate">🎙</button>
+          </div>
+          <div class="cap-found" id="ent-note-found" hidden></div>
+          <div class="node-comment-actions"><button type="button" class="node-comment-add" id="ent-note-add">Add &amp; update profile</button><span class="node-comment-status" id="ent-pstatus"></span></div>
+        </section>`;
 
     const kindFrag = `<details class="node-fold ent-details">
           <summary>Kind, aliases &amp; merge</summary>
@@ -449,25 +445,34 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           </div>
         </details>`;
 
-    // Layout: on the "Me" tab the game leads and everything richer folds away below, so what to do is
-    // immediately clear on a small screen. On a name's page the game sits under the profile as before.
-    const head = `
-        ${selfMode ? "" : `<button type="button" class="ent-back" id="ent-back">← All names</button>`}
-        <!-- The name is editable right here — fixing a mishearing renames it everywhere at once. -->
+    // Two versions of the page: BROWSE (paragraph + facts, read-only) and EDIT (name + facts form +
+    // notes). The Edit/Done button toggles between them — no per-visit instructions cluttering the read.
+    const topbar = `<div class="ent-topbar">
+        ${selfMode ? "<span></span>" : `<button type="button" class="ent-back" id="ent-back">← All names</button>`}
+        <button type="button" class="ent-edit-toggle" id="ent-edit-toggle">${entEditing ? "✓ Done" : "✎ Edit"}</button>
+      </div>`;
+
+    const browseBody = `
+        <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
+        ${subtitle}${flag}
+        ${profileFrag}
+        ${factsView(ent)}
+        ${mentionsFrag}
+        ${askFrag}`;
+
+    const editBody = `
         <input type="text" class="node-name ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" aria-label="Name" spellcheck="false">
-        <p class="node-subtitle">${KIND_LABEL[ent.entityKind || "person"]}${(ent.aliases && ent.aliases.length) ? ` · also ${escapeHtml(ent.aliases.join(", "))}` : ""} · <span class="ent-rename-hint">edit the name above to fix a spelling — it updates every summary</span></p>
-        ${ent.recognized === false ? `<p class="ent-flag-banner">🕳 You didn't recognize this name — a possible mistake or a memory hole. Add anything you can below, or it stays flagged.</p>` : ""}`;
+        ${subtitle}${flag}
+        <h3 class="ent-edit-h">Facts</h3>
+        ${factsForm(ent)}
+        <h3 class="ent-edit-h">Notes${selfMode ? " about you" : ""}</h3>
+        ${notesFrag}
+        ${kindFrag}`;
 
     root.innerHTML = `
-      <div class="entities${selfMode ? " ent-selfpage" : ""}">
-        ${head}
-        ${selfMode
-          ? `${gameFrag}
-        <details class="ent-more">
-          <summary>More about you — profile, notes &amp; timeline</summary>
-          <div class="ent-more-body">${profileFrag}${notesFrag}${askFrag}${mentionsFrag}${kindFrag}</div>
-        </details>`
-          : `${profileFrag}${gameFrag}${notesFrag}${askFrag}${mentionsFrag}${kindFrag}`}
+      <div class="entities${selfMode ? " ent-selfpage" : ""}${entEditing ? " ent-editing" : ""}">
+        ${topbar}
+        ${entEditing ? editBody : browseBody}
       </div>`;
 
     const pstatus = (msg, cls) => { const el = root.querySelector("#ent-pstatus"); if (!el) return; el.textContent = msg; el.className = "node-comment-status" + (cls ? " " + cls : ""); };
@@ -500,102 +505,31 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     // Backfill the standard-facts checklist on open, when it's empty but there's something to read.
     if (FACT_FIELDS[ent.entityKind || "person"] && !ent.facts && (ent.note || mentions.length)) extractFacts(ent, mentions);
 
-    // Your notes — a growing transcript in your words. Adding appends to the note and rewrites the
-    // profile (and, via the roster, folds into summaries that mention this name as they're rewritten).
-    // Live name capture on the note box: names light up and collect below AS YOU TYPE OR DICTATE, so
-    // it "listens" while you write (fixes typing-with-gboard not surfacing names like "Natalie").
+    // Edit/Done toggle — flip between the browse and edit versions of the page.
+    root.querySelector("#ent-edit-toggle")?.addEventListener("click", () => { entEditing = !entEditing; renderEntity(id); });
+
+    // ---- EDIT-ONLY wiring (these elements exist only in the edit version of the page) ----------
     const noteTa = root.querySelector("#ent-note-input");
-    const noteCap = attachLiveCapture(noteTa, { mount: root.querySelector("#ent-note-found"), buckets: ["names"] });
-    const noteOnText = () => noteCap.update();
-    noteTa.addEventListener("input", noteOnText);
-    setupDictation(root.querySelector("#ent-note-mic"), noteTa, root.querySelector("#ent-pstatus"), noteOnText);
+    if (noteTa) {
+      // Live name capture on the note box: names light up and collect below AS YOU TYPE OR DICTATE.
+      const noteCap = attachLiveCapture(noteTa, { mount: root.querySelector("#ent-note-found"), buckets: ["names"] });
+      const noteOnText = () => noteCap.update();
+      noteTa.addEventListener("input", noteOnText);
+      setupDictation(root.querySelector("#ent-note-mic"), noteTa, root.querySelector("#ent-pstatus"), noteOnText);
+    }
 
-    // Notes stay hidden behind the pencil until you choose to write; opening focuses the box.
-    const notesToggle = root.querySelector("#ent-notes-toggle");
-    const notesSection = root.querySelector("#ent-notes-section");
-    notesToggle?.addEventListener("click", () => {
-      const open = notesSection.hidden;
-      notesSection.hidden = !open;
-      notesToggle.setAttribute("aria-expanded", String(open));
-      notesToggle.classList.toggle("open", open);
-      if (open) { noteTa.focus(); noteCap.refresh(); }
-    });
-
-    // ---- The keyword game: tap (or say) a topic → answer it → it ticks off and moves to the next --
-    function wireKeywordGame() {
-      const game = root.querySelector("#kw-game");
-      if (!game) return;
-      const activeBox = root.querySelector("#kw-active");
-      const fields = gameFields(ent);
-      const labelOf = new Map(fields);
-      const keyNorm = (s) => String(s || "").toLowerCase().replace(/[^a-z]/g, "");
-      const matchKeyword = (text) => { const t = keyNorm(text); return (fields.find(([k, label]) => keyNorm(label) === t || keyNorm(k) === t) || [])[0] || null; };
-      const chipEl = (k) => game.querySelector(`.kw-chip[data-k="${window.CSS && CSS.escape ? CSS.escape(k) : k}"]`);
-      let activeK = null, listening = false, control = null;
-
-      function refreshChip(k) {
-        const el = chipEl(k); if (!el) return;
-        const v = factValue(ent.facts || {}, k);
-        el.classList.toggle("filled", !!v);
-        el.querySelector(".kw-check").textContent = v ? "✓" : "+";
-        let ve = el.querySelector(".kw-v");
-        if (v) { if (!ve) { ve = document.createElement("span"); ve.className = "kw-v"; el.appendChild(ve); } ve.textContent = v; }
-        else if (ve) ve.remove();
-      }
-      async function saveVal(k, val) {
-        val = String(val || "").trim();
+    // The facts form: save each field as you change it (a blank field clears just that fact).
+    root.querySelectorAll(".ent-fact-input").forEach((inp) => {
+      inp.addEventListener("change", async () => {
+        const k = inp.dataset.fk, val = inp.value.trim();
         const fresh = (await getEntity(id)) || ent;
         const facts = { ...(fresh.facts || {}) };
-        if (k === "age") { const n = (val.match(/\d{1,3}/) || [])[0]; facts.age = n ? Number(n) : val; }
-        else facts[k] = val;
+        if (k === "age") { const n = (val.match(/\d{1,3}/) || [])[0]; if (n) facts.age = Number(n); else if (val) facts.age = val; else delete facts.age; }
+        else if (val) facts[k] = val; else delete facts[k];
         await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() });
-        ent.facts = facts; refreshChip(k);
-      }
-      function nextEmpty(afterK) {
-        const ks = fields.map(([k]) => k);
-        const start = ks.indexOf(afterK);
-        for (let i = 1; i <= ks.length; i++) { const k = ks[(start + i) % ks.length]; if (!factValue(ent.facts || {}, k)) return k; }
-        return null;
-      }
-      async function commit(val) {
-        const k = activeK; if (!k) return;
-        await saveVal(k, val);
-        const nk = nextEmpty(k);
-        if (nk) showActive(nk);
-        else { activeBox.hidden = true; game.querySelectorAll(".kw-chip").forEach((c) => c.classList.remove("active")); genProfile(); }
-      }
-      function toggleMic() {
-        const mic = root.querySelector("#kw-mic");
-        if (listening) { control && control.stop && control.stop(); return; }
-        if (!hasSpeechInput) return;
-        listening = true; mic && mic.classList.add("on");
-        const hint = root.querySelector("#kw-hint"); if (hint) hint.textContent = "Listening… say the answer, or a topic name to switch.";
-        control = {};
-        vListen({ silenceMs: 4000, endWords: ["done", "next", "over"], onInterim: (t) => { const inp = root.querySelector("#kw-input"); if (inp) inp.value = t; }, control }).then(async ({ text, command }) => {
-          listening = false; mic && mic.classList.remove("on");
-          if (command === "stop") { activeBox.hidden = true; game.querySelectorAll(".kw-chip").forEach((c) => c.classList.remove("active")); return; }
-          const kw = matchKeyword(text);              // "you say a keyword to highlight it"
-          if (kw) { showActive(kw); return; }
-          if (text && text.trim()) await commit(text); // "then give it a value"
-        });
-      }
-      function showActive(k) {
-        activeK = k;
-        const label = labelOf.get(k), cur = factValue(ent.facts || {}, k);
-        activeBox.hidden = false;
-        activeBox.innerHTML = `<label class="kw-active-label">${escapeHtml(label)}</label>
-          <div class="kw-input-row"><input class="kw-input" id="kw-input" value="${escapeHtml(cur)}" placeholder="type the answer" autocomplete="off">
-          ${hasSpeechInput ? `<button type="button" class="kw-mic" id="kw-mic" aria-label="Speak">🎤</button>` : ""}</div>
-          <p class="kw-hint" id="kw-hint">Enter saves${hasSpeechInput ? " · 🎤 to speak · say a topic to switch" : ""}.</p>`;
-        game.querySelectorAll(".kw-chip").forEach((c) => c.classList.toggle("active", c.dataset.k === k));
-        const inp = root.querySelector("#kw-input");
-        inp.focus(); try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch { /* */ }
-        inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commit(inp.value); } });
-        root.querySelector("#kw-mic")?.addEventListener("click", toggleMic);
-      }
-      game.querySelectorAll(".kw-chip").forEach((c) => c.addEventListener("click", () => showActive(c.dataset.k)));
-    }
-    wireKeywordGame();
+        ent.facts = facts;
+      });
+    });
 
     root.querySelector("#ent-note-add")?.addEventListener("click", async () => {
       const ta = root.querySelector("#ent-note-input");
@@ -664,23 +598,25 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
     root.querySelector("#ent-back")?.addEventListener("click", () => { openId = null; render(); });
 
-    // Inline rename — fix a mishearing here and it updates every summary (tokens re-render to the new
-    // name) without re-summarizing anything.
+    // Inline rename (edit version only) — fix a mishearing here and it updates every summary (tokens
+    // re-render to the new name) without re-summarizing anything.
     const renameEl = root.querySelector("#ent-rename");
-    const doRename = async () => {
-      const v = renameEl.value.trim();
-      if (!v || v === ent.canonical) return;
-      const fresh = (await getEntity(id)) || ent;
-      await putEntity({ ...fresh, canonical: v, updatedAt: Date.now() });
-      ent.canonical = v;
-      resetEntityIndex();
-      setEntityMap(new Map((await getAllEntities()).map((e) => [e.id, e.canonical]))); // tokens → new name now
-      renderEntity(id);
-    };
-    renameEl.addEventListener("change", doRename);
-    renameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); renameEl.blur(); } });
-    renameEl.addEventListener("blur", doRename);
-    root.querySelector("#ent-save").addEventListener("click", async () => {
+    if (renameEl) {
+      const doRename = async () => {
+        const v = renameEl.value.trim();
+        if (!v || v === ent.canonical) return;
+        const fresh = (await getEntity(id)) || ent;
+        await putEntity({ ...fresh, canonical: v, updatedAt: Date.now() });
+        ent.canonical = v;
+        resetEntityIndex();
+        setEntityMap(new Map((await getAllEntities()).map((e) => [e.id, e.canonical]))); // tokens → new name now
+        renderEntity(id);
+      };
+      renameEl.addEventListener("change", doRename);
+      renameEl.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); renameEl.blur(); } });
+      renameEl.addEventListener("blur", doRename);
+    }
+    root.querySelector("#ent-save")?.addEventListener("click", async () => {
       const fresh = (await getEntity(id)) || ent;
       const next = {
         ...fresh,
@@ -910,7 +846,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       return;
     }
     const card = e.target.closest(".ent-card[data-open]");
-    if (card) { openId = card.dataset.open; renderEntity(openId); return; }
+    if (card) { openId = card.dataset.open; entEditing = false; renderEntity(openId); return; }
     const m = e.target.closest(".ent-mention[data-goto]");
     if (!m) return;
     if (m.dataset.kind === "day") onOpenDay?.(m.dataset.goto);
@@ -919,8 +855,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
 
   return {
     open() { openId = null; render(); }, // Names always lands on the roster (Me lives in its own tab)
-    async openSelf() { const s = await ensureSelf(); openId = s.id; renderEntity(s.id); }, // the "Me" tab
-    openEntity(id) { openId = id; renderEntity(id); }, // jump straight to one entity (from a name-link)
+    async openSelf() { const s = await ensureSelf(); openId = s.id; entEditing = false; renderEntity(s.id); }, // the "Me" tab
+    openEntity(id) { openId = id; entEditing = false; renderEntity(id); }, // jump straight to one entity (from a name-link)
     close() { if (iv) { iv.active = false; endInterview(); } },
   };
 }
