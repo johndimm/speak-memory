@@ -113,15 +113,19 @@ function factsView(ent) {
   if (!rows.length) return "";
   return `<dl class="ent-facts-view">${rows.map(([label, v]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(v)}</dd></div>`).join("")}</dl>`;
 }
-// Editable facts, for the EDIT view — one labelled input per field, saved as you change them.
-function factsForm(ent) {
-  const fields = factFields(ent);
-  if (!fields.length) return "";
+// The game, for the EDIT view — a chip per fact that fills IN as you talk (extracted invisibly), so
+// you just speak freely; the chips show what's been picked up. Tap one to correct it by hand.
+function factChipsInner(ent) {
   const f = ent.facts || {};
-  const rows = fields.map(([k, label]) =>
-    `<label class="ent-fact-edit"><span>${escapeHtml(label)}</span>
-      <input type="text" class="ent-fact-input" data-fk="${escapeHtml(k)}" value="${escapeHtml(factValue(f, k))}" autocomplete="off"></label>`).join("");
-  return `<div class="ent-facts-form" id="ent-facts-form">${rows}</div>`;
+  return factFields(ent).map(([k, label]) => {
+    const v = factValue(f, k);
+    return `<button type="button" class="fact-chip${v ? " filled" : ""}" data-k="${escapeHtml(k)}">
+      <span class="fc-check">${v ? "✓" : "○"}</span><span class="fc-k">${escapeHtml(label)}</span>${v ? `<span class="fc-v">${escapeHtml(v)}</span>` : ""}</button>`;
+  }).join("");
+}
+function factChips(ent) {
+  if (!factFields(ent).length) return "";
+  return `<div class="fact-chips" id="fact-chips">${factChipsInner(ent)}</div>`;
 }
 
 // Write (and save) an entity's profile from MY notes + the journal entries that mention it. The note
@@ -342,15 +346,13 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     root.innerHTML = `
       <div class="entities">
         <div class="ent-head">
-          <h2 class="ent-title">People &amp; Animals</h2>
+          <h2 class="ent-title">Names</h2>
           <div class="act-actions">
             ${entities.length ? `<button type="button" class="ent-scan ent-interview-btn" id="ent-interview">🎙 Interview me</button>` : ""}
             <button type="button" class="ent-scan" id="ent-scan">${entities.length ? "Scan new entries" : "Scan entries"}</button>
           </div>
         </div>
-        <p class="field-hint">Everyone and everything your journal names. Each has every mention in time order; merge two cards if they're the same individual.</p>
-        <button type="button" class="ent-onboard" id="ent-onboard">✨ Tell me about your life — I'll fill in your circle as you talk</button>
-        ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} name${undescribed.length === 1 ? "" : "s"} still need${undescribed.length === 1 ? "s" : ""} a description</button>` : ""}
+        ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} still need${undescribed.length === 1 ? "s" : ""} a description</button>` : ""}
         <div id="ent-status" class="ent-status" hidden></div>
         ${total === 0 && entities.length === 0
           ? `<p class="ent-empty">Write or imagine some days and the people, places and things you name will show up here.</p>`
@@ -363,10 +365,6 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     root.querySelector("#ent-interview")?.addEventListener("click", () => startInterview());
     root.querySelector("#ent-singles")?.addEventListener("click", () => { showSingles = !showSingles; render(); });
     root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) { entEditing = true; renderEntity(openId); } }); // jump straight into editing the first name that needs a description
-    root.querySelector("#ent-onboard")?.addEventListener("click", async () => {
-      const { startOnboarding } = await import("./onboard.js");
-      startOnboarding(() => render()); // refresh the roster with the names it found
-    });
   }
 
   function setStatus(msg, cls) {
@@ -397,6 +395,32 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const mergeOpts = others.map((e) => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.canonical)}</option>`).join("");
 
     const selfMode = isSelfEntity(ent);
+
+    // ONE background extractor for the "just talk, we listen" capture. For YOU we use the onboard
+    // extractor (purpose-built for first-person "my life now" → age/home/lives-with/work/friends); for
+    // anyone else, entityfacts. Both also return the names mentioned, so a single call feeds names too.
+    async function postCapture(text, signal) {
+      try {
+        if (selfMode) {
+          const r = await fetch("/api/summarize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...llmOverrides(), mode: "onboard", text }), signal });
+          if (!r.ok) return null;
+          const j = await r.json();
+          const facts = {};
+          if (j.age != null) facts.age = j.age;
+          if (j.birthYear != null) facts.birthYear = j.birthYear;
+          if (j.location) facts.location = j.location;
+          if (j.livesWith) facts.livesWith = j.livesWith;
+          if (j.job) facts.job = j.job;
+          if (Array.isArray(j.friends) && j.friends.length) facts.friends = j.friends.join(", ");
+          return { facts, names: j.names || [] };
+        }
+        const r = await fetch("/api/summarize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...llmOverrides(), mode: "entityfacts", name: ent.canonical, kind: ent.entityKind || "person", note: text, entries: [] }), signal });
+        if (!r.ok) return null;
+        const j = await r.json();
+        return { facts: j.facts || {}, names: j.names || [] };
+      } catch { return null; } // aborted or offline — the chips just don't fill this round
+    }
+
     const subtitle = `<p class="node-subtitle">${KIND_LABEL[ent.entityKind || "person"]}${(!selfMode && ent.aliases && ent.aliases.length) ? ` · also ${escapeHtml(ent.aliases.join(", "))}` : ""}</p>`;
     const flag = ent.recognized === false ? `<p class="ent-flag-banner">🕳 You didn't recognize this name — a possible mistake or a memory hole. Add anything you can in Edit, or it stays flagged.</p>` : "";
 
@@ -463,9 +487,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const editBody = `
         <input type="text" class="node-name ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" aria-label="Name" spellcheck="false">
         ${subtitle}${flag}
-        <h3 class="ent-edit-h">Facts</h3>
-        ${factsForm(ent)}
-        <h3 class="ent-edit-h">Notes${selfMode ? " about you" : ""}</h3>
+        <p class="cap-lead">${selfMode ? "Just talk or type about your life — these fill in as you go." : `Just talk or type about ${escapeHtml(ent.canonical)} — these fill in as you go.`}</p>
+        ${factChips(ent)}
         ${notesFrag}
         ${kindFrag}`;
 
@@ -508,28 +531,75 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     // Edit/Done toggle — flip between the browse and edit versions of the page.
     root.querySelector("#ent-edit-toggle")?.addEventListener("click", () => { entEditing = !entEditing; renderEntity(id); });
 
+    // Edit/Done toggle — flip between the browse and edit versions of the page.
+    // (defined once; see above)
+
     // ---- EDIT-ONLY wiring (these elements exist only in the edit version of the page) ----------
     const noteTa = root.querySelector("#ent-note-input");
+
+    // Save a single fact by hand (tap a chip to correct what was extracted).
+    async function saveFact(k, val) {
+      val = String(val || "").trim();
+      const fresh = (await getEntity(id)) || ent;
+      const facts = { ...(fresh.facts || {}) };
+      if (k === "age") { const n = (val.match(/\d{1,3}/) || [])[0]; if (n) facts.age = Number(n); else if (val) facts.age = val; else delete facts.age; }
+      else if (val) facts[k] = val; else delete facts[k];
+      await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() });
+      ent.facts = facts; refreshChips();
+    }
+    // Merge extracted facts in — only fills a topic that's still blank, so live extraction can't
+    // clobber something you corrected by hand.
+    async function applyFacts(newFacts) {
+      const fresh = (await getEntity(id)) || ent;
+      const facts = { ...(fresh.facts || {}) };
+      let changed = false;
+      for (const [k, v] of Object.entries(newFacts || {})) {
+        const has = facts[k] != null && String(facts[k]).trim() !== "";
+        if (!has && v != null && String(v).trim() !== "") { facts[k] = v; changed = true; }
+      }
+      if (changed) { await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() }); ent.facts = facts; refreshChips(); }
+    }
+    function refreshChips() { const w = root.querySelector("#fact-chips"); if (w) w.innerHTML = factChipsInner(ent); }
+    // Tap a chip → correct that one field inline (the only "manual" path; talking is the main one).
+    const chipsWrap = root.querySelector("#fact-chips");
+    const chipLabels = new Map(factFields(ent));
+    chipsWrap?.addEventListener("click", (e) => {
+      const chip = e.target.closest(".fact-chip");
+      if (!chip || chip.classList.contains("editing")) return;
+      const k = chip.dataset.k, label = chipLabels.get(k) || "", cur = factValue(ent.facts || {}, k);
+      chip.classList.add("editing");
+      chip.innerHTML = `<span class="fc-k">${escapeHtml(label)}</span><input class="fc-input" value="${escapeHtml(cur)}" autocomplete="off">`;
+      const inp = chip.querySelector(".fc-input");
+      inp.focus(); try { inp.setSelectionRange(inp.value.length, inp.value.length); } catch { /* */ }
+      inp.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); inp.blur(); } });
+      inp.addEventListener("blur", () => saveFact(k, inp.value));
+    });
+
     if (noteTa) {
-      // Live name capture on the note box: names light up and collect below AS YOU TYPE OR DICTATE.
-      const noteCap = attachLiveCapture(noteTa, { mount: root.querySelector("#ent-note-found"), buckets: ["names"] });
+      // ONE background call does both: extract this entity's facts AND the names it mentions, then
+      // fill the chips (invisibly) and light up names. You just talk; we listen and extract.
+      const hasFacts = factFields(ent).length > 0;
+      const remote = async (text, signal) => {
+        const res = await postCapture(text, signal);
+        if (res && hasFacts) await applyFacts(res.facts);
+        return { names: (res && res.names || []).map((n) => ({ name: n.name, kind: n.kind })) };
+      };
+      // Clicking a found name jumps to that person's page (in edit mode, to add info). Save the note
+      // first so nothing you've typed is lost on the way.
+      const onPick = async (name) => {
+        const text = (noteTa.value || "").trim();
+        if (text) { const fresh = (await getEntity(id)) || ent; const note = (fresh.note ? fresh.note + "\n" : "") + text; await putEntity({ ...fresh, note, updatedAt: Date.now() }); }
+        try {
+          const ids = await resolveEntityNames([{ name, kind: "person" }]);
+          const rid = (ids || []).find((x) => x && x !== id) || (ids || [])[0];
+          if (rid) { openId = rid; entEditing = true; renderEntity(rid); }
+        } catch { /* */ }
+      };
+      const noteCap = attachLiveCapture(noteTa, { mount: root.querySelector("#ent-note-found"), buckets: ["names"], remote: hasFacts ? remote : undefined, onPick });
       const noteOnText = () => noteCap.update();
       noteTa.addEventListener("input", noteOnText);
       setupDictation(root.querySelector("#ent-note-mic"), noteTa, root.querySelector("#ent-pstatus"), noteOnText);
     }
-
-    // The facts form: save each field as you change it (a blank field clears just that fact).
-    root.querySelectorAll(".ent-fact-input").forEach((inp) => {
-      inp.addEventListener("change", async () => {
-        const k = inp.dataset.fk, val = inp.value.trim();
-        const fresh = (await getEntity(id)) || ent;
-        const facts = { ...(fresh.facts || {}) };
-        if (k === "age") { const n = (val.match(/\d{1,3}/) || [])[0]; if (n) facts.age = Number(n); else if (val) facts.age = val; else delete facts.age; }
-        else if (val) facts[k] = val; else delete facts[k];
-        await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() });
-        ent.facts = facts;
-      });
-    });
 
     root.querySelector("#ent-note-add")?.addEventListener("click", async () => {
       const ta = root.querySelector("#ent-note-input");

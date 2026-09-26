@@ -121,6 +121,17 @@ const calendar = initCalendar({
   onOpenEntity: (id) => { setMode("people"); people.openEntity(id); }, // tap a name in a summary → its page
 });
 
+// One handler for name hypertext everywhere: any `.ent-link` (rendered in a diary/memoire summary, a
+// journal page, the detail panel, or a name-page profile) opens that name's page, which shows all its
+// instances. This is why names are clickable the same way across the whole app.
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".ent-link[data-eid]");
+  if (!b) return;
+  e.preventDefault();
+  setMode("people");
+  people.openEntity(b.dataset.eid);
+});
+
 const LAST_MODE_KEY = jkey("last-mode");
 const activitySubnav = document.getElementById("activity-subnav");
 let activitySub = "queue"; // which face of the Activity tab: the queue list, or the node graph

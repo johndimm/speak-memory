@@ -1429,6 +1429,8 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .cap-chip { font-size: 0.85rem; padding: 0.16rem 0.55rem; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); animation: cap-pop 0.35s ease; }
 .cap-chip-name { border-color: rgba(214, 158, 46, 0.8); }
 .cap-chip-when, .cap-chip-where, .cap-chip-category, .cap-chip-subject { border-color: rgba(64, 155, 155, 0.8); }
+.cap-chip.cap-hot { cursor: pointer; background: rgba(214, 158, 46, 0.12); }
+.cap-chip.cap-hot:hover { background: rgba(214, 158, 46, 0.28); border-color: rgba(214, 158, 46, 1); }
 @keyframes cap-pop { 0% { transform: scale(0.85); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
 /* ---- Entity page: BROWSE (paragraph + facts) vs EDIT (name + facts form + notes) --------------- */
@@ -1443,13 +1445,17 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-facts-view dt { flex: 0 0 6.5rem; color: var(--ink-soft); font-size: 0.9rem; }
 .ent-facts-view dd { margin: 0; color: var(--ink); font-weight: 500; }
 
-/* Edit: one labelled input per fact; the notes editor below. */
-.ent-edit-h { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); margin: 1rem 0 0.5rem; }
-.ent-facts-form { display: flex; flex-direction: column; gap: 0.55rem; }
-.ent-fact-edit { display: flex; align-items: center; gap: 0.7rem; }
-.ent-fact-edit > span { flex: 0 0 6.5rem; color: var(--ink-soft); font-size: 0.9rem; }
-.ent-fact-input { flex: 1; min-width: 0; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.6rem 0.8rem; }
-.ent-fact-input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; border-color: var(--accent); }
+/* Edit: the game — chips that fill in as you talk (extracted invisibly), tap to correct. */
+.cap-lead { font-size: 0.98rem; color: var(--ink); margin: 0.6rem 0 0.6rem; }
+.fact-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.9rem; }
+.fact-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.8rem; border-radius: 999px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); font: inherit; font-size: 0.95rem; cursor: pointer; }
+.fact-chip .fc-check { color: var(--ink-soft); }
+.fact-chip .fc-k { font-weight: 600; }
+.fact-chip .fc-v { color: var(--ink-soft); font-weight: 400; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fact-chip.filled { border-color: rgba(64, 155, 155, 0.7); background: rgba(64, 155, 155, 0.10); animation: cap-pop 0.35s ease; }
+.fact-chip.filled .fc-check { color: rgb(40, 140, 120); }
+.fact-chip.editing { padding: 0.25rem 0.5rem; }
+.fact-chip .fc-input { font: inherit; font-size: 0.95rem; border: none; background: transparent; color: var(--ink); min-width: 6rem; outline: none; }
 .mv-phase { font-size: 1.05rem; color: var(--ink); min-height: 1.4em; margin-bottom: 0.4rem; }
 .iv-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.8rem; }
 .ent-note-existing { margin-bottom: 0.6rem; }

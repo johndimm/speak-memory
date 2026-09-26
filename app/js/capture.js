@@ -58,6 +58,7 @@ export function attachLiveCapture(textarea, {
   mount,                       // element to render the Found chips into
   buckets = ["names"],         // which kinds to surface: "names","when","where","category","subject"
   remote = remoteNames,        // debounced LLM pass; return { names?:[{name,kind}], facts?:[{type,value}] }
+  onPick,                      // if set, name chips become clickable links → onPick(name, kind)
   debounceMs = 1100,
 } = {}) {
   const wantNames = buckets.includes("names");
@@ -137,11 +138,19 @@ export function attachLiveCapture(textarea, {
     if (!mount) return;
     const items = [...chips.values()];
     mount.innerHTML = items.length
-      ? `<span class="cap-found-label">Found</span>` + items.map((c) =>
-          `<span class="cap-chip cap-chip-${c.type}">${CHIP_META[c.type]?.icon || ""} ${esc(c.label)}</span>`).join("")
+      ? `<span class="cap-found-label">Found</span>` + items.map((c) => {
+          const hot = onPick && c.type === "name";
+          const tag = hot ? "button" : "span";
+          return `<${tag} type="button" class="cap-chip cap-chip-${c.type}${hot ? " cap-hot" : ""}"${hot ? ` data-name="${esc(c.label)}"` : ""}>${CHIP_META[c.type]?.icon || ""} ${esc(c.label)}${hot ? " ›" : ""}</${tag}>`;
+        }).join("")
       : "";
     mount.hidden = !items.length;
   }
+  // Clicking a found name → open that person's page (via onPick).
+  if (onPick && mount) mount.addEventListener("click", (e) => {
+    const b = e.target.closest(".cap-hot[data-name]");
+    if (b) onPick(b.dataset.name);
+  });
 
   // ---- Compute highlight ranges over the current text --------------------------------------
   function ranges(text) {
