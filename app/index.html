@@ -30,12 +30,17 @@
         <button class="title-edit" id="title-edit" type="button" aria-label="Rename journal" title="Rename">✎</button>
       </div>
       <nav class="mode-nav" aria-label="Section">
-        <button class="mode-btn" data-mode="me">Me</button>
-        <button class="mode-btn active" data-mode="diary">Diary</button>
+        <!-- The three time surfaces, together: past · present · future. -->
         <button class="mode-btn" data-mode="memoir">Memoire</button>
-        <button class="mode-btn" data-mode="people">Names</button>
-        <button class="mode-btn" data-mode="browse">Journal</button>
+        <button class="mode-btn active" data-mode="diary">Diary</button>
         <button class="mode-btn" data-mode="futures">Futures</button>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <!-- The people: you, then everyone else. -->
+        <button class="mode-btn" data-mode="me">Me</button>
+        <button class="mode-btn" data-mode="people">Names</button>
+        <span class="nav-sep" aria-hidden="true"></span>
+        <!-- The whole life, summarized over time (its own thing). -->
+        <button class="mode-btn" data-mode="browse">Chronicle</button>
         <div class="mode-more">
           <button class="mode-btn" id="more-btn" aria-haspopup="true" aria-expanded="false">More ▾</button>
           <div class="more-menu" id="more-menu" hidden>
@@ -73,7 +78,6 @@
     <section id="settings-view" class="view" hidden></section>
 
     <section id="browse-view" class="view" hidden>
-      <div id="browse-triptych"></div>
       <div class="browse-header">
         <nav class="breadcrumb" id="breadcrumb" aria-label="Location"></nav>
         <div class="period-nav">

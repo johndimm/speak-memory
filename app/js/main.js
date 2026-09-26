@@ -9,7 +9,6 @@ import { initActivity } from "./activity.js";
 import { initEntities } from "./entities.js";
 import { purgeRaw, getAllMemories } from "./db.js";
 import { jkey, isSampleJournal, activeJournalId } from "./journal.js";
-import { triptychHtml, wireTriptych } from "./triptych.js";
 
 // Keep raw text for the most recent entries only; drop older raw (summaries are kept).
 purgeRaw().catch(() => {});
@@ -194,21 +193,6 @@ if (moreBtn && moreMenu) {
   moreBtn.addEventListener("click", (e) => { e.stopPropagation(); const open = moreMenu.hidden; moreMenu.hidden = !open; moreBtn.setAttribute("aria-expanded", String(open)); });
   moreMenu.querySelectorAll(".more-item").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   document.addEventListener("click", (e) => { if (!moreMenu.hidden && !moreMenu.contains(e.target) && e.target !== moreBtn) { moreMenu.hidden = true; moreBtn.setAttribute("aria-expanded", "false"); } });
-}
-
-// The past·present·future band on the Journal — here none is "active"; all three navigate.
-const browseTriptych = document.getElementById("browse-triptych");
-if (browseTriptych) {
-  // Fortune is only meaningful once a future is selected (you're inside a future). On your real
-  // journal there's no imagined future to browse, so it's inert.
-  browseTriptych.innerHTML = triptychHtml(undefined, "browse", { disabled: isSampleJournal() ? [] : ["future"] });
-  // On the Journal the trio BROWSES the journal: Memoir → categories, Diary → recent days,
-  // Fortune → the AI-added future section (if this journal has one).
-  wireTriptych(browseTriptych, {
-    past: () => { setMode("browse"); calendar.goMemoir(); },
-    present: () => { setMode("browse"); calendar.goPresent(); },
-    future: async () => { setMode("browse"); await calendar.goFuture(); },
-  });
 }
 
 const recorder = initRecord(writeView, {

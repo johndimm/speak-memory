@@ -7,7 +7,6 @@ import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMe
 import { renderReps, wireReps, isOutlineText, escapeHtml, resolveEntityTokens } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
-import { triptychHtml, wireTriptych } from "./triptych.js";
 import { primeAudio } from "./voicetts.js";
 import { DEFAULT_CATEGORIES } from "./memoryvoice.js";
 import { attachLiveCapture } from "./capture.js";
@@ -103,8 +102,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <button type="button" class="app-intro-dismiss" id="app-intro-dismiss" aria-label="Dismiss">×</button>
       <p class="app-intro-lead"><strong>Speak, Memory</strong> — just talk, and it becomes your life story. Private to this device; no account.</p>
     </aside>
-    <!-- The arc of the app: past · present · future. The present (this diary) is where you are. -->
-    ${triptychHtml("present")}
     <form class="write-form" id="write-form">
       <!-- Memoir mode: voice tools up front (shown when adding a memory, not for the daily diary). -->
       <div class="memoir-handsfree-row" id="memoir-actions" hidden>
@@ -307,22 +304,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     if (memFields) memFields.hidden = !memory;      // category/subject/years/location — memoir only
     if (memoirActions) memoirActions.hidden = !memory; // the voice tools — memoir only
     if (moreEl) moreEl.hidden = memory;             // the date changer — diary only (memories use years)
-    // Highlight the matching triptych cell: Memoir (past) for a memory, Diary (present) otherwise.
-    const wantActive = memory ? "past" : "present";
-    const trip = root.querySelector(".triptych");
-    if (trip && trip.getAttribute("data-active") !== wantActive) {
-      trip.outerHTML = triptychHtml(wantActive);
-      const nt = root.querySelector(".triptych"); if (nt) nt.setAttribute("data-active", wantActive);
-      wireTrip();
-    }
-  }
-  function wireTrip() {
-    // Route through the top nav so the tab highlight stays in sync with the triptych.
-    wireTriptych(root, {
-      past: () => onNavigate ? onNavigate("memoir") : newMemory({}),
-      present: () => onNavigate ? onNavigate("diary") : (dateEl.value = todayISO(), loadDraft({ focus: true })),
-      future: () => onNavigate && onNavigate("futures"),
-    });
   }
   const catEl = root.querySelector("#entry-category");
   const catChips = root.querySelector("#entry-category-chips");
@@ -589,9 +570,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // In-app dictation (for devices whose keyboard has no mic). See dictation.js for the
   // Android-robust handling of auto-restart and de-duplication.
   setupDictation(micBtn, textEl, statusEl, onText); // dictation writes textEl.value → recolour + refresh Save
-  // Triptych: Past → the memoir (manual entry; hands-free is an explicit choice inside),
-  // Present → today's diary, Future → the fortune (Futures). The active cell follows the mode.
-  wireTrip();
   root.querySelector("#memoir-handsfree")?.addEventListener("click", async () => {
     primeAudio(); // unlock audio IN this tap, before the async import (mobile blocks post-gesture play)
     const { startLifeInterview } = await import("./lifeinterview.js");
