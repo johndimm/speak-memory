@@ -398,7 +398,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
 
     // Same rule as every page: open EMPTY cards ready to write (edit), and cards that already have
     // something to show in read mode with an Edit button. entEditing === null means "decide by content".
-    const hasContent = !!((ent.note && ent.note.trim()) || (ent.facts && Object.keys(ent.facts).length) || ent.profile || mentions.length);
+    // "Content to read" = YOUR words or facts, or real mentions — NOT the auto-generated profile
+    // (a leftover profile shouldn't stop an otherwise-empty card from opening ready to write).
+    const hasContent = !!((ent.note && ent.note.trim()) || (ent.facts && Object.keys(ent.facts).length) || mentions.length);
     if (entEditing === null || entEditing === undefined) entEditing = !hasContent;
 
     // ONE background extractor for the "just talk, we listen" capture. For YOU we use the onboard
