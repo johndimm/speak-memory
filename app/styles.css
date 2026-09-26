@@ -600,6 +600,24 @@ button.tri:active { transform: translateY(1px); }
 /* Tappable category / subject chips (replacing the native datalist dropdown) */
 .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
 .chip-row:empty { display: none; }
+
+/* Memories: a compact two-up form ABOVE the text box, so both fit above the fold on a narrow phone. */
+#memory-fields { display: flex; flex-direction: column; gap: 0.55rem; margin-bottom: 0.7rem; }
+.mem-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; align-items: start; }
+.mem-row > * { min-width: 0; }        /* let columns be equal — don't let no-wrap chips stretch one */
+#memory-fields .field { margin: 0; gap: 0.25rem; min-width: 0; }
+#memory-fields .field-label { font-size: 0.72rem; }
+#memory-fields input[type="text"], #memory-fields input[type="number"] { width: 100%; box-sizing: border-box; padding: 0.5rem 0.6rem; font-size: 0.95rem; }
+/* Keep suggestion chips to a single scrollable line so they don't grow the form's height. */
+#memory-fields .chip-row { flex-wrap: nowrap; overflow-x: auto; margin-top: 0.3rem; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+#memory-fields .chip-row::-webkit-scrollbar { display: none; }
+#memory-fields .chip { flex: 0 0 auto; }
+#memory-fields .mem-years { gap: 0.4rem; }
+#memory-fields .mem-year-dash { padding-bottom: 0.6rem; }
+#memory-fields .mem-ongoing { padding-bottom: 0.5rem; font-size: 0.82rem; }
+/* A shorter text box in Memories (the form takes the top), taller in the Journal. */
+.form-memoir .write-main #entry-text { min-height: 6rem; }
+.form-memoir .write-prompt { margin-bottom: 0.25rem; }
 .chip {
   border: 1px solid var(--line); background: var(--card); color: var(--ink-soft);
   font: inherit; font-size: 0.8rem; padding: 0.35rem 0.75rem; border-radius: 999px; cursor: pointer;

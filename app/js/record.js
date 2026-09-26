@@ -103,13 +103,44 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <p class="app-intro-lead"><strong>Speak, Memory</strong> — just talk, and it becomes your life story. Private to this device; no account.</p>
     </aside>
     <form class="write-form" id="write-form">
-      <!-- Memoir mode: voice tools up front (shown when adding a memory, not for the daily diary). -->
-      <div class="memoir-handsfree-row" id="memoir-actions" hidden>
-        <button type="button" class="fut-interview" id="memoir-series">🎙 Add a series by voice</button>
-        <button type="button" class="fut-interview" id="memoir-handsfree">💬 Talk it through</button>
-        <span class="field-hint">Or just fill in the memory below — I won't interrupt.</span>
+      <!-- Memories-only: category/subject/span/place. FIRST, so on a narrow phone the form and the
+           text box are both above the fold. Hidden in Journal (diary) mode. Compact for small screens. -->
+      <div id="memory-fields" hidden>
+        <div class="mem-row">
+          <div class="field">
+            <span class="field-label">Category</span>
+            <input type="text" id="entry-category" autocomplete="off" placeholder="places, friends, jobs…">
+            <div class="chip-row" id="entry-category-chips"></div>
+          </div>
+          <div class="field">
+            <span class="field-label">Subject <em>(optional)</em></span>
+            <input type="text" id="entry-subject" autocomplete="off" placeholder="Deena, the Elm St. house">
+            <div class="chip-row" id="entry-subject-chips"></div>
+          </div>
+        </div>
+        <div class="mem-row">
+          <div class="field loc-field">
+            <span class="field-label">Location <em>(optional)</em></span>
+            <input type="text" id="entry-location" autocomplete="off" placeholder="a city or address">
+            <div class="loc-suggest" id="entry-location-suggest" hidden></div>
+            <span class="field-hint" id="entry-location-hint"></span>
+          </div>
+          <fieldset class="mem-years">
+            <label class="field mem-year-field">
+              <span class="field-label">Year</span>
+              <input type="number" id="entry-start-year" min="1900" max="2100" inputmode="numeric" placeholder="1971">
+            </label>
+            <span class="mem-year-dash">–</span>
+            <label class="field mem-year-field">
+              <span class="field-label">End</span>
+              <input type="number" id="entry-end-year" min="1900" max="2100" inputmode="numeric" placeholder="1974">
+            </label>
+            <label class="mem-ongoing"><input type="checkbox" id="entry-ongoing"> now</label>
+          </fieldset>
+        </div>
       </div>
-      <!-- The input leads: a big prompt + box, with Dictate right there. Everything else folds below. -->
+
+      <!-- The input leads: a prompt + box, with Dictate right there. -->
       <label class="field write-main">
         <span class="field-label write-prompt" id="entry-label">What happened today?</span>
         <textarea id="entry-text" rows="8"
@@ -120,6 +151,12 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <div class="write-actions">
         <button type="button" class="mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button>
         <button type="submit" class="save-btn" id="save-btn" disabled>Save entry</button>
+      </div>
+
+      <!-- Memories voice tools — below the form so they never push it off-screen. -->
+      <div class="memoir-handsfree-row" id="memoir-actions" hidden>
+        <button type="button" class="fut-interview" id="memoir-series">🎙 Add a series by voice</button>
+        <button type="button" class="fut-interview" id="memoir-handsfree">💬 Talk it through</button>
       </div>
 
       <label class="field" id="headline-field" hidden>
@@ -152,38 +189,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
           <input type="date" id="entry-date" value="${todayISO()}" max="${todayISO()}">
         </label>
       </details>
-
-      <!-- Memoir-only: the memory's category, subject, span, and place. Hidden in Diary mode. -->
-      <div id="memory-fields" hidden>
-        <div class="field">
-          <span class="field-label">Category</span>
-          <input type="text" id="entry-category" autocomplete="off" placeholder="places, friends, jobs…">
-          <div class="chip-row" id="entry-category-chips"></div>
-        </div>
-        <div class="field">
-          <span class="field-label">Subject <em>(optional)</em></span>
-          <input type="text" id="entry-subject" autocomplete="off" placeholder="a name — Deena, the Elm St. house">
-          <div class="chip-row" id="entry-subject-chips"></div>
-        </div>
-        <div class="field loc-field">
-          <span class="field-label">Location <em>(optional — for the map)</em></span>
-          <input type="text" id="entry-location" autocomplete="off" placeholder="type a city or address, then pick a match">
-          <div class="loc-suggest" id="entry-location-suggest" hidden></div>
-          <span class="field-hint" id="entry-location-hint"></span>
-        </div>
-        <fieldset class="mem-years">
-          <label class="field mem-year-field">
-            <span class="field-label">Year</span>
-            <input type="number" id="entry-start-year" min="1900" max="2100" inputmode="numeric" placeholder="1971">
-          </label>
-          <span class="mem-year-dash">–</span>
-          <label class="field mem-year-field">
-            <span class="field-label">End year</span>
-            <input type="number" id="entry-end-year" min="1900" max="2100" inputmode="numeric" placeholder="1974">
-          </label>
-          <label class="mem-ongoing"><input type="checkbox" id="entry-ongoing"> still going</label>
-        </fieldset>
-      </div>
 
       <button type="button" class="delete-entry-btn" id="delete-entry-btn" hidden>Delete entry</button>
       <p class="write-status" id="write-status"></p>
@@ -298,12 +303,14 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   const memoirActions = root.querySelector("#memoir-actions");
   // Switch the whole form between DIARY and MEMOIR so it's never a combined page.
   let formMode = "diary";
+  const writeForm = root.querySelector("#write-form");
   function setFormMode(mode) { // "diary" | "memory"
     formMode = mode;
     const memory = mode === "memory";
     if (memFields) memFields.hidden = !memory;      // category/subject/years/location — memoir only
     if (memoirActions) memoirActions.hidden = !memory; // the voice tools — memoir only
     if (moreEl) moreEl.hidden = memory;             // the date changer — diary only (memories use years)
+    if (writeForm) writeForm.classList.toggle("form-memoir", memory); // compacts the layout so form + box fit above the fold
   }
   const catEl = root.querySelector("#entry-category");
   const catChips = root.querySelector("#entry-category-chips");
@@ -773,11 +780,13 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     renderCategoryChips(); renderSubjectChips();
     entryLabel.textContent = "The memory";
     saveBtn.textContent = "Save memory";
-    if (memoirActions) memoirActions.scrollIntoView({ behavior: "smooth", block: "start" });
     applyEntryLayout();
     refreshSaveState();
     capture.reset(); // fresh memory — clear the Found list
-    (seed.subject ? textEl : subjectEl).focus();
+    // Stay at the top so the form AND the text box are both visible; focus the first empty field.
+    window.scrollTo({ top: 0 });
+    const firstEmpty = !catEl.value.trim() ? catEl : !subjectEl.value.trim() ? subjectEl : textEl;
+    firstEmpty.focus({ preventScroll: true });
   }
 
   return {
