@@ -99,7 +99,7 @@ function factsChecklist(ent) {
 }
 
 // The fact fields for an entity. "You" gets a life-focused set; anyone else gets their kind's facts.
-const SELF_FIELDS = [["age", "Age"], ["location", "Home"], ["livesWith", "Lives with"], ["job", "Work"], ["friends", "Friends"]];
+const SELF_FIELDS = [["age", "Age"], ["location", "Home"], ["livesWith", "Lives with"], ["job", "Work"], ["family", "Family"], ["friends", "Best friends"]];
 function factFields(ent) {
   if (isSelfEntity(ent)) return SELF_FIELDS;
   return FACT_FIELDS[ent.entityKind || "person"] || [];
@@ -411,6 +411,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
           if (j.location) facts.location = j.location;
           if (j.livesWith) facts.livesWith = j.livesWith;
           if (j.job) facts.job = j.job;
+          if (Array.isArray(j.family) && j.family.length) facts.family = j.family.join(", ");
           if (Array.isArray(j.friends) && j.friends.length) facts.friends = j.friends.join(", ");
           return { facts, names: j.names || [] };
         }
@@ -487,7 +488,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
     const editBody = `
         <input type="text" class="node-name ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" aria-label="Name" spellcheck="false">
         ${subtitle}${flag}
-        <p class="cap-lead">${selfMode ? "Just talk or type about your life — these fill in as you go." : `Just talk or type about ${escapeHtml(ent.canonical)} — these fill in as you go.`}</p>
+        <p class="cap-lead">${selfMode ? "Tell me about your life — where you live, who with, your family and best friends. Names you mention become cards to describe in Names." : `Just talk or type about ${escapeHtml(ent.canonical)} — these fill in as you go.`}</p>
         ${factChips(ent)}
         ${notesFrag}
         ${kindFrag}`;
@@ -582,6 +583,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory } = {}) {
       const remote = async (text, signal) => {
         const res = await postCapture(text, signal);
         if (res && hasFacts) await applyFacts(res.facts);
+        // On YOUR page, listing family/friends creates their cards right away, so you can go describe
+        // them in Names next (this is what feeds the guided Journal → Me → Names → Stories loop).
+        if (res && selfMode && res.names && res.names.length) { try { await resolveEntityNames(res.names); } catch { /* */ } }
         return { names: (res && res.names || []).map((n) => ({ name: n.name, kind: n.kind })) };
       };
       // Clicking a found name jumps to that person's page (in edit mode, to add info). Save the note

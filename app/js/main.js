@@ -7,8 +7,31 @@ import { initTimeline } from "./timeline.js";
 import { initFutures } from "./futures.js";
 import { initActivity } from "./activity.js";
 import { initEntities } from "./entities.js";
-import { purgeRaw, getAllMemories } from "./db.js";
+import { purgeRaw, getAllMemories, getEntry, getAllEntities } from "./db.js";
+import { ensureSelf, isSelfEntity, needsDescription } from "./self.js";
 import { jkey, isSampleJournal, activeJournalId } from "./journal.js";
+
+// The guided daily workflow: on open, land on the first unfinished step —
+//   1) Journal   until today has an entry,
+//   2) Me        until you've described yourself,
+//   3) Names     until every name has some input,
+//   4) Stories   once the first three are done (open-ended; you cycle here day to day).
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+async function guidedStart() {
+  try {
+    const todayEntry = await getEntry(todayISO());
+    if (!(todayEntry && (todayEntry.raw || todayEntry.full || todayEntry.prose))) return "diary"; // 1) say something about today
+    const self = await ensureSelf();
+    const meDone = !!(self && ((self.note && self.note.trim()) || (self.facts && Object.keys(self.facts).length)));
+    if (!meDone) return "me";                                                                      // 2) describe yourself
+    const others = (await getAllEntities()).filter((e) => !isSelfEntity(e));
+    if (others.some((e) => needsDescription(e))) return "people";                                  // 3) describe the names
+    return "memoir";                                                                               // 4) tell your stories
+  } catch { return "diary"; }
+}
 
 // Keep raw text for the most recent entries only; drop older raw (summaries are kept).
 purgeRaw().catch(() => {});
@@ -89,7 +112,7 @@ function openMemoryInJournal(mem) {
   futuresView.hidden = true; activityView.hidden = true; peopleView.hidden = true;
   if (activitySubnav) activitySubnav.hidden = true;
   browseView.hidden = false;
-  const browseAdd = document.getElementById("browse-add"); if (browseAdd) { browseAdd.hidden = false; browseAdd.textContent = "✎ Add a memory"; }
+  const browseAdd = document.getElementById("browse-add"); if (browseAdd) { browseAdd.hidden = false; browseAdd.textContent = "✎ Add a story"; }
   graph.close(); timeline.close();
   calendar.showMemory(mem);
 }
@@ -139,7 +162,7 @@ document.addEventListener("click", (e) => {
 const LAST_MODE_KEY = jkey("last-mode");
 const activitySubnav = document.getElementById("activity-subnav");
 let activitySub = "queue"; // which face of the Activity tab: the queue list, or the node graph
-const MORE_MODES = new Set(["timeline", "places", "activity"]); // live under the "More" menu
+const MORE_MODES = new Set(["futures", "timeline", "places", "activity"]); // live under the "More" menu
 function setMode(mode, arg, zoom) {
   try { if (mode !== "settings") localStorage.setItem(LAST_MODE_KEY, mode); } catch { /* ignore */ } // remember the tab for reload
   if (mode === "diary" || mode === "diary-edit") inputTab = "diary";
@@ -174,7 +197,7 @@ function setMode(mode, arg, zoom) {
   }
   // The browse's own Write/Add button — shown on the tree, labelled for the current tab.
   const browseAdd = document.getElementById("browse-add");
-  if (browseAdd) { browseAdd.hidden = !showBrowse; browseAdd.textContent = inputTab === "memoir" ? "✎ Add a memory" : "✎ Write today"; }
+  if (browseAdd) { browseAdd.hidden = !showBrowse; browseAdd.textContent = inputTab === "memoir" ? "✎ Add a story" : "✎ Write today"; }
   if (!showGraph) graph.close(); // stop live graph updates when its sub-view isn't showing
   if (mode !== "places") places.close(); // tear down the map when leaving
   if (mode !== "timeline") timeline.close(); // drop the timeline's tooltip/observer when leaving
@@ -272,9 +295,9 @@ if (isSampleJournal()) {
   } else {
     setMode("browse", undefined, "life"); // a sample/future never opens the editor
   }
-} else if (savedMode && VALID_MODES.has(savedMode)) {
-  if (savedMode === "browse") { restoreJournalPos(); setMode("browse"); } // back to the exact Journal page
-  else setMode(savedMode);
 } else {
-  setMode("diary"); // first run: your own journal opens on Today
+  // The guided workflow decides where to land — Journal → Me → Names → Stories — nudging you through
+  // the daily loop rather than restoring the last tab.
+  setMode("diary");                                  // show something immediately
+  guidedStart().then((mode) => setMode(mode)).catch(() => {});
 }

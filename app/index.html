@@ -30,17 +30,15 @@
         <button class="title-edit" id="title-edit" type="button" aria-label="Rename journal" title="Rename">✎</button>
       </div>
       <nav class="mode-nav" aria-label="Section">
-        <!-- The three time surfaces, together: past · present · future. -->
-        <button class="mode-btn" data-mode="memoir">Memories</button>
+        <!-- The four-step daily workflow, in order: today → yourself → the people → your stories. -->
         <button class="mode-btn active" data-mode="diary">Journal</button>
-        <button class="mode-btn" data-mode="futures">Futures</button>
-        <span class="nav-sep" aria-hidden="true"></span>
-        <!-- The people: you, then everyone else. -->
         <button class="mode-btn" data-mode="me">Me</button>
         <button class="mode-btn" data-mode="people">Names</button>
+        <button class="mode-btn" data-mode="memoir">Stories</button>
         <div class="mode-more">
           <button class="mode-btn" id="more-btn" aria-haspopup="true" aria-expanded="false">More ▾</button>
           <div class="more-menu" id="more-menu" hidden>
+            <button class="more-item" data-mode="futures">Futures</button>
             <button class="more-item" data-mode="timeline">Timeline</button>
             <button class="more-item" data-mode="places">Map</button>
             <button class="more-item" data-mode="activity">Activity</button>

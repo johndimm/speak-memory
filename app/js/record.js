@@ -259,7 +259,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     if (!deleteBtn) return;
     const editingDay = inEditMode && loadedEntry;
     deleteBtn.hidden = !(editingDay || editingMemId);
-    deleteBtn.textContent = editingMemId ? "Delete memory" : "Delete entry";
+    deleteBtn.textContent = editingMemId ? "Delete story" : "Delete entry";
   }
   function toggleEditText() {
     editingText = !editingText;
@@ -646,7 +646,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // Save as a memory (category filled) — stored whole; the Journal's background pass summarizes.
   async function saveMemory() {
     const text = textEl.value.trim();
-    if (!text) { statusEl.textContent = "Add the memory text first."; statusEl.className = "write-status error"; return; }
+    if (!text) { statusEl.textContent = "Add the story text first."; statusEl.className = "write-status error"; return; }
     saveBtn.disabled = true; statusEl.textContent = "Saving…"; statusEl.className = "write-status";
     try {
       const startYear = startYearEl.value.trim() ? parseInt(startYearEl.value, 10) : null;
@@ -698,7 +698,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     loadedEntry = null; inEditMode = false; editingText = false;
     setFormMode("memory"); memoirActions.hidden = true; // editing one memory: show fields, hide series tools
     dateEl.value = ""; briefEl.value = ""; headlineField.hidden = true;
-    entryLabel.textContent = "The memory";
+    entryLabel.textContent = "The story";
     pendingPhotos = (mem.photos ?? []).map((ph) => { const b = storedToBlob(ph); return { blob: b, url: URL.createObjectURL(b) }; });
     renderThumbs();
     catEl.value = mem.category || ""; subjectEl.value = mem.subject || "";
@@ -710,8 +710,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     applyEntryLayout(); // inEditMode is false now → shows the text box
     refreshSaveState();
     capture.reset(); capture.refresh(); // colour the memory's text + collect its names
-    saveBtn.textContent = "Update memory";
-    statusEl.textContent = `Editing “${mem.subject || mem.category || mem.label || "memory"}” — change anything, then Save.`;
+    saveBtn.textContent = "Update story";
+    statusEl.textContent = `Editing “${mem.subject || mem.category || mem.label || "story"}” — change anything, then Save.`;
     statusEl.className = "write-status";
     textEl.focus();
   }
@@ -778,8 +778,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false;
     setFormMode("memory"); // show memory fields + voice tools, hide the diary date
     renderCategoryChips(); renderSubjectChips();
-    entryLabel.textContent = "The memory";
-    saveBtn.textContent = "Save memory";
+    entryLabel.textContent = "The story";
+    saveBtn.textContent = "Save story";
     applyEntryLayout();
     refreshSaveState();
     capture.reset(); // fresh memory — clear the Found list

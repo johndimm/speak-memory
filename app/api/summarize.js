@@ -690,15 +690,17 @@ Return ONLY valid JSON with a "facts" object holding those fields and a "names" 
 - location: where they live now (city/place), else ""
 - livesWith: who they live with (e.g. "my wife and two kids"), else ""
 - job: what they do for work, else ""
+- family: array of the names of family members they mention (names only, e.g. "Carol", "my son Dave" → "Dave"), else []
 - friends: array of the names of best/close friends they mention (names only), else []
 - names: EVERY named person, animal, place, or organization mentioned, as {"name","kind":"person|animal|place|org|thing"}
-Return ONLY valid JSON: {"age":<int|null>,"birthYear":<int|null>,"location":"...","livesWith":"...","job":"...","friends":["..."],"names":[{"name":"...","kind":"..."}]}.`;
+Return ONLY valid JSON: {"age":<int|null>,"birthYear":<int|null>,"location":"...","livesWith":"...","job":"...","family":["..."],"friends":["..."],"names":[{"name":"...","kind":"..."}]}.`;
       const r = await callJsonObject(sys, text, 0.2, cfg);
       const int = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
       const KINDS = ["person", "animal", "place", "org", "thing"];
       res.status(200).json({
         age: int(r.age), birthYear: (int(r.birthYear) && int(r.birthYear) > 1000 && int(r.birthYear) < 2200) ? int(r.birthYear) : null,
         location: String(r.location || "").slice(0, 160), livesWith: String(r.livesWith || "").slice(0, 200), job: String(r.job || "").slice(0, 200),
+        family: Array.isArray(r.family) ? r.family.filter((x) => typeof x === "string").map((x) => x.slice(0, 80)).slice(0, 20) : [],
         friends: Array.isArray(r.friends) ? r.friends.filter((x) => typeof x === "string").map((x) => x.slice(0, 80)).slice(0, 20) : [],
         names: Array.isArray(r.names) ? r.names.filter((m) => m && m.name).map((m) => ({ name: String(m.name).slice(0, 80), kind: KINDS.includes(m.kind) ? m.kind : "person" })) : [],
       });
