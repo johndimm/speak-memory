@@ -103,8 +103,17 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       <p class="app-intro-lead"><strong>Speak, Memory</strong> — just talk, and it becomes your life story. Private to this device; no account.</p>
     </aside>
     <form class="write-form" id="write-form">
-      <!-- Memories-only: category/subject/span/place. FIRST, so on a narrow phone the form and the
-           text box are both above the fold. Hidden in Journal (diary) mode. Compact for small screens. -->
+      <!-- Start talking right away: a small box that GROWS as you write, pushing the form down. -->
+      <label class="field write-main">
+        <span class="field-label write-prompt" id="entry-label">What happened today?</span>
+        <textarea id="entry-text" rows="3"
+          placeholder="Just talk — tap 🎤 Dictate — or type…"></textarea>
+      </label>
+      <!-- Names (and, in memoir, dates/places) light up as you write; found ones collect here. -->
+      <div class="cap-found" id="entry-found" hidden></div>
+
+      <!-- Memories-only form: category/subject/span/place. BELOW the box — fill it in by hand (or, later,
+           it fills as you answer). Hidden in Journal (diary) mode. -->
       <div id="memory-fields" hidden>
         <div class="mem-row">
           <div class="field">
@@ -138,14 +147,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
         </fieldset>
       </div>
 
-      <!-- The input leads: a prompt + box, with Dictate right there. -->
-      <label class="field write-main">
-        <span class="field-label write-prompt" id="entry-label">What happened today?</span>
-        <textarea id="entry-text" rows="8"
-          placeholder="Just talk — tap 🎤 Dictate — or type…"></textarea>
-      </label>
-      <!-- Names (and, in memoir, dates/places) light up as you write; found ones collect here. -->
-      <div class="cap-found" id="entry-found" hidden></div>
       <div class="write-actions">
         <button type="button" class="mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button>
         <button type="submit" class="save-btn" id="save-btn" disabled>Save entry</button>
@@ -250,6 +251,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     editTextToggle.textContent = editingText ? "Done editing" : "✎ Edit text";
     if (showView) entryView.innerHTML = renderReps(loadedEntry ? repsOf(loadedEntry) : {});
     syncDeleteBtn();
+    if (!textEl.hidden) requestAnimationFrame(autoGrow); // size the box to its content once it's visible
   }
   // Delete lives only here, in the editor: shown when editing an existing day (inEditMode) or an
   // existing memory (editingMemId). Composing something new has nothing to delete.
@@ -546,7 +548,14 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     refreshSaveState();
   });
 
-  const onText = () => { refreshSaveState(); capture.update(); };
+  // Auto-grow the text box to fit its content, so it starts at a few lines and grows as you write
+  // (pushing the memory form below it down), instead of scrolling inside a fixed box.
+  function autoGrow() {
+    if (!textEl || textEl.hidden) return;
+    textEl.style.height = "auto";
+    textEl.style.height = textEl.scrollHeight + "px";
+  }
+  const onText = () => { refreshSaveState(); capture.update(); autoGrow(); };
   textEl.addEventListener("input", onText);
   dateEl.addEventListener("change", () => loadDraft({ focus: true }));
 

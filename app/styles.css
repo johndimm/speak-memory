@@ -215,7 +215,7 @@ button.tri:active { transform: translateY(1px); }
   font-family: var(--font-display); font-size: 1.6rem; font-weight: 400; line-height: 1.15;
   letter-spacing: 0; text-transform: none; color: var(--ink);
 }
-.write-main #entry-text { min-height: 11rem; font-size: 1.05rem; border-width: 1.5px; }
+.write-main #entry-text { min-height: 4.6rem; font-size: 1.05rem; border-width: 1.5px; }
 .write-main #entry-text:focus { border-color: var(--accent); }
 .write-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .write-actions .mic-btn { margin: 0; }
@@ -341,7 +341,9 @@ button.tri:active { transform: translateY(1px); }
   box-shadow: 0 0 0 4px var(--accent-soft);
   transition: background 0.5s, box-shadow 0.5s;
 }
-#entry-text { resize: vertical; min-height: 9rem; line-height: 1.6; }
+/* Auto-growing box: starts at a few lines, grows to fit its content (JS sets the height); no inner
+   scrollbar and no manual resize handle, so the box itself expands and pushes the form below down. */
+#entry-text { resize: none; overflow: hidden; min-height: 4.6rem; line-height: 1.6; }
 #entry-text:focus, #entry-date:focus, #entry-brief:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
 
 .entry-view {
@@ -638,7 +640,7 @@ button.tri:active { transform: translateY(1px); }
 #memory-fields .mem-year-dash { padding-bottom: 0.6rem; }
 #memory-fields .mem-ongoing { padding-bottom: 0.5rem; font-size: 0.82rem; margin-left: 0.15rem; }
 /* A shorter text box in Memories (the form takes the top), taller in the Journal. */
-.form-memoir .write-main #entry-text { min-height: 6rem; }
+.form-memoir .write-main #entry-text { min-height: 4.6rem; }
 .form-memoir .write-prompt { margin-bottom: 0.25rem; }
 .chip {
   border: 1px solid var(--line); background: var(--card); color: var(--ink-soft);
