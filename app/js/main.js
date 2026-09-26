@@ -266,7 +266,23 @@ document.getElementById("browse-add")?.addEventListener("click", () => setMode(i
 // The "More" menu (Timeline / Map / Activity) — toggle open, pick an item, close on outside click.
 const moreBtn = document.getElementById("more-btn"), moreMenu = document.getElementById("more-menu");
 if (moreBtn && moreMenu) {
-  moreBtn.addEventListener("click", (e) => { e.stopPropagation(); const open = moreMenu.hidden; moreMenu.hidden = !open; moreBtn.setAttribute("aria-expanded", String(open)); });
+  moreBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const open = moreMenu.hidden;
+    moreMenu.hidden = !open;
+    moreBtn.setAttribute("aria-expanded", String(open));
+    // On phones the menu is position:fixed (see styles.css) — drop it just under the More button.
+    if (open && getComputedStyle(moreMenu).position === "fixed") {
+      const r = moreBtn.getBoundingClientRect();
+      moreMenu.style.top = `${r.bottom + 6}px`;
+      moreMenu.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+    } else { moreMenu.style.top = moreMenu.style.right = ""; }
+  });
+  // A fixed menu doesn't follow the page, so close it on scroll / rotate rather than leave it adrift.
+  const closeMore = () => { if (!moreMenu.hidden) { moreMenu.hidden = true; moreBtn.setAttribute("aria-expanded", "false"); } };
+  let moreW = window.innerWidth; // a phone's address bar showing/hiding resizes only the height — ignore that
+  window.addEventListener("resize", () => { if (window.innerWidth !== moreW) { moreW = window.innerWidth; closeMore(); } });
+  window.addEventListener("scroll", closeMore, { passive: true });
   moreMenu.querySelectorAll(".more-item").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
   document.addEventListener("click", (e) => { if (!moreMenu.hidden && !moreMenu.contains(e.target) && e.target !== moreBtn) { moreMenu.hidden = true; moreBtn.setAttribute("aria-expanded", "false"); } });
 }

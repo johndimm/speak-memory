@@ -1572,6 +1572,9 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
   .mode-btn { flex: 0 0 auto; min-width: 0; padding: 0.38rem 0.46rem; font-size: 0.74rem; white-space: nowrap; }
   .mode-more { flex: 0 0 auto; }
   #more-btn { padding-left: 0.4rem; padding-right: 0.4rem; }
+  /* The sideways-scrolling tab row clips anything that pokes out of it — so here the More menu is
+     placed against the screen instead (main.js sets its top/right under the More button). */
+  .more-menu { position: fixed; }
   .mode-btn-gear { flex: 0 0 auto; padding: 0.38rem 0.4rem; font-size: 0.92rem; }
 }
 
