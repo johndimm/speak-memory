@@ -90,14 +90,20 @@ let inputTab = "diary";
 const nextBtn = document.getElementById("next-step");
 const nextGo = document.getElementById("next-step-go");
 const DEST_LABEL = { diary: "Journal", me: "Me", people: "Names", memoir: "Stories" };
-async function offerNext() {
+let nextDismissed = false; // × hides the nudge until you next save something
+async function offerNext({ saved = false } = {}) {
   if (!nextBtn) return;
+  if (saved) nextDismissed = false;
+  if (nextDismissed) { nextBtn.hidden = true; return; }
   let mode = await guidedStart();
   const activeTab = document.querySelector(".mode-nav .mode-btn.active")?.dataset.mode;
   delete nextBtn.dataset.entid;
+  // On the Names tab, always offer the next empty name — whatever step the overall workflow is on.
+  if (activeTab === "people") mode = "people";
   if (mode === "people") {
     // Chain through the names that still need a word, one at a time (skip the one you just did).
     const nextId = people.nextUndescribed ? await people.nextUndescribed() : null;
+    if (document.querySelector(".mode-nav .mode-btn.active")?.dataset.mode !== activeTab) return; // you moved on meanwhile
     if (nextId) { nextBtn.dataset.entid = nextId; nextBtn.dataset.mode = "people"; nextGo.textContent = "Next name to describe →"; nextBtn.hidden = false; return; }
     mode = "memoir"; // every name has a word → on to Stories
   }
@@ -112,7 +118,7 @@ nextGo?.addEventListener("click", () => {
   if (eid) { setMode("people"); people.openEntity(eid); }
   else setMode(m);
 });
-document.getElementById("next-step-x")?.addEventListener("click", () => { nextBtn.hidden = true; }); // dismiss the nudge
+document.getElementById("next-step-x")?.addEventListener("click", () => { nextBtn.hidden = true; nextDismissed = true; }); // dismiss the nudge
 
 // The "Lives" tab: your own journal + the sample-lives gallery (switching journals reloads).
 function renderLives() {
@@ -130,7 +136,8 @@ const activity = initActivity(activityView, { onRetry: () => calendar.prime() })
 const people = initEntities(peopleView, {
   onOpenDay: (date) => setMode("browse", date, "day"),          // a mention → open that day in the Journal
   onOpenMemory: async (id) => { const m = (await getAllMemories()).find((x) => x.id === id); if (m) openMemoryInJournal(m); },
-  onProgress: () => offerNext(),                                // described yourself / a name → nudge to what's next
+  onProgress: () => offerNext({ saved: true }),                 // described yourself / a name → nudge to what's next
+  onShown: () => offerNext(),                                   // a Names page is up → offer the next empty name
 });
 
 // Open a memory's page in the Journal (after saving/editing it in Write).
@@ -288,8 +295,8 @@ if (moreBtn && moreMenu) {
 }
 
 const recorder = initRecord(writeView, {
-  onSaved: (date) => { setMode("diary", date, "day"); offerNext(); }, // completed the day → nudge to the next step
-  onSavedMemory: (mem) => { setMode("memoir-edit", mem); offerNext(); },  // saved story → its READ view, then the next nudge
+  onSaved: (date) => { setMode("diary", date, "day"); offerNext({ saved: true }); }, // completed the day → nudge to the next step
+  onSavedMemory: (mem) => { setMode("memoir-edit", mem); offerNext({ saved: true }); },  // saved story → its READ view, then the next nudge
   onDeleted: (date) => setMode("diary", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
   onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode

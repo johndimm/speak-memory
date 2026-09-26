@@ -190,9 +190,10 @@ function itemSortKey(it) {
   return "0000";
 }
 
-export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {}) {
+export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShown } = {}) {
   let openId = null; // entity being viewed, or null = the roster
   let entEditing = null; // browse (read) vs edit (write); null = decide by whether the card has content
+  let needOrder = null;    // ids of the names still needing a description, in the roster's order
   let editSnapshot = null; // the saved version when ✎ Edit was tapped — Cancel restores it
   const entDraftKey = (eid) => jkey(`draft:ent:${eid}`); // unsaved words in the box, kept while you're away
   let scanning = false;
@@ -322,8 +323,6 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
     const manySingles = singles.length > 20;
     const visible = (showSingles || !manySingles) ? entities : entities.filter(keep);
 
-    // "Needs a description" = a shown name (the recurring ones) with no note of your own yet.
-    const undescribed = visible.filter((e) => e && needsDescription(e));
 
     const byKind = new Map();
     for (const e of visible) {
@@ -333,17 +332,21 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
     }
     const sections = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => {
       const list = byKind.get(k).sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.canonical.localeCompare(b.canonical));
-      const cards = list.map((e) => `
+      const cards = list.map((e) => { const empty = e.recognized !== false && !isSelfEntity(e) && needsDescription(e); return `
         <div class="ent-card-wrap">
-          <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}" data-open="${escapeHtml(e.id)}">
+          <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}${empty ? " ent-card-empty" : ""}" data-open="${escapeHtml(e.id)}">
             <span class="ent-name">${escapeHtml(e.canonical)}</span>
-            ${e.recognized === false ? `<span class="ent-flag">🕳 didn't recognize</span>` : (e.aliases && e.aliases.length) ? `<span class="ent-aka">aka ${escapeHtml(e.aliases.join(", "))}</span>` : ""}
+            ${e.recognized === false ? `<span class="ent-flag">🕳 didn't recognize</span>` : empty ? `<span class="ent-need" title="Needs a description" aria-label="needs a description">✎</span>` : (e.aliases && e.aliases.length) ? `<span class="ent-aka">aka ${escapeHtml(e.aliases.join(", "))}</span>` : ""}
             <span class="ent-count">${counts.get(e.id) || 0}</span>
           </button>
           <button type="button" class="ent-card-del" data-del="${escapeHtml(e.id)}" title="Delete this name" aria-label="Delete">×</button>
-        </div>`).join("");
+        </div>`; }).join("");
       return `<h3 class="ent-kind">${KIND_LABEL[k] || k}s</h3><div class="ent-grid">${cards}</div>`;
     }).join("");
+    // "Needs a description" = a shown name with no note of your own yet — in the order the list shows
+    // them, so the count, the marked cards, and the guided Next all walk the same names.
+    const undescribed = KIND_ORDER.flatMap((k) => byKind.get(k) || []).filter((e) => e && !isSelfEntity(e) && needsDescription(e));
+    needOrder = undescribed.map((e) => e.id);
 
     root.innerHTML = `
       <div class="entities">
@@ -354,7 +357,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
             <button type="button" class="ent-scan" id="ent-scan">${entities.length ? "Scan new entries" : "Scan entries"}</button>
           </div>
         </div>
-        ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} still need${undescribed.length === 1 ? "s" : ""} a description</button>` : ""}
+        ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} still need${undescribed.length === 1 ? "s" : ""} a description <span class="ent-needs-key">(dashed below) — tap to start</span></button>` : ""}
         <div id="ent-status" class="ent-status" hidden></div>
         ${total === 0 && entities.length === 0
           ? `<p class="ent-empty">Write or imagine some days and the people, places and things you name will show up here.</p>`
@@ -367,6 +370,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
     root.querySelector("#ent-interview")?.addEventListener("click", () => startInterview());
     root.querySelector("#ent-singles")?.addEventListener("click", () => { showSingles = !showSingles; render(); });
     root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) { entEditing = true; renderEntity(openId); } }); // jump straight into editing the first name that needs a description
+    onShown && onShown(); // the roster is up → the guided Next can point at the first empty name
   }
 
   function setStatus(msg, cls) {
@@ -381,6 +385,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
   async function renderEntity(id) {
     const [ent, sources, entities] = await Promise.all([getEntity(id), allSources(), getAllEntities()]);
     setEntityMap(new Map(entities.map((e) => [e.id, e.canonical]))); // resolve {{e:id|Name}} tokens to names
+    onShown && onShown(); // a name page is up → the guided Next can point at the next empty one
     if (!ent) { openId = null; render(); return; }
     const mentions = sources.filter((s) => Array.isArray(s.entityRefs) && s.entityRefs.includes(id))
       .sort((a, b) => itemSortKey(a).localeCompare(itemSortKey(b)));
@@ -956,9 +961,16 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
     open() { openId = null; render(); }, // Names always lands on the roster (Me lives in its own tab)
     async openSelf() { const s = await ensureSelf(); openId = s.id; entEditing = null; renderEntity(s.id); }, // Me: write if empty, else read + Edit
     openEntity(id) { openId = id; entEditing = null; renderEntity(id); }, // a name: write if empty, else read + Edit
-    async nextUndescribed() { // a name still needing a word (not the one already open) — for the guided "Next"
-      const all = (await getAllEntities()).filter((e) => !isSelfEntity(e) && needsDescription(e) && e.id !== openId);
-      return all.length ? all[0].id : null;
+    async nextUndescribed() { // the next name still needing a word, in the list's order — for the guided "Next"
+      const all = await getAllEntities();
+      const empty = new Set(all.filter((e) => !isSelfEntity(e) && needsDescription(e)).map((e) => e.id));
+      // Walk the list's order from just past the open name (wrapping), so Next moves forward through it.
+      // Before the list has been drawn, any empty name will do. (Names described since it was drawn
+      // drop out via `empty`; hidden once-mentioned names are never suggested.)
+      const order = needOrder || all.map((e) => e.id);
+      const at = openId ? order.indexOf(openId) : -1;
+      for (let i = 1; i <= order.length; i++) { const id = order[(at + i + order.length) % order.length]; if (id !== openId && empty.has(id)) return id; }
+      return null;
     },
     close() { if (iv) { iv.active = false; endInterview(); } },
   };

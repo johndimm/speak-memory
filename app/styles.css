@@ -1409,6 +1409,10 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-aka { font-size: 0.78rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ent-flag { font-size: 0.74rem; color: #b3261e; white-space: nowrap; }
 .ent-card-flag { border-color: rgba(179, 38, 30, 0.4); }
+/* A name with no description of your own yet — dashed, with a small note, so the empty ones stand out. */
+.ent-card-empty { border-style: dashed; border-color: var(--accent-soft); background: transparent; }
+.ent-need { font-size: 0.8rem; color: var(--accent); }
+.ent-needs-key { font-weight: 400; opacity: 0.8; }
 .ent-flag-banner { background: rgba(179, 38, 30, 0.1); border: 1px solid rgba(179, 38, 30, 0.4); color: #b3261e; border-radius: var(--radius); padding: 0.6rem 0.9rem; font-size: 0.9rem; margin: 0.5rem 0; }
 .ent-count { margin-left: auto; font-size: 0.8rem; color: var(--paper); background: var(--accent-soft); border-radius: 999px; padding: 0.05rem 0.5rem; min-width: 1.5rem; text-align: center; }
 /* On phones: tidy single-column rows (not chunky rounded boxes), smaller action buttons. */
