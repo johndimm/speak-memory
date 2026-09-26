@@ -209,11 +209,11 @@ function setMode(mode, arg, zoom) {
   // Graph now lives inside the Activity tab as a sub-view (Queue | Graph).
   const showGraph = mode === "activity" && activitySub === "graph";
   const showQueue = mode === "activity" && activitySub === "queue";
-  // Journal & Memories lead with the WRITE box (#write-view) and show the browse/time-tree
-  // (#browse-view) beneath it — so there's always a text box at the top, no extra click. The *-edit
-  // modes focus a single past entry (write only, no browse).
+  // Journal & Stories ARE the day/story editor (#write-view) with a breadcrumb on top. The time-tree
+  // browse (#browse-view) is a SEPARATE view reached by tapping a breadcrumb — never stacked under the
+  // editor (that showed the same entry twice).
   const showWrite = mode === "diary" || mode === "memoir" || mode === "diary-edit" || mode === "memoir-edit";
-  const showBrowse = mode === "browse" || mode === "diary" || mode === "memoir";
+  const showBrowse = mode === "browse";
   writeView.hidden = !showWrite;
   browseView.hidden = !showBrowse;
   settingsView.hidden = mode !== "settings";
@@ -277,6 +277,11 @@ const recorder = initRecord(writeView, {
   onDeleted: (date) => setMode("diary", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
   onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode
+  onBrowse: (focus, zoom) => { // breadcrumb crumb → the time-tree browse at that level
+    if (zoom === "memoir") { setMode("browse"); calendar.goMemoir(); }              // Stories → all categories
+    else if (zoom === "category") { setMode("browse"); calendar.showNode({ zoom: "category", category: focus }); } // one category
+    else setMode("browse", focus, zoom);                                            // Journal date tree
+  },
 });
 const graph = initGraphView(graphView, {
   // "Open ›" in the graph's node preview → jump to that node's page in the Journal.

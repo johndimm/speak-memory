@@ -726,10 +726,14 @@ button.tri:active { transform: translateY(1px); }
 
 /* Browse header */
 .browse-header { margin-bottom: 1.75rem; }
-.breadcrumb {
+.breadcrumb, .write-breadcrumb {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem 0.35rem;
   font-size: 0.9rem;
 }
+.write-breadcrumb { margin-bottom: 0.7rem; }
+.write-breadcrumb:empty { display: none; }
+.write-title { font-family: var(--font-display); font-size: 1.5rem; line-height: 1.2; margin: 0.2rem 0 0.6rem; }
+.write-title[hidden] { display: none; }
 .crumb {
   border: none; background: transparent; padding: 0.2rem 0.1rem;
   font: inherit; font-size: 0.9rem; color: var(--accent); font-weight: 600;

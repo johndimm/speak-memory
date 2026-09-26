@@ -96,15 +96,15 @@ function nowContext() {
   };
 }
 
-export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate } = {}) {
+export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate, onBrowse } = {}) {
   root.innerHTML = `
-    <aside class="app-intro" id="app-intro" hidden>
-      <button type="button" class="app-intro-dismiss" id="app-intro-dismiss" aria-label="Dismiss">×</button>
-      <p class="app-intro-lead"><strong>Speak, Memory</strong> — just talk, and it becomes your life story. Private to this device; no account.</p>
-    </aside>
     <form class="write-form" id="write-form">
+      <!-- Where this entry sits in the time tree; tap a crumb to browse. -->
+      <nav class="write-breadcrumb" id="write-breadcrumb" aria-label="Location"></nav>
       <!-- Read mode (an existing entry): a single Edit button up top; tapping it reveals the box. -->
       <button type="button" class="detail-nav-btn edit-text-btn" id="edit-text-toggle" hidden>✎ Edit</button>
+      <!-- Read mode: the day's headline, above its summary. -->
+      <h2 class="write-title" id="write-title" hidden></h2>
       <!-- Start talking right away: a small box that GROWS as you write, pushing the form down. -->
       <label class="field write-main">
         <span class="field-label write-prompt" id="entry-label">What happened today?</span>
@@ -194,16 +194,6 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     </div>
   `;
 
-  // First-visit intro card: show until the reader dismisses it (or has already written something).
-  const introEl = root.querySelector("#app-intro");
-  const introDismiss = root.querySelector("#app-intro-dismiss");
-  if (introEl && localStorage.getItem("sm-intro-dismissed") !== "1") {
-    introEl.hidden = false;
-    introDismiss?.addEventListener("click", () => {
-      introEl.hidden = true;
-      localStorage.setItem("sm-intro-dismissed", "1");
-    });
-  }
 
   const dateEl = root.querySelector("#entry-date");
   const textEl = root.querySelector("#entry-text");
@@ -216,6 +206,47 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   const statusEl = root.querySelector("#write-status");
   const entryLabel = root.querySelector("#entry-label");
   const entryView = root.querySelector("#entry-view");
+  const writeBreadcrumb = root.querySelector("#write-breadcrumb");
+  const writeTitle = root.querySelector("#write-title");
+
+  // A date-based breadcrumb (Life › decade › year › month › the day). Each crumb browses the time tree
+  // at that level; the current day is the last, non-clickable crumb.
+  const escCrumb = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  function renderWriteBreadcrumb(dateStr) {
+    if (!writeBreadcrumb) return;
+    const isStory = !root.querySelector("#memory-fields")?.hidden; // Stories mode = the memory form is showing
+    if (isStory) {
+      // Stories breadcrumb: Life (all categories) › category › subject. Jump anywhere to browse.
+      const catV = (root.querySelector("#entry-category")?.value || "").trim();
+      const subV = (root.querySelector("#entry-subject")?.value || "").trim();
+      const parts = [`<button type="button" class="crumb" data-cat="" data-sub="">⌂ Life</button>`];
+      if (catV) parts.push(`<span class="crumb-sep">›</span><button type="button" class="crumb" data-cat="${escCrumb(catV)}" data-sub="">${escCrumb(catV)}</button>`);
+      if (subV) parts.push(`<span class="crumb-sep">›</span><span class="crumb crumb-current">${escCrumb(subV)}</span>`);
+      else if (catV) parts[parts.length - 1] = parts[parts.length - 1].replace('class="crumb"', 'class="crumb crumb-current"'); // category is the last, current
+      writeBreadcrumb.innerHTML = parts.join("");
+      return;
+    }
+    const iso = dateStr || todayISO();
+    const y = iso.slice(0, 4);
+    const d = new Date(iso + "T12:00:00");
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const crumbs = [
+      { z: "life", f: "", label: "⌂ Life" },
+      { z: "decade", f: iso, label: `${Math.floor(+y / 10) * 10}s` },
+      { z: "year", f: iso, label: y },
+      { z: "month", f: iso, label: d.toLocaleDateString("en-US", { month: "long" }) },
+    ];
+    const current = d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    writeBreadcrumb.innerHTML = crumbs.map((c) =>
+      `<button type="button" class="crumb" data-zoom="${c.z}" data-focus="${esc(c.f)}">${esc(c.label)}</button>`).join('<span class="crumb-sep">›</span>')
+      + `<span class="crumb-sep">›</span><span class="crumb crumb-current">${esc(current)}</span>`;
+  }
+  writeBreadcrumb?.addEventListener("click", (e) => {
+    const b = e.target.closest(".crumb");
+    if (!b || b.classList.contains("crumb-current") || !onBrowse) return;
+    if (b.dataset.zoom) { onBrowse(b.dataset.focus || undefined, b.dataset.zoom); return; } // Journal (date tree)
+    if (b.hasAttribute("data-cat")) { onBrowse(b.dataset.cat || "", b.dataset.cat ? "category" : "memoir"); } // Stories (category tree)
+  });
   const editTextToggle = root.querySelector("#edit-text-toggle");
   wireReps(entryView);
 
@@ -239,7 +270,15 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     entryView.hidden = !showView;
     if (writeMain) writeMain.hidden = showView;      // the box + prompt: edit only
     if (writeActions) writeActions.hidden = showView; // Dictate + Save: edit only
-    if (editTextToggle) { editTextToggle.hidden = !showView; editTextToggle.textContent = "✎ Edit"; }
+    // One toggle button on an existing entry: "✎ Edit" while reading, "✓ Done" while editing (so you
+    // can always cancel back to the read view). Hidden only when composing a brand-new entry.
+    if (editTextToggle) { editTextToggle.hidden = !inEditMode; editTextToggle.textContent = editingText ? "✓ Done" : "✎ Edit"; }
+    // Read mode: a title line = the day's headline, above the summary.
+    if (writeTitle) {
+      const brief = showView ? (loadedEntry?.brief || (loadedEntry?.prose && loadedEntry.prose.brief) || "") : "";
+      writeTitle.textContent = brief;
+      writeTitle.hidden = !brief;
+    }
     if (showView) entryView.innerHTML = renderReps(loadedEntry ? repsOf(loadedEntry) : {});
     syncDeleteBtn();
     if (!showView) { requestAnimationFrame(autoGrow); setTimeout(autoGrow, 120); } // size the box now, and again once the layout settles
@@ -287,6 +326,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     if (memoirActions) memoirActions.hidden = !memory; // the voice tools — memoir only
     if (moreEl) moreEl.hidden = memory;             // the date changer — diary only (memories use years)
     if (writeForm) writeForm.classList.toggle("form-memoir", memory); // compacts the layout so form + box fit above the fold
+    renderWriteBreadcrumb(dateEl.value);                              // date tree for Journal, category tree for Stories
   }
   const catEl = root.querySelector("#entry-category");
   const catChips = root.querySelector("#entry-category-chips");
@@ -369,7 +409,8 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   };
   async function loadMemLists() { allMems = await getAllMemories(); renderCategoryChips(); renderSubjectChips(); }
   loadMemLists();
-  catEl.addEventListener("input", () => { renderCategoryChips(); renderSubjectChips(); });
+  catEl.addEventListener("input", () => { renderCategoryChips(); renderSubjectChips(); renderWriteBreadcrumb(); });
+  subjectEl.addEventListener("input", () => renderWriteBreadcrumb());
   subjectEl.addEventListener("input", renderSubjectChips);
   catChips.addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; catEl.value = b.dataset.val; renderCategoryChips(); renderSubjectChips(); });
   subChips.addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; subjectEl.value = b.dataset.val; renderSubjectChips(); });
@@ -413,6 +454,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     editingText = false;
     entryLabel.textContent = promptForDate(date, editMode); // show the selected date (normally today)
     setFormMode("diary"); // pure diary — no memory fields, no memoir voice tools
+    renderWriteBreadcrumb(date);
     currentSummarized = entry ? entry.summarized !== false : true;
     saveBtn.textContent = editMode ? "Update entry" : "Save entry";
     updateModeUI();

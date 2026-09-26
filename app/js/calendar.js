@@ -815,8 +815,8 @@ async function renderLife() {
 
   // "Browse memoir" → just the categories (your past, organized by category), nothing else.
   if (memoirOnly) {
-    els.root.innerHTML = `<h2 class="node-name">Memoir</h2><p class="node-subtitle">your past, by category</p>`
-      + (cats.length ? categoryLinks : `<p class="nav-hint">No memories yet — add some in Write › Memoir.</p>`);
+    els.root.innerHTML = `<h2 class="node-name">Stories</h2><p class="node-subtitle">your past, by category</p>`
+      + (cats.length ? categoryLinks : `<p class="nav-hint">No stories yet — add some in the Stories tab.</p>`);
     return;
   }
 
