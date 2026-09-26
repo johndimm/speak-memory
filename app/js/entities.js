@@ -460,8 +460,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
         </section>`;
 
     const kindFrag = `<details class="node-fold ent-details">
-          <summary>Kind, aliases &amp; merge</summary>
+          <summary>${selfMode ? "Details" : "Rename, kind, aliases &amp; merge"}</summary>
           <div class="node-fold-body ent-detail-body">
+            <label class="ent-field"><span>Name</span>
+              <input type="text" class="ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" spellcheck="false"></label>
             <label class="ent-field"><span>Kind</span>
               <select id="ent-kind" class="ent-kindsel">${KIND_ORDER.map((k) => `<option value="${k}"${(ent.entityKind || "person") === k ? " selected" : ""}>${KIND_LABEL[k]}</option>`).join("")}</select></label>
             <label class="ent-field"><span>Also known as (comma-separated)</span>
@@ -475,34 +477,21 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
           </div>
         </details>`;
 
-    // Two versions of the page: BROWSE (paragraph + facts, read-only) and EDIT (name + facts form +
-    // notes). The Edit/Done button toggles between them — no per-visit instructions cluttering the read.
-    const topbar = `<div class="ent-topbar">
-        ${selfMode ? "<span></span>" : `<button type="button" class="ent-back" id="ent-back">← All names</button>`}
-        <button type="button" class="ent-edit-toggle" id="ent-edit-toggle">${entEditing ? "✓ Done" : "✎ Edit"}</button>
-      </div>`;
-
-    const browseBody = `
+    // ONE page (no Browse/Edit toggle): the text box is always at the top for original OR additional
+    // input, then what we know (facts, profile, timeline) reads below it. No extra clicks.
+    const backBar = selfMode ? "" : `<div class="ent-topbar"><button type="button" class="ent-back" id="ent-back">← All names</button></div>`;
+    root.innerHTML = `
+      <div class="entities${selfMode ? " ent-selfpage" : ""}">
+        ${backBar}
         <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
-        ${subtitle}${flag}
-        ${profileFrag}
-        ${factsView(ent)}
-        ${mentionsFrag}
-        ${askFrag}`;
-
-    const editBody = `
-        <input type="text" class="node-name ent-rename" id="ent-rename" value="${escapeHtml(ent.canonical)}" aria-label="Name" spellcheck="false">
-        ${subtitle}${flag}
-        <p class="cap-lead">${selfMode ? "Tell me about your life — where you live, who with, your family and best friends. Names you mention become cards to describe in Names." : `Just talk or type about ${escapeHtml(ent.canonical)} — these fill in as you go.`}</p>
         ${notesFrag}
         ${factChips(ent)}
+        ${subtitle}${flag}
+        ${profileFrag}
+        ${mentionsFrag}
+        ${askFrag}
         ${kindFrag}
-        ${selfMode ? "" : `<button type="button" class="ent-del-big" id="ent-del-big">🗑 Delete “${escapeHtml(ent.canonical)}”</button>`}`;
-
-    root.innerHTML = `
-      <div class="entities${selfMode ? " ent-selfpage" : ""}${entEditing ? " ent-editing" : ""}">
-        ${topbar}
-        ${entEditing ? editBody : browseBody}
+        ${selfMode ? "" : `<button type="button" class="ent-del-big" id="ent-del-big">🗑 Delete “${escapeHtml(ent.canonical)}”</button>`}
       </div>`;
 
     const pstatus = (msg, cls) => { const el = root.querySelector("#ent-pstatus"); if (!el) return; el.textContent = msg; el.className = "node-comment-status" + (cls ? " " + cls : ""); };
@@ -534,9 +523,6 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
     if ((!ent.profile || stale) && (mentions.length || ent.note)) genProfile();
     // Backfill the standard-facts checklist on open, when it's empty but there's something to read.
     if (FACT_FIELDS[ent.entityKind || "person"] && !ent.facts && (ent.note || mentions.length)) extractFacts(ent, mentions);
-
-    // Edit/Done toggle — flip between the browse and edit versions of the page.
-    root.querySelector("#ent-edit-toggle")?.addEventListener("click", () => { entEditing = !entEditing; renderEntity(id); });
 
     // Edit/Done toggle — flip between the browse and edit versions of the page.
     // (defined once; see above)
