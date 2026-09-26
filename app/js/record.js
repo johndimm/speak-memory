@@ -243,13 +243,16 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // A saved summary (prose/outline) shows as formatted rich text; the raw box is for
   // capture and hand-editing. Verbatim/compose keep the plain box.
   function applyEntryLayout() {
-    // The editable text box is ALWAYS shown at the top — original or additional input, no extra click.
-    // (The old read-only "formatted view" is gone; the browse/time-tree below is the reader now.)
-    entryView.hidden = true;
-    textEl.hidden = false;
-    editTextToggle.hidden = true;
+    // Same rule as every page: EMPTY (composing a new/blank entry) → show the text box; already has
+    // content (an existing entry) → show the read view + an "Edit" button, box hidden until you tap it.
+    const showView = inEditMode && !editingText;
+    entryView.hidden = !showView;
+    textEl.hidden = showView;
+    editTextToggle.hidden = !inEditMode;
+    editTextToggle.textContent = editingText ? "Done editing" : "✎ Edit";
+    if (showView) entryView.innerHTML = renderReps(loadedEntry ? repsOf(loadedEntry) : {});
     syncDeleteBtn();
-    requestAnimationFrame(autoGrow); // size the box to its content
+    if (!textEl.hidden) requestAnimationFrame(autoGrow); // size the box to its content when it's showing
   }
   // Delete lives only here, in the editor: shown when editing an existing day (inEditMode) or an
   // existing memory (editingMemId). Composing something new has nothing to delete.

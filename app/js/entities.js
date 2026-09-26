@@ -192,7 +192,7 @@ function itemSortKey(it) {
 
 export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {}) {
   let openId = null; // entity being viewed, or null = the roster
-  let entEditing = false; // an entity page has two versions: browse (read) and edit (form + notes)
+  let entEditing = null; // browse (read) vs edit (write); null = decide by whether the card has content
   let scanning = false;
   let showSingles = false; // one-off names (mentioned only once) are hidden until you ask for them
 
@@ -396,6 +396,11 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
 
     const selfMode = isSelfEntity(ent);
 
+    // Same rule as every page: open EMPTY cards ready to write (edit), and cards that already have
+    // something to show in read mode with an Edit button. entEditing === null means "decide by content".
+    const hasContent = !!((ent.note && ent.note.trim()) || (ent.facts && Object.keys(ent.facts).length) || ent.profile || mentions.length);
+    if (entEditing === null || entEditing === undefined) entEditing = !hasContent;
+
     // ONE background extractor for the "just talk, we listen" capture. For YOU we use the onboard
     // extractor (purpose-built for first-person "my life now" → age/home/lives-with/work/friends); for
     // anyone else, entityfacts. Both also return the names mentioned, so a single call feeds names too.
@@ -477,25 +482,40 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
           </div>
         </details>`;
 
-    // ONE page (no Browse/Edit toggle): the text box is always at the top for original OR additional
-    // input, then what we know (facts, profile, timeline) reads below it. No extra clicks.
-    const backBar = selfMode ? "" : `<div class="ent-topbar"><button type="button" class="ent-back" id="ent-back">← All names</button></div>`;
-    root.innerHTML = `
-      <div class="entities${selfMode ? " ent-selfpage" : ""}">
-        ${backBar}
+    // Two views, same rule as Journal/Stories: EDIT leads with the text box (empty cards open here);
+    // BROWSE reads what's known with an Edit button (cards that already have content open here).
+    const topbar = `<div class="ent-topbar">
+        ${selfMode ? "<span></span>" : `<button type="button" class="ent-back" id="ent-back">← All names</button>`}
+        <button type="button" class="ent-edit-toggle" id="ent-edit-toggle">${entEditing ? "✓ Done" : "✎ Edit"}</button>
+      </div>`;
+
+    const browseBody = `
+        <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
+        ${subtitle}${flag}
+        ${profileFrag}
+        ${factsView(ent)}
+        ${mentionsFrag}
+        ${askFrag}`;
+
+    const editBody = `
         <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
         ${notesFrag}
         ${factChips(ent)}
         ${subtitle}${flag}
-        ${profileFrag}
-        ${mentionsFrag}
-        ${askFrag}
         ${kindFrag}
-        ${selfMode ? "" : `<button type="button" class="ent-del-big" id="ent-del-big">🗑 Delete “${escapeHtml(ent.canonical)}”</button>`}
+        ${selfMode ? "" : `<button type="button" class="ent-del-big" id="ent-del-big">🗑 Delete “${escapeHtml(ent.canonical)}”</button>`}`;
+
+    root.innerHTML = `
+      <div class="entities${selfMode ? " ent-selfpage" : ""}${entEditing ? " ent-editing" : ""}">
+        ${topbar}
+        ${entEditing ? editBody : browseBody}
       </div>`;
 
     const pstatus = (msg, cls) => { const el = root.querySelector("#ent-pstatus"); if (!el) return; el.textContent = msg; el.className = "node-comment-status" + (cls ? " " + cls : ""); };
     const dstatus = (msg, cls) => { const el = root.querySelector("#ent-dstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
+
+    // Edit ⇄ Done toggles between writing and reading this card.
+    root.querySelector("#ent-edit-toggle")?.addEventListener("click", () => { entEditing = !entEditing; renderEntity(id); });
 
     // Each name gets an LLM-written profile, generated from its mentions and cached on the entity.
     const mentionEntries = () => mentions.map((s) => ({
@@ -927,7 +947,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       return;
     }
     const card = e.target.closest(".ent-card[data-open]");
-    if (card) { openId = card.dataset.open; entEditing = true; renderEntity(openId); return; }
+    if (card) { openId = card.dataset.open; entEditing = null; renderEntity(openId); return; }
     const m = e.target.closest(".ent-mention[data-goto]");
     if (!m) return;
     if (m.dataset.kind === "day") onOpenDay?.(m.dataset.goto);
@@ -936,8 +956,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
 
   return {
     open() { openId = null; render(); }, // Names always lands on the roster (Me lives in its own tab)
-    async openSelf() { const s = await ensureSelf(); openId = s.id; entEditing = true; renderEntity(s.id); }, // the "Me" tab — opens ready to write (text box on top)
-    openEntity(id) { openId = id; entEditing = true; renderEntity(id); }, // a name page opens ready to write (text box on top)
+    async openSelf() { const s = await ensureSelf(); openId = s.id; entEditing = null; renderEntity(s.id); }, // Me: write if empty, else read + Edit
+    openEntity(id) { openId = id; entEditing = null; renderEntity(id); }, // a name: write if empty, else read + Edit
     async nextUndescribed() { // a name still needing a word (not the one already open) — for the guided "Next"
       const all = (await getAllEntities()).filter((e) => !isSelfEntity(e) && needsDescription(e) && e.id !== openId);
       return all.length ? all[0].id : null;
