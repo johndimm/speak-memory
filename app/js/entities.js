@@ -496,7 +496,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
         <p class="cap-lead">${selfMode ? "Tell me about your life — where you live, who with, your family and best friends. Names you mention become cards to describe in Names." : `Just talk or type about ${escapeHtml(ent.canonical)} — these fill in as you go.`}</p>
         ${factChips(ent)}
         ${notesFrag}
-        ${kindFrag}`;
+        ${kindFrag}
+        ${selfMode ? "" : `<button type="button" class="ent-del-big" id="ent-del-big">🗑 Delete “${escapeHtml(ent.canonical)}”</button>`}`;
 
     root.innerHTML = `
       <div class="entities${selfMode ? " ent-selfpage" : ""}${entEditing ? " ent-editing" : ""}">
@@ -716,11 +717,13 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress } = {})
       resetEntityIndex(); // name/aliases changed
       dstatus("Saved.", "ok");
     });
-    root.querySelector("#ent-del")?.addEventListener("click", async () => {
+    const deleteThisName = async () => {
       if (!confirm(`Delete “${ent.canonical}”? Its mentions stay in the entries; only the name is removed.`)) return;
       await removeEntity(id);
       openId = null; render();
-    });
+    };
+    root.querySelector("#ent-del")?.addEventListener("click", deleteThisName);
+    root.querySelector("#ent-del-big")?.addEventListener("click", deleteThisName); // the prominent one, always visible in Edit
     root.querySelector("#ent-merge-btn")?.addEventListener("click", async () => {
       const targetId = root.querySelector("#ent-merge-sel").value;
       if (!targetId || targetId === id) return;

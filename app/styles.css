@@ -1490,6 +1490,9 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .fact-chip.filled .fc-check { color: rgb(40, 140, 120); }
 .fact-chip.editing { padding: 0.25rem 0.5rem; }
 .fact-chip .fc-input { font: inherit; font-size: 0.95rem; border: none; background: transparent; color: var(--ink); min-width: 6rem; outline: none; }
+/* Prominent, always-visible Delete on a name's Edit page (deleting used to be buried in a fold). */
+.ent-del-big { display: block; width: 100%; margin: 1.4rem 0 0.4rem; font: inherit; font-size: 0.95rem; color: #b3402f; background: none; border: 1px solid rgba(179, 64, 47, 0.4); border-radius: var(--radius); padding: 0.7rem 1rem; cursor: pointer; }
+.ent-del-big:hover { border-color: #b3402f; background: rgba(179, 64, 47, 0.07); }
 .mv-phase { font-size: 1.05rem; color: var(--ink); min-height: 1.4em; margin-bottom: 0.4rem; }
 .iv-hint { font-size: 0.8rem; color: var(--ink-soft); margin-top: 0.8rem; }
 .ent-note-existing { margin-bottom: 0.6rem; }
