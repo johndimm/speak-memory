@@ -10,6 +10,7 @@ import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { primeAudio } from "./voicetts.js";
 import { DEFAULT_CATEGORIES } from "./memoryvoice.js";
 import { attachLiveCapture } from "./capture.js";
+import { resolveEntityNames } from "./entityresolve.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -96,7 +97,7 @@ function nowContext() {
   };
 }
 
-export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate, onBrowse } = {}) {
+export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate, onBrowse, onOpenName } = {}) {
   root.innerHTML = `
     <form class="write-form" id="write-form">
       <!-- Where this entry sits in the time tree; tap a crumb to browse. -->
@@ -253,7 +254,15 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   // Live capture: colour names as you type/dictate and collect them below the box. Diary surfaces
   // names; memoir also lights up dates/places/categories (its structured fields cover the rest).
   const foundEl = root.querySelector("#entry-found");
-  const capture = attachLiveCapture(textEl, { mount: foundEl, buckets: ["names"] });
+  // Clicking a Found name opens that person's page. Save the current entry first so nothing's lost.
+  const capture = attachLiveCapture(textEl, { mount: foundEl, buckets: ["names"], onPick: async (name) => {
+    await persistDraft();
+    try {
+      const ids = await resolveEntityNames([{ name, kind: "person" }]);
+      const rid = (ids || [])[0];
+      if (rid && onOpenName) onOpenName(rid);
+    } catch { /* */ }
+  } });
 
   let currentSummarized = true; // mode of the loaded entry (edit mode)
   let inEditMode = false;
@@ -639,6 +648,31 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   }
 
   // Save as a memory (category filled) — stored whole; the Journal's background pass summarizes.
+  // Quietly persist what's in the box (no navigation) so tapping a Found name never loses your words.
+  async function persistDraft() {
+    const text = textEl.value.trim();
+    if (!text) return;
+    if (formMode === "memory") {
+      const startYear = startYearEl.value.trim() ? parseInt(startYearEl.value, 10) : null;
+      const endRaw = endYearEl.value.trim() ? parseInt(endYearEl.value, 10) : null;
+      const ongoing = ongoingEl.checked;
+      const endYear = (!ongoing && startYear != null && endRaw && endRaw !== startYear) ? endRaw : null;
+      const label = startYear == null ? "sometime" : endYear ? `${Math.min(startYear, endYear)}–${Math.max(startYear, endYear)}` : ongoing ? `${startYear}–present` : String(startYear);
+      const mem = { id: editingMemId || uid(), category: catEl.value.trim(), subject: subjectEl.value.trim(), startYear, endYear, label, text, needsSummary: true, createdAt: editingMemOrig?.createdAt || Date.now(), updatedAt: Date.now() };
+      if (ongoing) mem.ongoing = true;
+      await putMemory(mem);
+      editingMemId = mem.id; editingMemOrig = mem;
+      return;
+    }
+    const date = dateEl.value || todayISO();
+    const existing = loadedEntry ?? (await getEntry(date));
+    let toSave;
+    if (existing) { toSave = { ...existing, raw: text, rawSavedAt: Date.now(), updatedAt: Date.now(), needsSummary: true }; delete toSave.levels; delete toSave.prose; delete toSave.outline; }
+    else { toSave = { date, dayOfWeek: dayOfWeek(date), raw: text, rawSavedAt: Date.now(), createdAt: Date.now(), updatedAt: Date.now(), needsSummary: true }; }
+    await putEntry(withMode(toSave, "verbatim"));
+    loadedEntry = toSave;
+  }
+
   async function saveMemory() {
     const text = textEl.value.trim();
     if (!text) { statusEl.textContent = "Add the story text first."; statusEl.className = "write-status error"; return; }

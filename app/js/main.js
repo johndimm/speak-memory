@@ -277,6 +277,7 @@ const recorder = initRecord(writeView, {
   onDeleted: (date) => setMode("diary", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
   onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode
+  onOpenName: (id) => { setMode("people"); people.openEntity(id); }, // tap a Found name → its page
   onBrowse: (focus, zoom) => { // breadcrumb crumb → the time-tree browse at that level
     if (zoom === "memoir") { setMode("browse"); calendar.goMemoir(); }              // Stories → all categories
     else if (zoom === "category") { setMode("browse"); calendar.showNode({ zoom: "category", category: focus }); } // one category
