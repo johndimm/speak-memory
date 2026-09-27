@@ -109,6 +109,15 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
   root.innerHTML = `
     <div class="settings">
       <section class="settings-group">
+        <h2 class="settings-h">Look</h2>
+        <label class="field">
+          <span class="field-label" for="look-select">Style</span>
+          <select id="look-select">
+            <option value="classic">Classic — paper and serif</option>
+            <option value="modern">Modern — clean and sans-serif</option>
+          </select>
+        </label>
+
         <h2 class="settings-h">Browse</h2>
         <label class="field">
           <span class="field-label" for="landing-level">Opens on</span>
@@ -343,6 +352,14 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
     } finally {
       regenBtn.disabled = false;
     }
+  });
+
+  // Look: Classic (default) or Modern — a class on <html>, applied before paint by index.html.
+  const lookEl = root.querySelector("#look-select");
+  try { lookEl.value = localStorage.getItem("look") === "modern" ? "modern" : "classic"; } catch { /* */ }
+  lookEl.addEventListener("change", () => {
+    try { localStorage.setItem("look", lookEl.value); } catch { /* */ }
+    document.documentElement.classList.toggle("theme-modern", lookEl.value === "modern");
   });
 
   const landingEl = root.querySelector("#landing-level");

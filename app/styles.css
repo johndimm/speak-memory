@@ -6,6 +6,7 @@
   --card: #fffdf9;
   --accent: #c45c26;
   --accent-soft: #e8a882;
+  --accent-rgb: 196, 92, 38; /* the accent as r,g,b — for tints: rgba(var(--accent-rgb), 0.08) */
   --line: rgba(26, 22, 18, 0.12);
   --shadow: 0 18px 50px rgba(26, 22, 18, 0.12);
   --radius: 14px;
@@ -385,14 +386,14 @@ button.tri:active { transform: translateY(1px); }
   font-weight: 600;
   font-size: 0.9rem;
   cursor: pointer;
-  background: rgba(196, 92, 38, 0.04);
+  background: rgba(var(--accent-rgb), 0.04);
 }
 .photo-add { font: inherit; }
 /* Mic button (no longer shares .photo-add) — same chip look, its own rules. */
 .mic-btn {
   display: inline-flex; align-items: center; gap: 0.4rem; font: inherit; font-weight: 600; font-size: 0.9rem;
   padding: 0.7rem 1.1rem; border: 1px dashed var(--accent-soft); border-radius: var(--radius);
-  color: var(--accent); background: rgba(196, 92, 38, 0.04); cursor: pointer;
+  color: var(--accent); background: rgba(var(--accent-rgb), 0.04); cursor: pointer;
 }
 .mic-btn.listening {
   border-style: solid;
@@ -870,7 +871,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .detail-nav-btn.mem-edit, .detail-nav-btn.mem-del { width: auto; height: auto; border-radius: 999px; }
 .summarizing-note {
   max-width: 52rem; margin: 0 0 1.25rem;
-  background: rgba(196, 92, 38, 0.08); border: 1px solid var(--accent-soft); border-radius: var(--radius);
+  background: rgba(var(--accent-rgb), 0.08); border: 1px solid var(--accent-soft); border-radius: var(--radius);
   color: var(--accent); padding: 0.7rem 1rem; font-size: 0.9rem; line-height: 1.4;
 }
 .summarizing-note .sn-count { font-weight: 600; }
@@ -1376,7 +1377,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-empty { color: var(--ink-soft); font-style: italic; margin-top: 1rem; }
 .ent-onboard { display: block; width: 100%; margin: 0.2rem 0 0.6rem; border: none; background: var(--accent); color: #fff; font: inherit; font-weight: 600; font-size: 0.95rem; padding: 0.7rem 1rem; border-radius: 10px; cursor: pointer; text-align: left; }
 .ent-onboard:hover { filter: brightness(1.05); }
-.ent-needs { display: block; width: 100%; margin: 0.2rem 0 0.8rem; border: 1px solid rgba(196,92,38,0.4); background: rgba(196,92,38,0.08); color: var(--accent); font: inherit; font-weight: 600; font-size: 0.9rem; padding: 0.6rem 0.9rem; border-radius: 10px; cursor: pointer; text-align: left; }
+.ent-needs { display: block; width: 100%; margin: 0.2rem 0 0.8rem; border: 1px solid rgba(var(--accent-rgb), 0.4); background: rgba(var(--accent-rgb), 0.08); color: var(--accent); font: inherit; font-weight: 600; font-size: 0.9rem; padding: 0.6rem 0.9rem; border-radius: 10px; cursor: pointer; text-align: left; }
 /* Onboarding overlay — the live checklist + names */
 .ob-card { max-width: 34rem; text-align: left; }
 .ob-title { font-family: var(--font-display); font-size: 1.8rem; margin-bottom: 0.3rem; text-align: center; }
@@ -1394,7 +1395,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ob-names-none { color: var(--ink-soft); font-style: italic; font-size: 0.85rem; }
 .ob-chip { background: var(--accent-soft); color: var(--paper); border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.82rem; animation: show-in 0.4s ease; }
 #ob-stop { color: var(--ink-soft); border: 1px solid var(--line); background: var(--card); font: inherit; border-radius: 999px; padding: 0.5rem 1.2rem; cursor: pointer; }
-.ent-needs:hover { background: rgba(196,92,38,0.14); }
+.ent-needs:hover { background: rgba(var(--accent-rgb), 0.14); }
 .ent-card-self { border-color: var(--accent); }
 /* Editable name heading on a name's page — looks like a title, becomes clearly editable on focus. */
 .ent-rename { font-family: var(--font-display); font-size: 2rem; font-weight: 400; line-height: 1.1; color: var(--ink);
@@ -1429,7 +1430,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-sel-del:disabled { opacity: 0.45; cursor: default; }
 .ent-pick { font-size: 1.05rem; color: var(--accent); line-height: 1; }
 .ent-selectmode .ent-card { padding-right: 0.9rem; }
-.ent-card-picked { border-color: var(--accent); border-style: solid; background: rgba(196, 92, 38, 0.08); }
+.ent-card-picked { border-color: var(--accent); border-style: solid; background: rgba(var(--accent-rgb), 0.08); }
 body.ent-selecting:has(#people-view:not([hidden])) #next-step { display: none !important; }
 .ent-flag-banner { background: rgba(179, 38, 30, 0.1); border: 1px solid rgba(179, 38, 30, 0.4); color: #b3261e; border-radius: var(--radius); padding: 0.6rem 0.9rem; font-size: 0.9rem; margin: 0.5rem 0; }
 .ent-count { margin-left: auto; font-size: 0.8rem; color: var(--paper); background: var(--accent-soft); border-radius: 999px; padding: 0.05rem 0.5rem; min-width: 1.5rem; text-align: center; }
@@ -1940,7 +1941,7 @@ img.sample-photo { object-fit: cover; }
 .ladder-head { margin: 0.25rem 0 0.2rem; font-size: 0.78rem; color: var(--ink-soft); }
 .ladder-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0; border-top: 1px solid var(--line); min-height: 2.4rem; }
 .ladder-row:first-of-type { border-top: none; }
-.ladder-row.picked { background: rgba(196, 92, 38, 0.07); margin: 0 -0.8rem; padding-left: 0.8rem; padding-right: 0.8rem; }
+.ladder-row.picked { background: rgba(var(--accent-rgb), 0.07); margin: 0 -0.8rem; padding-left: 0.8rem; padding-right: 0.8rem; }
 .ladder-cat { flex: 0 0 6.2rem; font-weight: 600; font-size: 0.88rem; }
 .ladder-now { flex: 1 1 auto; min-width: 0; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ladder-yrs { color: var(--ink-soft); font-size: 0.8rem; }
@@ -1975,7 +1976,7 @@ img.sample-photo { object-fit: cover; }
 .sample-journal .node-comment { display: none !important; }
 
 /* In a Future: what this is, from when to when, and the prompt it was imagined from. */
-.future-banner { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.8rem; margin: 0 0 1rem; padding: 0.6rem 0.9rem; border: 1px solid rgba(196, 92, 38, 0.35); background: rgba(196, 92, 38, 0.07); border-radius: var(--radius); font-size: 0.88rem; }
+.future-banner { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.8rem; margin: 0 0 1rem; padding: 0.6rem 0.9rem; border: 1px solid rgba(var(--accent-rgb), 0.35); background: rgba(var(--accent-rgb), 0.07); border-radius: var(--radius); font-size: 0.88rem; }
 .fb-what { font-weight: 600; color: var(--accent); }
 .fb-prompt { flex: 1 1 12rem; font-family: var(--font-display); font-size: 1rem; color: var(--ink); }
 .fb-btns { display: flex; gap: 1rem; flex-wrap: wrap; }
@@ -1992,7 +1993,7 @@ img.sample-photo { object-fit: cover; }
 .fut-row-wrap { display: flex; align-items: stretch; gap: 0.3rem; }
 .fut-row { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 0.7rem; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 0.9rem; font: inherit; color: var(--ink); cursor: pointer; }
 .fut-row:hover { border-color: var(--accent-soft); }
-.fut-row.active { border-color: var(--accent); background: rgba(196, 92, 38, 0.07); }
+.fut-row.active { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.07); }
 .fr-year { flex: 0 0 3.2rem; font-family: var(--font-display); font-size: 1.25rem; color: var(--accent); }
 .fr-now .fr-year { font-family: inherit; font-size: 0.95rem; font-weight: 700; color: var(--ink); }
 .fr-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2030,12 +2031,52 @@ img.sample-photo { object-fit: cover; }
 .lt-yrs { font-size: 0.72rem; color: var(--ink-soft); }
 .lt-tag { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
 .lt-add { min-width: 3.2rem; align-items: center; border-style: dashed; border-color: var(--accent-soft); background: var(--paper); color: var(--accent); font-size: 1.3rem; cursor: pointer; }
-.lt-add:hover { background: rgba(196, 92, 38, 0.08); }
+.lt-add:hover { background: rgba(var(--accent-rgb), 0.08); }
 .lt-story { cursor: pointer; }
 .lt-story:hover { border-color: var(--accent-soft); }
-.lt-now { border-color: var(--accent); background: rgba(196, 92, 38, 0.08); }
+.lt-now { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
 .lt-missing { cursor: pointer; border-style: dashed; }
 .lt-missing .lt-name { font-weight: 500; color: var(--accent); }
 .lt-refile { margin-left: 0.6rem; border: none; background: none; padding: 0; font: inherit; font-size: 0.72rem; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--accent); cursor: pointer; }
 
 .cap-more { border: none; background: none; padding: 0.2rem 0.4rem; font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--accent); cursor: pointer; }
+
+
+/* ============================================================================================
+   MODERN look (⚙ → Look). Classic stays the default; this only overrides tokens and a few shapes.
+   ============================================================================================ */
+html.theme-modern {
+  --ink: #111827;
+  --ink-soft: #6b7280;
+  --paper: #ffffff;
+  --paper-deep: #f3f4f6;
+  --card: #ffffff;
+  --accent: #4f46e5;
+  --accent-soft: #a5b4fc;
+  --accent-rgb: 79, 70, 229;
+  --line: rgba(17, 24, 39, 0.10);
+  --shadow: 0 1px 2px rgba(17, 24, 39, 0.05), 0 8px 24px rgba(17, 24, 39, 0.06);
+  --radius: 12px;
+  --font-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+html.theme-modern .grain { display: none; }
+html.theme-modern body { -webkit-font-smoothing: antialiased; }
+/* Headings: tight sans instead of the display serif. */
+html.theme-modern .app-title { font-weight: 700; letter-spacing: -0.02em; font-size: clamp(1.35rem, 4vw, 1.75rem); }
+html.theme-modern .node-name, html.theme-modern .write-title, html.theme-modern .ent-title,
+html.theme-modern .fut-title, html.theme-modern .fut-new-title, html.theme-modern h2 { font-weight: 700; letter-spacing: -0.02em; }
+html.theme-modern .node-word { font-weight: 700; letter-spacing: -0.01em; }
+html.theme-modern .node-phrase { font-style: normal; font-weight: 500; color: var(--ink-soft); }
+html.theme-modern .write-prompt:not(.is-question) { letter-spacing: 0.04em; }
+html.theme-modern .write-prompt.is-question { font-weight: 600; letter-spacing: -0.01em; }
+/* The header: plain white with a hairline, no heavy shadow. */
+html.theme-modern .app-bar { box-shadow: none; background: rgba(255, 255, 255, 0.92); backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px); }
+/* Tabs: a light segmented control; the active tab is a white pill with a soft shadow. */
+html.theme-modern .mode-nav { background: var(--paper-deep); border-color: transparent; }
+html.theme-modern .mode-btn.active { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(17, 24, 39, 0.12); }
+html.theme-modern .mode-btn:disabled { opacity: 0.35; }
+/* Flat cards: hairline borders, no drop shadows on the small ones. */
+html.theme-modern .ent-card, html.theme-modern .fut-row, html.theme-modern .lt-block,
+html.theme-modern .fact-chip, html.theme-modern .cap-chip { box-shadow: none; }
+html.theme-modern .rep-tab.active { background: var(--ink); color: #fff; }
