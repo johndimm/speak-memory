@@ -71,9 +71,17 @@ export async function openDoc(name, title) {
   ov.querySelector(".doc-title").textContent = title || "";
   body.innerHTML = `<p class="doc-loading">Loading…</p>`;
   ov.hidden = false;
+  // Remember where you were in each document, and open it there next time.
+  const posKey = `doc-scroll:${name}`;
+  body.onscroll = null;
   try {
     const md = await fetch(`docs/${name}.md`).then((r) => { if (!r.ok) throw new Error(r.status); return r.text(); });
     body.innerHTML = mdToHtml(md);
+    let saved = 0;
+    try { saved = Number(localStorage.getItem(posKey)) || 0; } catch { /* */ }
+    body.scrollTop = saved;
+    let t = null;
+    body.onscroll = () => { clearTimeout(t); t = setTimeout(() => { try { localStorage.setItem(posKey, String(Math.round(body.scrollTop))); } catch { /* */ } }, 150); };
     const copyBtn = ov.querySelector(".doc-copy");
     copyBtn.textContent = "Copy";
     copyBtn.onclick = () => { navigator.clipboard?.writeText(md).then(() => { copyBtn.textContent = "Copied ✓"; setTimeout(() => (copyBtn.textContent = "Copy"), 1500); }); };
