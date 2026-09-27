@@ -1587,9 +1587,9 @@ body.ent-selecting:has(#people-view:not([hidden])) #next-step { display: none !i
   .app-bar-inner { gap: 0.6rem; }
   /* Six tabs — keep them on ONE row (never let the gear wrap to its own line). Tighten spacing so
      they fit a 360px phone; if a narrower screen can't hold them, the row scrolls sideways. */
-  .mode-nav { width: 100%; max-width: 100%; gap: 0.05rem; padding: 0.2rem; flex-wrap: nowrap; justify-content: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; border-radius: 999px; box-sizing: border-box; }
+  .mode-nav { width: 100%; max-width: 100%; gap: 0; padding: 0.2rem; flex-wrap: nowrap; justify-content: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; border-radius: 999px; box-sizing: border-box; }
   .mode-nav::-webkit-scrollbar { display: none; }
-  .mode-btn { flex: 0 0 auto; min-width: 0; padding: 0.38rem 0.4rem; font-size: 0.72rem; white-space: nowrap; }
+  .mode-btn { flex: 0 0 auto; min-width: 0; padding: 0.38rem 0.3rem; font-size: 0.72rem; white-space: nowrap; }
   .mode-more { flex: 0 0 auto; }
   #more-btn { padding-left: 0.4rem; padding-right: 0.4rem; }
   /* The sideways-scrolling tab row clips anything that pokes out of it — so here the More menu is
@@ -1969,3 +1969,15 @@ img.sample-photo { object-fit: cover; }
 
 /* A Future is read-only: no "Add your take" box on its pages. */
 .sample-journal .node-comment { display: none !important; }
+
+/* In a Future: what this is, from when to when, and the prompt it was imagined from. */
+.future-banner { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.8rem; margin: 0 0 1rem; padding: 0.6rem 0.9rem; border: 1px solid rgba(196, 92, 38, 0.35); background: rgba(196, 92, 38, 0.07); border-radius: var(--radius); font-size: 0.88rem; }
+.fb-what { font-weight: 600; color: var(--accent); }
+.fb-prompt { flex: 1 1 12rem; font-family: var(--font-display); font-size: 1rem; color: var(--ink); }
+.fb-btns { display: flex; gap: 1rem; flex-wrap: wrap; }
+.fb-back, .fb-reveal { border: none; background: none; padding: 0; font: inherit; color: var(--accent); font-weight: 600; cursor: pointer; white-space: nowrap; }
+/* The journal's title stays on one line on phones (a long Future name ends in …). */
+@media (max-width: 640px) {
+  .app-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .title-wrap { min-width: 0; max-width: 100%; }
+}

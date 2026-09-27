@@ -9,7 +9,7 @@ import { initActivity } from "./activity.js";
 import { initEntities } from "./entities.js";
 import { purgeRaw, getAllMemories, getEntry } from "./db.js";
 import { ensureSelf } from "./self.js";
-import { jkey, isSampleJournal, activeJournalId } from "./journal.js";
+import { jkey, isSampleJournal, activeJournalId, isFutureJournal, listJournals, switchJournal } from "./journal.js";
 
 // The guided daily workflow: on open, land on the first unfinished step —
 //   1) Journal   until today has an entry,
@@ -200,7 +200,7 @@ document.addEventListener("click", (e) => {
 const LAST_MODE_KEY = jkey("last-mode");
 const activitySubnav = document.getElementById("activity-subnav");
 let activitySub = "queue"; // which face of the Activity tab: the queue list, or the node graph
-const MORE_MODES = new Set(["futures", "timeline", "places", "activity"]); // live under the "More" menu
+const MORE_MODES = new Set(["me", "timeline", "places", "activity"]); // live under the "More" menu
 function setMode(mode, arg, zoom) {
   try { if (mode !== "settings") localStorage.setItem(LAST_MODE_KEY, mode); } catch { /* ignore */ } // remember the tab for reload
   if (nextBtn) nextBtn.hidden = true; // clear the Next nudge on any navigation; a save re-offers it
@@ -356,16 +356,36 @@ try {
 // A sample life is read-only: it never opens Write; the body class hides write/edit/delete (styles.css).
 if (isSampleJournal()) {
   document.body.classList.add("sample-journal");
+  // In a Future, say what it is — its span and the prompt it was imagined from — on every page.
+  if (isFutureJournal()) {
+    const f = listJournals().find((j) => j.id === activeJournalId()) || {};
+    const fmt = (iso) => { try { return new Date(iso + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); } catch { return iso; } };
+    const from = f.startDate ? fmt(f.startDate) : (f.baseYear ? String(f.baseYear) : "");
+    const span = from && f.endYear ? `${from} → ${f.endYear}` : (f.endYear ? `to ${f.endYear}` : "");
+    const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const bar = document.createElement("div");
+    bar.className = "future-banner";
+    bar.innerHTML = `<span class="fb-what">🔮 Imagined future${span ? ` · ${esc(span)}` : ""}</span>`
+      + `<span class="fb-prompt">${f.nudge ? `“${esc(f.nudge)}”` : "Straight ahead — no nudge"}</span>`
+      + `<span class="fb-btns"><button type="button" class="fb-reveal">▶ Play the reveal</button><button type="button" class="fb-back">← Your real journal</button></span>`;
+    bar.querySelector(".fb-back").addEventListener("click", () => switchJournal(""));
+    bar.querySelector(".fb-reveal").addEventListener("click", async () => {
+      const { playFutureShow } = await import("./audioshow.js");
+      playFutureShow({ endYear: f.endYear, years: f.years, nudge: f.nudge });
+    });
+    document.querySelector(".app-main")?.prepend(bar);
+  }
   // Same tab bar as your journal, but the writing tabs are off (grayed out by the CSS).
-  for (const b of modeBtns) if (["diary", "memoir", "me"].includes(b.dataset.mode)) { b.disabled = true; b.title = "Read-only — nothing to write here"; }
+  for (const b of [...modeBtns, ...document.querySelectorAll(".more-item")]) if (["diary", "memoir", "me"].includes(b.dataset.mode)) { b.disabled = true; b.title = "Read-only — nothing to write here"; }
   // A just-imagined future lands on the Activity page, so you WATCH the summaries run (queued →
   // summarizing → done) instead of staring at a Journal that's silently filling in. Futures sets
   // this flag the first time you step into one; it fires once, then falls back to the Journal.
-  const landActivity = sessionStorage.getItem("land-on-graph");
-  if (landActivity && landActivity === activeJournalId()) {
-    sessionStorage.removeItem("land-on-graph");
-    setMode("activity");   // opening Activity primes the pass, then shows the live queue
-  } else if (savedMode && savedMode !== "diary" && savedMode !== "memoir" && VALID_MODES.has(savedMode)) {
+  // Opening a Future from its card lands in Browse at Life; a reload keeps you where you were.
+  const landBrowse = sessionStorage.getItem("land-on-browse");
+  if (landBrowse && landBrowse === activeJournalId()) {
+    sessionStorage.removeItem("land-on-browse");
+    setMode("browse", undefined, "life");
+  } else if (savedMode && !["diary", "memoir", "me", "diary-edit", "memoir-edit"].includes(savedMode) && VALID_MODES.has(savedMode)) {
     if (savedMode === "browse") { restoreJournalPos(); setMode("browse"); }
     else setMode(savedMode);
   } else {

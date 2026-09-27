@@ -128,7 +128,8 @@ export function initFutures(root) {
     const st = statusOf(f);
     if (st === "generating") return `<span class="fut-card-tag fut-gen" data-gen="${escapeHtml(f.id)}">◷ Imagining…</span>`;
     if (st === "error") return `<span class="fut-card-tag fut-err">⚠ ${escapeHtml(f.error || "Failed")} — tap to retry</span>`;
-    return `<span class="fut-card-tag">${f.years ? `${f.years}-year future` : "future"} · tap to step in</span>`;
+    if (f.id === activeJournalId()) return `<span class="fut-card-tag">${f.years ? `${f.years}-year future` : "future"} · you're in it</span>`;
+    return `<span class="fut-card-tag fut-open">${f.years ? `${f.years}-year future` : "future"} · Open ›</span>`;
   }
 
   // The list of futures — rebuilt on its own so a background update never clobbers the composer.
@@ -148,7 +149,7 @@ export function initFutures(root) {
       </div>`).join("");
     return `
       <p class="nav-hint">Your futures</p>
-      <p class="field-hint" style="margin:0 0 0.8rem">A future appears here as soon as you start it. When it's ready, open it to step in — Journal, Timeline, and Graph all become that life.</p>
+      <p class="field-hint" style="margin:0 0 0.8rem">A future appears here as soon as you start it. When it's ready, tap <strong>Open ›</strong>: it opens in Browse at Life, your real past running straight into the imagined years.</p>
       ${futures.length
         ? `<div class="fut-grid">${cards}</div>`
         : `<p class="fut-empty">No futures yet. Imagine one above and it'll show up here.</p>`}`;
@@ -166,14 +167,7 @@ export function initFutures(root) {
     const inFuture = isSampleJournal();
     root.innerHTML = `
       <div class="futures">
-        ${inFuture ? `
-          <div class="fut-inbanner">
-            <span>You're living in an imagined future. This isn't your real journal.</span>
-            <span class="fut-inbanner-btns">
-              <button type="button" class="fut-reveal" id="fut-reveal">▶ Play the reveal</button>
-              <button type="button" class="fut-back" id="fut-back">← Back to your real journal</button>
-            </span>
-          </div>` : ""}
+        ${"" /* In a Future, the banner at the top of every page (main.js) says what it is. */}
 
         <div class="fut-compose">
           <h2 class="fut-title">Imagine forward</h2>
@@ -437,13 +431,15 @@ export function initFutures(root) {
       if (!f) return;
       const st = statusOf(f);
       if (st === "ready") {
-        // First step-in: land on the Graph so the summarization is visible as it happens.
-        if (!f.opened) { try { sessionStorage.setItem("land-on-graph", f.id); } catch { /* ignore */ } registerJournal({ ...f, opened: true }); }
+        // Opening a Future lands you in Browse at Life — your real past running into the imagined years
+        // (summaries still being written show their progress there).
+        try { sessionStorage.setItem("land-on-browse", f.id); } catch { /* ignore */ }
+        if (!f.opened) registerJournal({ ...f, opened: true });
         switchJournal(f.id);
         return;
       }
       if (st === "error") { retry(f); return; }
-      setStatus("working", `Still imagining ${f.endYear || "your future"}… this usually takes a minute or two. It'll say “step in” when it's ready.`);
+      setStatus("working", `Still imagining ${f.endYear || "your future"}… this usually takes a minute or two. It'll say “Open ›” when it's ready.`);
     }
   });
 

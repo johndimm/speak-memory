@@ -30,18 +30,18 @@
         <button class="title-edit" id="title-edit" type="button" aria-label="Rename journal" title="Rename">✎</button>
       </div>
       <nav class="mode-nav" aria-label="Section">
-        <!-- The four-step daily workflow, in order: today → yourself → the people → your stories. -->
+        <!-- Today, the people, the past, the future — then Browse to read it all. (Me lives in More.) -->
         <button class="mode-btn active" data-mode="diary">Journal</button>
-        <button class="mode-btn" data-mode="me">Me</button>
         <button class="mode-btn" data-mode="people">Names</button>
         <button class="mode-btn" data-mode="memoir">Stories</button>
+        <button class="mode-btn" data-mode="futures">Futures</button>
         <!-- Browse the whole life tree (Life → decades → … and the story categories). Opens at Life the
              first time, then wherever you last were. The only way in for a read-only Future/sample. -->
         <button class="mode-btn" data-mode="browse">Browse</button>
         <div class="mode-more">
           <button class="mode-btn" id="more-btn" aria-haspopup="true" aria-expanded="false">More ▾</button>
           <div class="more-menu" id="more-menu" hidden>
-            <button class="more-item" data-mode="futures">Futures</button>
+            <button class="more-item" data-mode="me">Me</button>
             <button class="more-item" data-mode="timeline">Timeline</button>
             <button class="more-item" data-mode="places">Map</button>
             <button class="more-item" data-mode="activity">Activity</button>

@@ -14,9 +14,9 @@ Three tabs hold your life, one for each tense:
 - **Journal**: the **present**. What happened today, in your own words.
 - **Futures**: the **future**. The app imagines your journal carrying on for the next 10 or 20 years, or for the rest of your life, grounded in everything you've told it.
 
-Two more tabs tell the app **who**:
+Two more places tell the app **who**:
 
-- **Me**: you, and your life *now*: where you live, who with, your work, what you do for fun, and since when.
+- **Me** (in **More**): you, and your life *now*: where you live, who with, your work, what you do for fun, and since when.
 - **Names**: everyone and everything you mention (people, pets, places, organizations), each with a short description.
 
 **Browse** lets you read it all as one tree, from your whole Life down to a single day.
@@ -59,7 +59,7 @@ This is the easiest place to start, and it's already a complete product. Open **
 
 Next, tell the app **who** everyone is.
 
-- **Me.** Open **Me** and just talk. One question at a time appears above the box: *Where do you live, and since when?* Then *Who do you live with?*, then work, fun, family and best friends. Answer in any order, in your own words. The chips tick themselves off as they hear the answers, and "for ten years" or "since I was a kid" become years.
+- **Me.** Open **More → Me** and just talk. One question at a time appears above the box: *Where do you live, and since when?* Then *Who do you live with?*, then work, fun, family and best friends. Answer in any order, in your own words. The chips tick themselves off as they hear the answers, and "for ten years" or "since I was a kid" become years.
 - **Names.** Everyone your Journal has mentioned is already listed.
   - Names that come up **twice or more** get a description written for you from your own entries.
   - Names mentioned **only once** (dashed, with ✎) need a word from you: "Luann is my sister", "Oak Ave was our first house". Follow **Next name to describe →** through them one at a time (Next saves what you typed).
@@ -76,7 +76,7 @@ Stories are summarized just like days. A story rolls up into its **decade** (so 
 
 ### Level 4: A Future (where it all pays off)
 
-Everything from Levels 1–3 comes together in **Futures** (under **More**): the app imagines your journal carrying on from **tomorrow**, for 10 years, 20 years, or the rest of your life. See **Futures** below for what it's built from. The more you've done, the more it sounds like you, with your real people, places and threads.
+Everything from Levels 1–3 comes together in **Futures**: the app imagines your journal carrying on from **tomorrow**, for 10 years, 20 years, or the rest of your life. See **Futures** below for what it's built from. The more you've done, the more it sounds like you, with your real people, places and threads.
 
 ---
 
@@ -134,7 +134,9 @@ A Future is built from:
 
 Every Future **starts tomorrow**, picking up where your Journal leaves off, and is built only from your real days, never from another Future's. The more you've done in Levels 1–3, the sharper it is.
 
-**Inside a Future**, your real past and the imagined years appear **together**: Browse shows your real decades running straight into the imagined ones. A Future is **read-only**: there's no Journal, Stories or Me to write in, and every view (Names, Browse, Futures, Timeline, Map, Activity) sits in the tab bar. Your real journal is read live and never copied or changed. Tap **← Back to your real journal** to return. **▶ Play the reveal** narrates the Future aloud.
+When a Future is ready, tap **Open ›** on its card. It opens in **Browse at Life**, with your real past and the imagined years together: your real decades run straight into the imagined ones. A banner at the top of every page shows the Future's span and the **prompt** it was imagined from, with **▶ Play the reveal** (narrated aloud) and **← Your real journal** to return.
+
+A Future is **read-only**. The tab bar stays the same, but Journal, Stories and Me are grayed out. Your real journal is read live and never copied or changed.
 
 ---
 
