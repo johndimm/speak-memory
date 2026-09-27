@@ -269,7 +269,7 @@ if (activitySubnav) activitySubnav.addEventListener("click", (e) => {
 // Browse → back where you last were in the life tree (remembered per journal), or Life the first time.
 function openBrowse() {
   if (restoreJournalPos()) setMode("browse");
-  else setMode("browse", undefined, "life");
+  else setMode("browse", undefined, localStorage.getItem("journal-landing") || "life"); // Settings › Browse opens on
 }
 modeBtns.forEach((btn) => btn.addEventListener("click", () => (btn.dataset.mode === "browse" ? openBrowse() : setMode(btn.dataset.mode))));
 

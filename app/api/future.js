@@ -23,7 +23,7 @@ already write in this journal — a voice-memo poured out at the end of the day.
 any other day, so write them RAW: first person, unpolished, specific, the texture of a real spoken entry.
 
 Rules:
-- Choose about {DAYS} days total, spread roughly evenly from {START_YEAR} to {END_YEAR} — a day or two per year,
+- Choose about {DAYS} days total, spread roughly evenly from {START_YEAR} to {END_YEAR} — about one every {GAP} —
   never all clustered at the end. Give each a real, plausible calendar date.
 - Ground everything in the real journal: name the ACTUAL people, places, and running threads that appear in it,
   and let them evolve plausibly over the years — people age, move, arrive, drift away; projects finish or fade;
@@ -80,14 +80,14 @@ function parseJson(text) {
   return null;
 }
 
-async function callChat(messages, temperature) {
+async function callChat(messages, temperature, maxTokens = 8192) { // up to 40 raw days + states in one reply
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY not set in environment");
   const model = process.env.DEEPSEEK_MODEL || DEFAULT_MODEL;
   const res = await fetch(API_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model, temperature, response_format: { type: "json_object" }, messages }),
+    body: JSON.stringify({ model, temperature, response_format: { type: "json_object" }, messages, max_tokens: maxTokens }),
   });
   if (!res.ok) throw new Error(`DeepSeek API error ${res.status}: ${await res.text()}`);
   const data = await res.json();
@@ -103,7 +103,8 @@ export default async function handler(req, res) {
       res.status(400).json({ error: "No journal entries yet — write a few days first, then imagine forward." });
       return;
     }
-    const years = [5, 10, 20, 30].includes(Number(body.years)) ? Number(body.years) : 10;
+    // Any span up to a whole life (e.g. 15 → 95 is 80 years).
+    const years = Math.max(1, Math.min(100, Math.round(Number(body.years)) || 10));
     const nudge = typeof body.prompt === "string" ? body.prompt.trim().slice(0, 2000) : "";
     // How many future diary entries to write. Caller-controlled; default ~1/year, clamped 2–40.
     const requested = Number(body.count);
@@ -120,7 +121,13 @@ export default async function handler(req, res) {
       .replace(/{YEARS}/g, String(years))
       .replace(/{DAYS}/g, String(sampleDays))
       .replace(/{START_YEAR}/g, String(baseYear + 1))
-      .replace(/{END_YEAR}/g, String(endYear));
+      .replace(/{END_YEAR}/g, String(endYear))
+      .replace(/{GAP}/g, years / sampleDays <= 1.5 ? "year" : `${Math.round(years / sampleDays)} years`);
+    // "Rest of life": the span runs out to the end — let the life actually reach it.
+    const toAge = Number(body.toAge), ageNow = Number(body.currentAge);
+    if (toAge > 0 && ageNow > 0) {
+      system += `\n\nThis future runs for the REST OF MY LIFE: I am ${ageNow} now and it ends around age ${toAge} (${endYear}). Let me grow up and grow old at a believable pace — each entry sounds like me at THAT age (a teenager writes like a teenager, an old person like an old person) — through the big turns a whole life brings: leaving home, work, love, family, loss, and the final years.`;
+    }
     if (nudge) {
       system += `\n\nSteer the future this way: "${nudge}"\nHonor that intention, but keep everything else grounded in the journal and its people.`;
     }

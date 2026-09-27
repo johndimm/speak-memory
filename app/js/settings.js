@@ -101,7 +101,7 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
   root.innerHTML = `
     <div class="settings">
       <section class="settings-group">
-        <h2 class="settings-h">Journal</h2>
+        <h2 class="settings-h">Browse</h2>
         <label class="field">
           <span class="field-label" for="landing-level">Opens on</span>
           <select id="landing-level">
@@ -111,7 +111,7 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
             <option value="decade">The current decade</option>
             <option value="life">Your whole life</option>
           </select>
-          <span class="field-hint">Where the Journal tab starts. Drill into the cards from there; the breadcrumb walks you back up.</span>
+          <span class="field-hint">Where Browse starts the first time — after that it returns to wherever you last were. The breadcrumb walks you back up.</span>
         </label>
         <label class="field">
           <span class="field-label" for="year-grouping">Group years by</span>
@@ -338,7 +338,7 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
   });
 
   const landingEl = root.querySelector("#landing-level");
-  landingEl.value = localStorage.getItem(LANDING_KEY) || "week";
+  landingEl.value = localStorage.getItem(LANDING_KEY) || "life";
   landingEl.addEventListener("change", () => localStorage.setItem(LANDING_KEY, landingEl.value));
 
   // Year grouping — calendar decades vs life decades (relative to a birth year). Read by the
@@ -552,5 +552,5 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
     }
   });
 
-  return { refresh: () => { landingEl.value = localStorage.getItem(LANDING_KEY) || "week"; } };
+  return { refresh: () => { landingEl.value = localStorage.getItem(LANDING_KEY) || "life"; } };
 }

@@ -93,8 +93,23 @@ function elapsed(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+// "Rest of life": imagine forward to this age.
+const LIFE_END_AGE = 95;
+// Your age now, from Me (age or birth year) or Settings' birth year; null if unknown.
+async function currentAge() {
+  const yearNow = new Date().getFullYear();
+  try {
+    const f = ((await ensureSelf()) || {}).facts || {};
+    if (Number.isFinite(Number(f.age)) && Number(f.age) > 0) return Number(f.age);
+    if (Number(f.birthYear) > 1900) return yearNow - Number(f.birthYear);
+  } catch { /* */ }
+  const by = Number(localStorage.getItem(jkey("birth-year")));
+  return by > 1900 && by <= yearNow ? yearNow - by : null;
+}
+
 export function initFutures(root) {
   let composeYears = 10;
+  let composeToAge = null; // set when "Rest of life" is picked
   let composeCount = 8; // how many future diary entries to generate (user-controllable)
   const activeGen = new Set(); // ids generating in THIS session (survives tab switches, not reloads)
   let tick = null;
@@ -154,8 +169,8 @@ export function initFutures(root) {
         <div class="fut-compose">
           <h2 class="fut-title">Imagine forward</h2>
           <p class="fut-lead">Let the journal keep going. The app writes raw diary days across the coming years —
-            grounded in your real people and threads — then opens them as a life you can browse in Journal,
-            Timeline, and Graph. Leave the nudge blank to just see where things drift, or push the future one
+            grounded in your real people and threads — then opens them as a life you can browse — your real past
+            running straight into the imagined years — in Browse, Timeline, and Map. Leave the nudge blank to just see where things drift, or push the future one
             way with a decision, a hope, or a fear.</p>
           <p class="fut-lead" style="margin-top:0">The more I know about your life, the sharper the fortune.
             <button type="button" class="fut-interview" id="fut-interview">🎙 Tell me your story</button></p>
@@ -164,7 +179,8 @@ export function initFutures(root) {
           <div class="fut-controls">
             <div class="fut-horizons" role="group" aria-label="How far ahead">
               <button class="fut-h${composeYears === 10 ? " active" : ""}" data-years="10">10 years</button>
-              <button class="fut-h${composeYears === 20 ? " active" : ""}" data-years="20">20 years</button>
+              <button class="fut-h${composeYears === 20 && !composeToAge ? " active" : ""}" data-years="20">20 years</button>
+              <button class="fut-h${composeToAge ? " active" : ""}" data-years="life">Rest of life (to ${LIFE_END_AGE})</button>
             </div>
             <label class="fut-count">
               <span>Entries</span>
@@ -205,8 +221,17 @@ export function initFutures(root) {
   function wire() {
     const nudge = root.querySelector("#fut-nudge");
     root.querySelectorAll(".fut-h").forEach((b) =>
-      b.addEventListener("click", () => {
-        composeYears = Number(b.dataset.years);
+      b.addEventListener("click", async () => {
+        if (b.dataset.years === "life") {
+          const age = await currentAge();
+          if (age == null) { setStatus("error", `Tell Me your age first (or set your birth year in ⚙ Settings) — then I can imagine your life to ${LIFE_END_AGE}.`); return; }
+          if (age >= LIFE_END_AGE - 1) { setStatus("error", `You're already ${age} — try 10 years instead.`); return; }
+          composeYears = LIFE_END_AGE - age; composeToAge = LIFE_END_AGE;
+          // A long life needs more days to not feel sparse — about one every two years (max 40).
+          composeCount = Math.max(composeCount, Math.min(40, Math.round(composeYears / 2)));
+          const countEl = root.querySelector("#fut-count"); if (countEl) countEl.value = composeCount;
+          setStatus("", `${composeYears} years — from ${age} to ${LIFE_END_AGE}.`);
+        } else { composeYears = Number(b.dataset.years); composeToAge = null; setStatus("", ""); }
         root.querySelectorAll(".fut-h").forEach((x) => x.classList.toggle("active", x === b));
       }));
     const countEl = root.querySelector("#fut-count");
@@ -253,7 +278,7 @@ export function initFutures(root) {
   function setStatus(cls, msg) {
     const status = root.querySelector("#fut-status");
     if (!status) return;
-    status.hidden = false;
+    status.hidden = !msg; // an empty message clears it
     status.className = `fut-status ${cls}`;
     status.textContent = msg;
   }
@@ -288,7 +313,7 @@ export function initFutures(root) {
       : `${endYear} — straight ahead`;
 
     // Register it right away so it shows in the list with a live status, then generate.
-    registerJournal({ id, title, kind: "future", subtitle: nudge || "straight ahead", nudge, years, count, baseYear, endYear, createdAt: Date.now(), status: "generating" });
+    registerJournal({ id, title, kind: "future", subtitle: nudge || "straight ahead", nudge, years, count, toAge: composeToAge, baseYear, endYear, createdAt: Date.now(), status: "generating" });
     renderGallery();
     runGeneration(id, entries);
   }
@@ -297,7 +322,7 @@ export function initFutures(root) {
     activeGen.add(id);
     updateGenLabels();
     const f0 = getFuture(id);
-    const { nudge = "", years = 10, count = 8 } = f0 || {};
+    const { nudge = "", years = 10, count = 8, toAge = null } = f0 || {};
     const finish = (patch) => {
       // The user may have deleted this future while it generated — if so, don't resurrect it.
       if (!getFuture(id) && patch.status !== undefined && patch.status !== "error") { activeGen.delete(id); return; }
@@ -324,7 +349,7 @@ export function initFutures(root) {
       try {
         const res = await fetch("/api/future", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entries: entries.map(({ entityRefs, ...e }) => e), prompt: nudge, years, count, memories: baseMemories, about: await getAboutText(), ...(await gatherGrounding(entries)) }), signal: ctrl.signal,
+          body: JSON.stringify({ entries: entries.map(({ entityRefs, ...e }) => e), prompt: nudge, years, count, toAge, currentAge: await currentAge(), memories: baseMemories, about: await getAboutText(), ...(await gatherGrounding(entries)) }), signal: ctrl.signal,
         });
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Server ${res.status}`); }
         data = await res.json();
