@@ -1587,9 +1587,9 @@ body.ent-selecting:has(#people-view:not([hidden])) #next-step { display: none !i
   .app-bar-inner { gap: 0.6rem; }
   /* Six tabs — keep them on ONE row (never let the gear wrap to its own line). Tighten spacing so
      they fit a 360px phone; if a narrower screen can't hold them, the row scrolls sideways. */
-  .mode-nav { width: 100%; max-width: 100%; gap: 0.1rem; padding: 0.22rem; flex-wrap: nowrap; justify-content: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; border-radius: 999px; box-sizing: border-box; }
+  .mode-nav { width: 100%; max-width: 100%; gap: 0.05rem; padding: 0.2rem; flex-wrap: nowrap; justify-content: center; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; border-radius: 999px; box-sizing: border-box; }
   .mode-nav::-webkit-scrollbar { display: none; }
-  .mode-btn { flex: 0 0 auto; min-width: 0; padding: 0.38rem 0.46rem; font-size: 0.74rem; white-space: nowrap; }
+  .mode-btn { flex: 0 0 auto; min-width: 0; padding: 0.38rem 0.4rem; font-size: 0.72rem; white-space: nowrap; }
   .mode-more { flex: 0 0 auto; }
   #more-btn { padding-left: 0.4rem; padding-right: 0.4rem; }
   /* The sideways-scrolling tab row clips anything that pokes out of it — so here the More menu is
@@ -1956,3 +1956,18 @@ img.sample-photo { object-fit: cover; }
 }
 /* A prompt that's a real question (Me's next question, a Stories ladder thread) reads as a sentence. */
 .write-prompt.is-question { text-transform: none; letter-spacing: 0; font-family: var(--font-display); font-size: 1.15rem; font-weight: 400; color: var(--ink); line-height: 1.3; }
+
+/* A Future / sample life has no input tabs (Journal, Stories), so there's room to lay the More
+   menu's items out in the tab bar itself — every view one tap away, no More button. */
+.sample-journal #more-btn,
+.sample-journal .mode-btn[data-mode="me"] { display: none !important; } /* Me is input too — none in a Future */
+.sample-journal .mode-more { display: contents; }
+.sample-journal .more-menu,
+.sample-journal .more-menu[hidden] { display: contents !important; }
+.sample-journal .more-item { flex: 0 0 auto; border: none; background: transparent; color: var(--ink-soft); font: inherit; font-weight: 500; font-size: 0.85rem; padding: 0.5rem 1.1rem; border-radius: 999px; }
+.sample-journal .more-item:hover { background: transparent; color: var(--ink); }
+.sample-journal .more-item.active { background: var(--ink); color: var(--paper); }
+@media (max-width: 640px) {
+  .sample-journal .more-item,
+  .sample-journal .mode-btn { padding: 0.38rem 0.34rem; font-size: 0.72rem; }
+}

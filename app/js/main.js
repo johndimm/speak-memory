@@ -145,7 +145,7 @@ const people = initEntities(peopleView, {
 function openMemoryInJournal(mem) {
   if (nextBtn) nextBtn.hidden = true;
   inputTab = "memoir"; // a memory lives in the Memories tree
-  modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "memoir"));
+  modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === "browse"));
   writeView.hidden = true; settingsView.hidden = true; graphView.hidden = true; livesView.hidden = true; placesView.hidden = true; timelineView.hidden = true;
   futuresView.hidden = true; activityView.hidden = true; peopleView.hidden = true;
   if (activitySubnav) activitySubnav.hidden = true;
@@ -207,7 +207,7 @@ function setMode(mode, arg, zoom) {
   if (mode === "diary" || mode === "diary-edit") inputTab = "diary";
   else if (mode === "memoir" || mode === "memoir-edit") inputTab = "memoir";
   // An edit form or an internal browse page still highlights its owning tab (Journal or Memories).
-  const navMode = mode === "diary-edit" ? "diary" : mode === "memoir-edit" ? "memoir" : mode === "browse" ? inputTab : mode;
+  const navMode = mode === "diary-edit" ? "diary" : mode === "memoir-edit" ? "memoir" : mode;
   modeBtns.forEach((b) => b.classList.toggle("active", b.dataset.mode === navMode));
   // The More button + its items reflect the current mode; close the menu after a pick.
   const moreBtn = document.getElementById("more-btn"), moreMenu = document.getElementById("more-menu");
@@ -266,7 +266,12 @@ if (activitySubnav) activitySubnav.addEventListener("click", (e) => {
   setMode("activity");
 });
 
-modeBtns.forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
+// Browse → back where you last were in the life tree (remembered per journal), or Life the first time.
+function openBrowse() {
+  if (restoreJournalPos()) setMode("browse");
+  else setMode("browse", undefined, "life");
+}
+modeBtns.forEach((btn) => btn.addEventListener("click", () => (btn.dataset.mode === "browse" ? openBrowse() : setMode(btn.dataset.mode))));
 
 // The browse's Write/Add button opens the edit form for the tab you're browsing.
 document.getElementById("browse-add")?.addEventListener("click", () => setMode(inputTab === "memoir" ? "memoir-edit" : "diary-edit"));
@@ -298,7 +303,7 @@ if (moreBtn && moreMenu) {
 const recorder = initRecord(writeView, {
   onSaved: (date) => { setMode("diary", date, "day"); offerNext({ saved: true }); }, // completed the day → nudge to the next step
   onSavedMemory: (mem) => { setMode("memoir-edit", mem); offerNext({ saved: true }); },
-  onOpenMe: () => setMode("me"),                                  // Stories ladder: "Tell Me where you live ›"  // saved story → its READ view, then the next nudge
+  onOpenMe: () => setMode("me"),                                  // Stories ladder: "Tell Me where you live ›"
   onDeleted: (date) => setMode("diary", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
   onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode
