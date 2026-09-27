@@ -214,8 +214,10 @@ function mentionIndex(sources) {
   }
   return byId;
 }
-// Still needs YOUR words: no note of your own, and too few mentions to write one from.
-const needsYou = (e, count) => !isSelfEntity(e) && needsDescription(e) && e.recognized !== false && count <= ASK_MAX;
+// Still needs YOUR words: nothing describes it yet — no note of yours, no profile (however it was
+// written), no facts — and too few mentions to write one from.
+const hasFacts = (e) => !!(e.facts && Object.values(e.facts).some((v) => v != null && String(v).trim() !== ""));
+const needsYou = (e, count) => !isSelfEntity(e) && needsDescription(e) && !(e.profile && e.profile.trim()) && !hasFacts(e) && e.recognized !== false && count <= ASK_MAX;
 // Can be described from the journal: no note, no profile yet, and mentioned often enough.
 // Tried once (profileTriedAt) → never retried automatically, so an empty or failing reply can't loop.
 const canAutoDescribe = (e, count) => !isSelfEntity(e) && needsDescription(e) && e.recognized !== false && !e.profile && !e.profileTriedAt && count > ASK_MAX;
