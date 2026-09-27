@@ -673,7 +673,7 @@ Return ONLY valid JSON: {"subject":"...","fromYear":<int|null>,"toYear":<int|nul
         ? `- orgType: what it is (employer, club, school, band, …)
 - role: my role or involvement
 - years: when it was in my life`
-        : `- relationship: who they are to me (e.g. "my brother", "a coworker", "childhood friend")
+        : `- relationship: who they are to me (e.g. "my brother", "a coworker", "childhood friend") — ONLY if stated; never infer it or a gender from context ("" if not said)
 - age: their age in years (integer) if stated, else null
 - birthYear: 4-digit year if stated, else null
 - job: what they do for work
@@ -741,6 +741,7 @@ Return ONLY valid JSON: {"age":<int|null>,"birthYear":<int|null>,"location":"...
       const excerpts = entries.map((e) => `${e.date || ""}: ${String(e.full || e.brief || "").replace(/\s+/g, " ").slice(0, 300)}`).join("\n").slice(0, 12000);
       const sys = `Write a very short profile of "${name}"${aliases.length ? ` (also known as ${aliases.join(", ")})` : ""}, in the FIRST PERSON from my point of view — ${kind === "person" || kind === "animal" ? "who they are and our relationship" : "what it is and how it fits in my life"} — in ONE or TWO plain sentences.
 Base it on MY NOTES (below; my own authoritative words) and the journal excerpts. Summarize what's given, warmly and plainly, and add nothing that isn't there.
+NEVER guess a gender or a relationship: say "my son", "my daughter", "my wife", "my friend"… ONLY if that exact relationship is stated. If it isn't, don't name one, and use the name instead of he/she.
 Do NOT add caveats about how much is known; never say the journal is limited, that details are sparse, or that you don't know much; no preamble like "based on…". If my notes describe them, just tell it.
 Return ONLY valid JSON: {"profile":"..."}.`;
       const user = `MY NOTES ABOUT ${name}:\n${note || "(none yet)"}\n\nJOURNAL EXCERPTS:\n${excerpts || "(none)"}`;

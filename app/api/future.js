@@ -32,6 +32,8 @@ Rules:
   day, not a highlight reel. Some entries can be small and quiet.
 - Extrapolate honestly from the trajectory the journal actually shows — the most PLAUSIBLE arc — unless the note
   below asks you to steer it a certain way.
+- The people in WHO'S WHO are exactly who they are described as: never change or invent anyone's gender or their
+  relationship to you (a daughter stays a daughter). If a relationship isn't stated, don't assign one — just use the name.
 - Never break character or mention being an AI, a model, or a prediction. You are the journal, continuing.
 
 Also imagine the enduring STATES of this future life — the parallel tracks that span years, not single
