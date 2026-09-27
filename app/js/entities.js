@@ -8,7 +8,7 @@
 // Entities live in the shared items store (kind "entity"); entries carry an `entityRefs: [id]` list.
 // Extraction runs against /api/summarize (mode:"entities"); each scan is logged to Activity.
 
-import { getAllEntries, getAllMemories, putEntry, putMemory, getAllEntities, getEntity, putEntity, deleteEntity } from "./db.js";
+import { getAllEntries, getAllMemories, putEntry, putMemory, getAllEntities, getEntity, putEntity, deleteEntity, getAllPeriods, putPeriod } from "./db.js";
 import { escapeHtml, resolveEntityTokens, setEntityMap } from "./render.js";
 import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
@@ -155,6 +155,41 @@ async function postSummarizeTimed(body, ms = 90000) {
   try {
     return await fetch("/api/summarize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal });
   } finally { clearTimeout(t); }
+}
+
+// ---- Fix a misspelled name everywhere -----------------------------------------------------
+// Renaming "Zay" → "Ze" can also fix the WORDS: every day, story and summary (every level up to Life)
+// in this journal that spells it the old way. Whole words, case-sensitive, and only this journal's
+// own items (in a Future, your real past is read-only and untouched). Ids, dates and keys are left alone.
+const SKIP_KEYS = new Set(["id", "key", "date", "kind", "hash", "createdAt", "updatedAt", "entityRefs", "noteRefs", "photos", "images"]);
+function nameRegex(from) { return new RegExp(`(?<![\\p{L}\\p{N}])${from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "gu"); }
+function replaceDeep(v, re, to, count) {
+  if (typeof v === "string") { const out = v.replace(re, () => { count.n++; return to; }); return out; }
+  if (Array.isArray(v)) return v.map((x) => replaceDeep(x, re, to, count));
+  if (v && typeof v === "object" && !(v instanceof ArrayBuffer) && !ArrayBuffer.isView(v) && !(v instanceof Blob)) {
+    const o = {};
+    for (const [k, x] of Object.entries(v)) o[k] = SKIP_KEYS.has(k) ? x : replaceDeep(x, re, to, count);
+    return o;
+  }
+  return v;
+}
+// Returns how many places changed; with dryRun, only counts.
+export async function renameInText(from, to, { dryRun = false } = {}) {
+  if (!from || !to || from === to) return 0;
+  const re = nameRegex(from);
+  let total = 0;
+  const sweep = async (rows, put) => {
+    for (const r of rows) {
+      if (r.fromPast) continue; // your real past is read-only from a Future
+      const count = { n: 0 };
+      const next = replaceDeep(r, re, to, count);
+      if (count.n) { total += count.n; if (!dryRun) await put(next); }
+    }
+  };
+  await sweep(await getAllEntries(), putEntry);
+  await sweep(await getAllMemories(), putMemory);
+  await sweep(await getAllPeriods(), putPeriod);
+  return total;
 }
 
 // Read-modify-write one entity, serialized — so a profile and its facts landing at the same moment
@@ -849,6 +884,15 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       const aliasesV = (root.querySelector("#ent-aliases")?.value || "").split(",").map((s) => s.trim()).filter(Boolean);
       const cur = (await getEntity(id)) || ent;
       const renamed = newName && newName !== cur.canonical;
+      // A rename can also fix the spelling in the words themselves (days, stories, every summary).
+      if (renamed) {
+        const n = await renameInText(cur.canonical, newName, { dryRun: true });
+        if (n && confirm(`Also change “${cur.canonical}” to “${newName}” in ${n} place${n === 1 ? "" : "s"} — your entries, stories and their summaries?`)) {
+          pstatus("Fixing the spelling everywhere…", "working");
+          await renameInText(cur.canonical, newName);
+          if (!aliasesV.includes(cur.canonical)) aliasesV.push(cur.canonical); // future mentions of the old spelling resolve here too
+        }
+      }
       await putEntity({ ...cur, canonical: newName || cur.canonical, entityKind: kindV || cur.entityKind, aliases: aliasesV, note: text, recognized: true, reviewedAt: Date.now(), updatedAt: Date.now() });
       Object.assign(ent, { canonical: newName || cur.canonical, entityKind: kindV || cur.entityKind, aliases: aliasesV, note: text, recognized: true });
       if (renamed || kindV !== cur.entityKind) { resetEntityIndex(); setEntityMap(new Map((await getAllEntities()).map((e) => [e.id, e.canonical]))); }

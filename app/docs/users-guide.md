@@ -117,6 +117,7 @@ Every page follows the same shape:
 - **🎙 Interview** asks about each name out loud, hands-free.
 - Descriptions never guess. The app says "my daughter" or "my friend" only if you've said so. If something's wrong, tap **✎ Edit** and say it right.
 - **Name, kind, aliases & merge** (in Edit) fixes a misspelling, changes a person into a place, or merges two cards for the same person.
+- **Fix a misspelled name everywhere.** Rename it (say "Zay" to "Ze") and Save. The app asks whether to change the spelling in all your entries, stories and summaries too, and tells you how many places. Rename it to someone who already exists and they become the same person. This works in a Future too, where it changes only that Future's own text.
 
 ---
 
