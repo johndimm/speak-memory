@@ -2037,3 +2037,5 @@ img.sample-photo { object-fit: cover; }
 .lt-missing { cursor: pointer; border-style: dashed; }
 .lt-missing .lt-name { font-weight: 500; color: var(--accent); }
 .lt-refile { margin-left: 0.6rem; border: none; background: none; padding: 0; font: inherit; font-size: 0.72rem; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--accent); cursor: pointer; }
+
+.cap-more { border: none; background: none; padding: 0.2rem 0.4rem; font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--accent); cursor: pointer; }

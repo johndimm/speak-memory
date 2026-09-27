@@ -70,7 +70,7 @@ CRITICAL for the "outline": do NOT explode one moment into a stack of short bull
 const LEVELS_SYSTEM = `You distill a piece of writing into a ladder of summaries — each level a little fuller than the one before — plus a nested outline, so a reader can zoom from a single word all the way down to the full text. You ALSO extract the named individuals it refers to.
 Return ONLY valid JSON with these keys:
 {"word":"...","phrase":"...","sentence":"...","paragraph":"...","summary":"...","outline":"...","entities":[{"name":"...","kind":"person|animal|place|org|thing"}]}
-- entities: the named people and animals, and named places, organizations, or things that matter, mentioned in the text. Give each its clearest canonical name. Skip generic references ("my boss", "the dog") unless a name is given. Omit or use [] if none.
+- entities: the named people and animals, and named places, organizations, or things that matter, mentioned in the text. Give each its clearest canonical name. Skip generic references ("my boss", "the dog") unless a name is given. NOT names: products and brands (a Civic, an iPhone), software and programming languages (Windows, C++), TV shows, films and books, zip codes and numbers, or famous people mentioned only in passing — unless they're personally part of this life (my Civic that I drove for ten years, a show I worked on). Omit or use [] if none.
 - word: ONE evocative word for the whole.
 - phrase: 2–5 words.
 - sentence: a single sentence capturing the whole.
@@ -797,7 +797,7 @@ Return ONLY valid JSON: {"ack":"...","memory":{...}|null,"next":"..."}. Escape d
       if (Array.isArray(body.batch)) {
         const items = body.batch.slice(0, 20).map((x) => ({ id: String(x.id || ""), text: String(x.text || "").slice(0, 3000) })).filter((x) => x.id && x.text.trim());
         if (!items.length) { res.status(200).json({ results: [] }); return; }
-        const sys = `You extract the named INDIVIDUALS from SEVERAL journal entries at once — people and animals by name, and named places, organizations, or things that matter to this life. Skip generic references ("my boss", "the dog") unless a name is given.
+        const sys = `You extract the named INDIVIDUALS from SEVERAL journal entries at once — people and animals by name, and named places, organizations, or things that matter to this life. Skip generic references ("my boss", "the dog") unless a name is given. NOT names: products and brands (a Civic, an iPhone), software and programming languages (Windows, C++), TV shows, films and books, zip codes and numbers, or famous people mentioned only in passing — unless they're personally part of this life (my Civic that I drove for ten years, a show I worked on).
 For EACH entry, identified by its id, give each individual its clearest canonical name.
 Return ONLY valid JSON: {"results":[{"id":"<the entry id>","mentions":[{"name":"<name>","kind":"person|animal|place|org|thing"}]}]}. Include EVERY id exactly once, with an empty mentions array if it names no one. Escape double quotes with a backslash.`;
         const user = items.map((it) => `=== ENTRY id="${it.id}" ===\n${it.text}`).join("\n\n");
@@ -811,7 +811,7 @@ Return ONLY valid JSON: {"results":[{"id":"<the entry id>","mentions":[{"name":"
       if (!text) { res.status(200).json({ mentions: [] }); return; }
       // Constant-size prompt — NO roster (that doesn't scale as the cast grows). Just extract the
       // named individuals; the client resolves them to existing entities by normalized match.
-      const sys = `You extract the named INDIVIDUALS a journal entry refers to: people and animals by name, and named places, organizations, or things that matter to this life. Skip generic references ("my boss", "the dog") unless a name is given. Resolve pronouns only when the name is unambiguous in the entry.
+      const sys = `You extract the named INDIVIDUALS a journal entry refers to: people and animals by name, and named places, organizations, or things that matter to this life. Skip generic references ("my boss", "the dog") unless a name is given. NOT names: products and brands (a Civic, an iPhone), software and programming languages (Windows, C++), TV shows, films and books, zip codes and numbers, or famous people mentioned only in passing — unless they're personally part of this life (my Civic that I drove for ten years, a show I worked on). Resolve pronouns only when the name is unambiguous in the entry.
 Give each individual its clearest canonical name as written in the entry.
 Return ONLY valid JSON: {"mentions":[{"name":"<name>","kind":"person|animal|place|org|thing"}]}. Escape double quotes with a backslash.`;
       const r = await callJsonObject(sys, `Entry:\n\n${text.slice(0, 12000)}`, 0.2, cfg);

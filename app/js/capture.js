@@ -53,6 +53,9 @@ const CHIP_META = {
   name: { icon: "👤" }, when: { icon: "📅" }, where: { icon: "📍" },
   category: { icon: "🏷" }, subject: { icon: "✦" },
 };
+// A found name's icon says what KIND it is.
+const KIND_ICON = { person: "👤", animal: "🐾", place: "📍", org: "🏢", thing: "◆" };
+const CHIP_CAP = 8; // show this many, then "+N more"
 
 export function attachLiveCapture(textarea, {
   mount,                       // element to render the Found chips into
@@ -117,7 +120,7 @@ export function attachLiveCapture(textarea, {
 
   // ---- Found chips (accumulate for this text) ----------------------------------------------
   const chips = new Map();     // key -> {type, label}
-  const addChip = (type, label) => {
+  const addChip = (type, label, kind) => {
     if (!label) return false;
     if (type === "name") {
       const nl = norm(label);
@@ -133,23 +136,29 @@ export function attachLiveCapture(textarea, {
     }
     const key = type + ":" + norm(label);
     if (chips.has(key)) return false;
-    chips.set(key, { type, label });
+    chips.set(key, { type, label, kind });
     return true;
   };
+  let showAll = false;
   function renderChips() {
     if (!mount) return;
     const items = [...chips.values()];
+    const shown = showAll ? items : items.slice(0, CHIP_CAP);
+    const more = items.length - shown.length;
     mount.innerHTML = items.length
-      ? `<span class="cap-found-label">Found</span>` + items.map((c) => {
+      ? `<span class="cap-found-label">Found</span>` + shown.map((c) => {
           const hot = onPick && c.type === "name";
           const tag = hot ? "button" : "span";
-          return `<${tag} type="button" class="cap-chip cap-chip-${c.type}${hot ? " cap-hot" : ""}"${hot ? ` data-name="${esc(c.label)}"` : ""}>${CHIP_META[c.type]?.icon || ""} ${esc(c.label)}${hot ? " ›" : ""}</${tag}>`;
-        }).join("")
+          const icon = c.type === "name" ? (KIND_ICON[c.kind] || KIND_ICON.person) : (CHIP_META[c.type]?.icon || "");
+          return `<${tag} type="button" class="cap-chip cap-chip-${c.type}${hot ? " cap-hot" : ""}"${hot ? ` data-name="${esc(c.label)}"` : ""}>${icon} ${esc(c.label)}${hot ? " ›" : ""}</${tag}>`;
+        }).join("") + (more > 0 ? `<button type="button" class="cap-more">+${more} more</button>` : "")
       : "";
     mount.hidden = !items.length;
   }
   // Clicking a found name → open that person's page (via onPick).
-  if (onPick && mount) mount.addEventListener("click", (e) => {
+  if (mount) mount.addEventListener("click", (e) => {
+    if (e.target.closest(".cap-more")) { showAll = true; renderChips(); return; }
+    if (!onPick) return;
     const b = e.target.closest(".cap-hot[data-name]");
     if (b) onPick(b.dataset.name);
   });
@@ -183,7 +192,12 @@ export function attachLiveCapture(textarea, {
   function instant() {
     const text = textarea.value;
     let changed = false;
-    if (wantNames) for (const row of nameIndex) { row.re.lastIndex = 0; if (row.re.test(text)) changed = addChip("name", row.canonical) || changed; }
+    if (wantNames) {
+      for (const row of nameIndex) { row.re.lastIndex = 0; if (row.re.test(text)) changed = addChip("name", row.canonical, row.kind) || changed; }
+      // Found follows the text: a name you've deleted from the box drops out.
+      const low = text.toLowerCase();
+      for (const [k, c] of chips) if (c.type === "name" && !low.includes(c.label.toLowerCase())) { chips.delete(k); changed = true; }
+    }
     if (wantWhen) { const ys = (text.match(new RegExp("\\b" + YR + "\\b", "g")) || []).map(Number).filter((y) => y >= 1900 && y <= 2035); for (const y of ys) changed = addChip("when", String(y)) || changed; }
     if (wantWhere) { const re = /\b(?:in|at|near)\s+([A-Z][\p{L}'’.-]+(?:\s+[A-Z][\p{L}'’.-]+){0,3})/gu; let m; while ((m = re.exec(text))) changed = addChip("where", m[1].replace(/[.,;:]$/, "").trim()) || changed; }
     if (wantCat) { const re = /[A-Za-z']+/g; let m; while ((m = re.exec(text))) { const c = CAT_ALIASES[m[0].toLowerCase()]; if (c) changed = addChip("category", c) || changed; } }
@@ -204,7 +218,7 @@ export function attachLiveCapture(textarea, {
         const res = await remote(text, abort.signal) || {};
         if (mine !== seq) return;                 // superseded by a newer parse
         let changed = false;
-        for (const n of (res.names || [])) { if (!n || !n.name) continue; const k = norm(n.name); if (!discovered.has(k)) { discovered.set(k, { name: n.name, kind: n.kind }); changed = true; } changed = addChip("name", n.name) || changed; }
+        for (const n of (res.names || [])) { if (!n || !n.name) continue; const k = norm(n.name); if (!discovered.has(k)) { discovered.set(k, { name: n.name, kind: n.kind }); changed = true; } changed = addChip("name", n.name, n.kind) || changed; }
         for (const f of (res.facts || [])) { if (f && f.value != null && buckets.includes(f.type)) changed = addChip(f.type, String(f.value)) || changed; }
         if (changed) { rebuildIndex(); paint(); renderChips(); }  // newly-discovered names now colour in the text too
       } catch { /* aborted or transient — keep what we have */ }
