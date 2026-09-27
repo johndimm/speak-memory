@@ -409,7 +409,12 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     const lv = (item && item.levels) || {};
     const rungs = (lv.word ? `<p class="node-word">${escapeHtml(resolveEntityTokens(lv.word))}</p>` : "")
       + (lv.phrase ? `<p class="node-phrase">${escapeHtml(resolveEntityTokens(lv.phrase))}</p>` : "");
-    entryView.innerHTML = rungs + toggle + `<div class="rep-body">${renderRep(reps, repView)}</div>`;
+    // Your words, one tap away — closed by default, read-only (✎ Edit is where you change them).
+    const words = item && (item.raw || item.text) ? String(item.raw || item.text) : "";
+    const transcript = words && repView !== "verbatim" && reps.prose !== words // (unsummarized → the prose already IS your words)
+      ? `<details class="node-fold node-verbatim-fold read-transcript"><summary>Transcript</summary><div class="node-fold-body"><div class="node-verbatim verbatim">${escapeHtml(words)}</div></div></details>`
+      : "";
+    entryView.innerHTML = rungs + toggle + `<div class="rep-body">${renderRep(reps, repView)}</div>` + transcript;
   }
   entryView.addEventListener("click", (e) => {
     const t = e.target.closest(".rep-tab[data-rep]");

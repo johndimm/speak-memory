@@ -788,6 +788,8 @@ function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", ele
       + `<div class="rep-toggle leaf-rep-toggle"><button type="button" class="rep-tab active" data-leaf-rep="summary">Summary</button><button type="button" class="rep-tab" data-leaf-rep="outline">Outline</button></div>`
       + summaryHtml
       + `<div class="node-outline-body leaf-outline" data-detail="outline" hidden>${outlineBody}</div>`
+      // Your words, one tap away — closed by default, read-only here (✎ Edit is where you change them).
+      + (verbatim ? `<details class="node-fold node-verbatim-fold"><summary>Transcript</summary><div class="node-fold-body"><div class="node-verbatim verbatim">${escapeHtml(verbatim)}</div></div></details>` : "")
       + images
       + (elementsHtml ? `${elementsLabel ? `<p class="nav-hint">${escapeHtml(elementsLabel)}</p>` : ""}${elementsHtml}` : "");
   }
