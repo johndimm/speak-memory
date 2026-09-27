@@ -1961,7 +1961,9 @@ img.sample-photo { object-fit: cover; }
    the writing tabs — Journal, Me, Stories — are just grayed out and can't be tapped. More stays. */
 .sample-journal .mode-btn[data-mode="diary"],
 .sample-journal .mode-btn[data-mode="memoir"],
-.sample-journal .mode-btn[data-mode="me"] { opacity: 0.35; pointer-events: none; cursor: default; }
+.sample-journal .mode-btn[data-mode="me"],
+.more-item:disabled { opacity: 0.35; pointer-events: none; cursor: default; }
+.more-item:disabled:hover { background: transparent; color: var(--ink); }
 
 /* The Guide sits at the bottom of the More menu, set off by a hairline. */
 .more-guide { border-top: 1px solid var(--line) !important; margin-top: 0.15rem; }
