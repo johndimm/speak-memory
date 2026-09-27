@@ -128,6 +128,15 @@ function factChips(ent) {
   return `<div class="fact-chips" id="fact-chips">${factChipsInner(ent)}</div>`;
 }
 
+// POST to /api/summarize with a time limit, so a stalled call can't leave a page "Updating…" forever.
+async function postSummarizeTimed(body, ms = 90000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch("/api/summarize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: ctrl.signal });
+  } finally { clearTimeout(t); }
+}
+
 // Read-modify-write one entity, serialized — so a profile and its facts landing at the same moment
 // can't overwrite each other.
 let entWrite = Promise.resolve();
@@ -142,10 +151,7 @@ function updateEntity(id, fallback, change) {
 // hands-free interview. Returns the profile text.
 async function writeProfile(ent, mentions) {
   const entries = (mentions || []).map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
-  const r = await fetch("/api/summarize", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...llmOverrides(), mode: "entityprofile", name: ent.canonical, kind: ent.entityKind || "person", aliases: ent.aliases || [], note: ent.note || "", entries }),
-  });
+  const r = await postSummarizeTimed({ ...llmOverrides(), mode: "entityprofile", name: ent.canonical, kind: ent.entityKind || "person", aliases: ent.aliases || [], note: ent.note || "", entries });
   if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `Server ${r.status}`); }
   const { profile } = await r.json();
   const reply = profile || "";
@@ -158,10 +164,7 @@ async function writeProfile(ent, mentions) {
 async function extractFacts(ent, mentions) {
   if (!FACT_FIELDS[ent.entityKind || "person"]) return [];
   const entries = (mentions || []).map((s) => ({ date: s.date || `${s.startYear || ""}`, brief: s.brief || (s.prose && s.prose.brief) || "", full: s.full || s.raw || s.text || "" }));
-  const r = await fetch("/api/summarize", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...llmOverrides(), mode: "entityfacts", name: ent.canonical, kind: ent.entityKind || "person", note: ent.note || "", entries }),
-  });
+  const r = await postSummarizeTimed({ ...llmOverrides(), mode: "entityfacts", name: ent.canonical, kind: ent.entityKind || "person", note: ent.note || "", entries });
   if (!r.ok) return [];
   const { facts, names } = await r.json();
   // MERGE, don't overwrite: a value you typed/said in the keyword game is authoritative — the LLM
@@ -226,6 +229,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
   // touches the page, so finishing late can never redraw — or pull you back to — a page you've left.
   let viewSeq = 0;
   const processing = new Set(); // ids whose saved words are still being turned into facts + a profile
+  let commitPending = null;      // the open name's "save what's in the box" (set while its edit box is up)
   let selecting = false;         // the roster's Select mode (batch delete)
   const selected = new Set();
   let editSnapshot = null; // the saved version when ✎ Edit was tapped — Cancel restores it
@@ -371,6 +375,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     } finally { autoRunning = false; }
   }
 
+  // Words typed on a name's page but never saved (kept as a draft on this device).
+  const hasDraft = (e) => { try { const d = (localStorage.getItem(entDraftKey(e.id)) || "").trim(); return !!d && d !== (e.note || "").trim(); } catch { return false; } };
+
   // ---- Roster (the entity list) --------------------------------------------------------------
   async function render() {
     await sanitizeEntities(); // repair any names that are leftover {{tokens}}
@@ -411,11 +418,11 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     }
     const sections = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => {
       const list = byKind.get(k).sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.canonical.localeCompare(b.canonical));
-      const cards = list.map((e) => { const empty = needsYou(e, counts.get(e.id) || 0); return `
+      const cards = list.map((e) => { const empty = needsYou(e, counts.get(e.id) || 0); const draft = hasDraft(e); return `
         <div class="ent-card-wrap">
           <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}${empty ? " ent-card-empty" : ""}${selected.has(e.id) ? " ent-card-picked" : ""}" data-open="${escapeHtml(e.id)}"${empty ? ` data-empty="1"` : ""}>
             ${selecting ? `<span class="ent-pick" aria-hidden="true">${selected.has(e.id) ? "☑" : "☐"}</span>` : ""}<span class="ent-name">${escapeHtml(e.canonical)}</span>
-            ${e.recognized === false ? `<span class="ent-flag">🕳 didn't recognize</span>` : empty ? `<span class="ent-need" title="Needs a description" aria-label="needs a description">✎</span>` : (e.aliases && e.aliases.length) ? `<span class="ent-aka">aka ${escapeHtml(e.aliases.join(", "))}</span>` : ""}
+            ${e.recognized === false ? `<span class="ent-flag">🕳 didn't recognize</span>` : draft ? `<span class="ent-draft" title="You wrote something here but didn't save it — open to save">● unsaved</span>` : empty ? `<span class="ent-need" title="Needs a description" aria-label="needs a description">✎</span>` : (e.aliases && e.aliases.length) ? `<span class="ent-aka">aka ${escapeHtml(e.aliases.join(", "))}</span>` : ""}
             <span class="ent-count">${counts.get(e.id) || 0}</span>
           </button>
           ${selecting ? "" : `<button type="button" class="ent-card-del" data-del="${escapeHtml(e.id)}" title="Delete this name" aria-label="Delete">×</button>`}
@@ -429,6 +436,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     needOrder = undescribed.map((e) => e.id);
 
     viewSeq++;
+    commitPending = null;
     document.body.classList.toggle("ent-selecting", selecting); // hides the Next nudge while picking
     const selBar = selecting ? `<div class="ent-selbar" id="ent-selbar">
           <span class="ent-selcount" id="ent-selcount">${selected.size} selected</span>
@@ -550,9 +558,10 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
 
     // Profile paragraph — written from the mentions PLUS your notes.
     const profileFrag = `<div class="node-summary ent-summary" id="ent-summary">
-          ${processing.has(id) ? `<p class="ent-ask-working">◷ Updating ${escapeHtml(ent.canonical)}'s description…</p>`
+          ${processing.has(id) ? `${ent.note ? renderAnswerText(ent.note) : ""}<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s description…</p>`
             : ent.profile
             ? `${renderAnswerText(ent.profile)}<button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Refresh</button>`
+            : ent.note ? `${renderAnswerText(ent.note)}<button type="button" class="ent-summary-refresh" id="ent-summary-refresh">↻ Write description</button>`
             : mentions.length ? `<p class="ent-ask-working">◷ Writing ${escapeHtml(ent.canonical)}'s profile…</p>` : `<p class="ent-empty">Nothing yet — tap Edit to add a few facts or notes.</p>`}
         </div>`;
 
@@ -621,6 +630,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         ${selfMode ? "" : `<button type="button" class="delete-entry-btn" id="ent-del-big">Delete</button>`}`;
 
     const mySeq = ++viewSeq;
+    commitPending = null;
     document.body.classList.remove("ent-selecting");
     const live = () => viewSeq === mySeq; // still this page, in this mode?
     root.innerHTML = `
@@ -767,28 +777,34 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     // After Save: turn your words into facts, linked names, and a fresh profile. Runs in the
     // BACKGROUND with no page access — you may be on another name by the time it finishes.
     async function processNote(text) {
+      const profileJob = async () => {
+        const fresh = (await getEntity(id)) || ent;
+        if (fresh.note || mentions.length) { try { await writeProfile(fresh, mentions); } catch { /* ↻ on its page */ } }
+      };
       if (!text) {
         // Your words are gone → so are the facts and profile drawn from them (mentions can rewrite a profile).
         await updateEntity(id, ent, (cur) => ({ ...cur, facts: {}, profile: "", profileAt: 0, updatedAt: Date.now() }));
-      } else {
-        // A note names other people and carries standard facts. For kinds with a fact checklist
-        // (person/place/org) extractFacts does both (facts + names); otherwise just pull the names.
-        try {
-          const fresh = (await getEntity(id)) || ent;
-          if (FACT_FIELDS[fresh.entityKind || "person"]) await extractFacts(fresh, mentions);
-          else {
-            const { mentions: mm } = await postEntities(text);
-            const refs = mm && mm.length ? (await resolveEntityNames(mm)).filter((rid) => rid !== id) : [];
-            if (refs.length) await updateEntity(id, ent, (cur) => ({ ...cur, noteRefs: [...new Set([...(cur.noteRefs || []), ...refs])], updatedAt: Date.now() }));
-          }
-        } catch { /* the words are saved; facts can be refreshed later */ }
+        await profileJob();
+        return;
       }
-      const fresh = (await getEntity(id)) || ent;
-      if (fresh.note || mentions.length) { try { await writeProfile(fresh, mentions); } catch { /* Refresh on its page */ } }
+      // The profile reads your saved words directly, so it needn't wait for the facts — run both at once.
+      const profileP = profileJob();
+      // A note names other people and carries standard facts. For kinds with a fact checklist
+      // (person/place/org) extractFacts does both (facts + names); otherwise just pull the names.
+      try {
+        const fresh = (await getEntity(id)) || ent;
+        if (FACT_FIELDS[fresh.entityKind || "person"]) await extractFacts(fresh, mentions);
+        else {
+          const { mentions: mm } = await postEntities(text);
+          const refs = mm && mm.length ? (await resolveEntityNames(mm)).filter((rid) => rid !== id) : [];
+          if (refs.length) await updateEntity(id, ent, (cur) => ({ ...cur, noteRefs: [...new Set([...(cur.noteRefs || []), ...refs])], updatedAt: Date.now() }));
+        }
+      } catch { /* the words are saved; facts can be refreshed later */ }
+      await profileP;
     }
     // Save = keep everything you changed (your words + name/kind/aliases) and go straight to READ.
     // The slow part (facts, names, profile) follows in the background — it never pulls you back here.
-    root.querySelector("#ent-note-add")?.addEventListener("click", async () => {
+    const doSave = async () => {
       const ta = root.querySelector("#ent-note-input");
       const text = (ta && ta.value || "").trim();
       if (!text && !hasContent) { pstatus("Nothing to save yet.", ""); return; }
@@ -815,7 +831,15 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         // Anywhere else — another name, Edit, another tab — leave you alone.
         if (viewSeq === shown && openId === id && !root.hidden) renderEntity(id);
       });
-    });
+    };
+    root.querySelector("#ent-note-add")?.addEventListener("click", doSave);
+    // Leaving with words in the box (e.g. tapping Next) saves them first — typing then moving on
+    // must never strand your words as an unsaved draft.
+    commitPending = noteTa ? async () => {
+      if (!live()) return;
+      const text = noteTa.value.trim();
+      if (text && text !== (ent.note || "").trim()) await doSave();
+    } : null;
 
     // Ask about this entity — answered only from the entries that mention it.
     root.querySelector("#ent-ask-form")?.addEventListener("submit", async (e) => {
@@ -1094,6 +1118,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
   });
 
   return {
+    async commitEdit() { if (commitPending) { const f = commitPending; commitPending = null; await f(); } }, // save the open box, if it has unsaved words
     open() { openId = null; selecting = false; selected.clear(); render(); }, // Names always lands on the roster (Me lives in its own tab)
     async openSelf() { selecting = false; selected.clear(); const s = await ensureSelf(); openId = s.id; entEditing = null; renderEntity(s.id); }, // Me: write if empty, else read + Edit
     openEntity(id) { selecting = false; selected.clear(); openId = id; entEditing = null; renderEntity(id); }, // a name: write if empty, else read + Edit

@@ -112,9 +112,10 @@ async function offerNext({ saved = false } = {}) {
   nextGo.textContent = `Next: ${DEST_LABEL[mode] || "Journal"} →`;
   nextBtn.hidden = false;
 }
-nextGo?.addEventListener("click", () => {
+nextGo?.addEventListener("click", async () => {
   const m = nextBtn.dataset.mode, eid = nextBtn.dataset.entid;
   nextBtn.hidden = true;
+  await people.commitEdit(); // words typed on this name's page are saved (and processed) before moving on
   if (eid) { setMode("people"); people.openEntity(eid); }
   else setMode(m);
 });
