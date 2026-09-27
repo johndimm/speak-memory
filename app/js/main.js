@@ -1,6 +1,6 @@
 import { initRecord } from "./record.js";
 import { initCalendar, initGraphView, restoreJournalPos } from "./calendar.js";
-import { initSettings } from "./settings.js";
+import { initSettings, openDoc } from "./settings.js";
 import { renderJournalsSection, wireJournalsSection } from "./samples.js";
 import { initPlaces } from "./places.js";
 import { initTimeline } from "./timeline.js";
@@ -296,14 +296,19 @@ if (moreBtn && moreMenu) {
   let moreW = window.innerWidth; // a phone's address bar showing/hiding resizes only the height — ignore that
   window.addEventListener("resize", () => { if (window.innerWidth !== moreW) { moreW = window.innerWidth; closeMore(); } });
   window.addEventListener("scroll", closeMore, { passive: true });
-  moreMenu.querySelectorAll(".more-item").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode)));
+  // A More item is a view (data-mode) — or the User's Guide (data-doc), which opens over whatever you're on.
+  moreMenu.querySelectorAll(".more-item").forEach((b) => b.addEventListener("click", () => {
+    if (b.dataset.doc) { moreMenu.hidden = true; moreBtn.setAttribute("aria-expanded", "false"); openDoc(b.dataset.doc, "User's Guide"); }
+    else setMode(b.dataset.mode);
+  }));
   document.addEventListener("click", (e) => { if (!moreMenu.hidden && !moreMenu.contains(e.target) && e.target !== moreBtn) { moreMenu.hidden = true; moreBtn.setAttribute("aria-expanded", "false"); } });
 }
 
 const recorder = initRecord(writeView, {
   onSaved: (date) => { setMode("diary", date, "day"); offerNext({ saved: true }); }, // completed the day → nudge to the next step
   onSavedMemory: (mem) => { setMode("memoir-edit", mem); offerNext({ saved: true }); },
-  onOpenMe: () => setMode("me"),                                  // Stories ladder: "Tell Me where you live ›"
+  onOpenMe: () => setMode("me"),
+  onOpenGuide: () => openDoc("users-guide", "User's Guide"),    // first run: "New here? Read the guide ›"                                  // Stories ladder: "Tell Me where you live ›"
   onDeleted: (date) => setMode("diary", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
   onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode

@@ -1969,5 +1969,14 @@ img.sample-photo { object-fit: cover; }
 .sample-journal .more-item.active { background: var(--ink); color: var(--paper); }
 @media (max-width: 640px) {
   .sample-journal .more-item,
-  .sample-journal .mode-btn { padding: 0.38rem 0.34rem; font-size: 0.72rem; }
+  .sample-journal .mode-btn { padding: 0.38rem 0.29rem; font-size: 0.72rem; }
+  .sample-journal .mode-nav { gap: 0; }
 }
+
+/* The Guide in More; in a Future (items laid out in the tab bar) it shrinks to "?" on phones. */
+.more-guide { border-top: 1px solid var(--line) !important; margin-top: 0.15rem; }
+.sample-journal .more-guide { border-top: none !important; margin-top: 0; }
+@media (max-width: 640px) { .sample-journal .more-guide .guide-word { display: none; } }
+/* First run: a one-line pointer to the guide under an empty Journal. */
+.first-help { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--ink-soft); }
+.first-help button { border: none; background: none; padding: 0; font: inherit; color: var(--accent); font-weight: 600; cursor: pointer; }

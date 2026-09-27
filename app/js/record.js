@@ -112,7 +112,7 @@ const LADDER = [
     ask: (cur) => cur ? `What did you do for fun before ${cur}? When?` : "What did you do for fun? When?" },
 ];
 
-export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate, onBrowse, onOpenName, onOpenMe } = {}) {
+export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate, onBrowse, onOpenName, onOpenMe, onOpenGuide } = {}) {
   root.innerHTML = `
     <!-- Same layout as every input page (docs/input-method-design.md):
          breadcrumb → text box (EDIT) or ✎ Edit (READ) → title → content → Save/Cancel → Delete. -->
@@ -131,6 +131,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
         </label>
         <div class="write-tools"><button type="button" class="mic-btn" id="mic-btn" hidden><span>🎤 Dictate</span></button></div>
         <div class="cap-found" id="entry-found" hidden></div>
+        <p class="first-help" id="first-help" hidden>New here? <button type="button" id="first-help-btn">Read the guide ›</button></p>
       </div>
 
       <h2 class="write-title" id="write-title"></h2>
@@ -352,6 +353,16 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     textEl.focus();
   });
 
+  // First run (no days, no stories yet): point at the guide under the Journal box.
+  const firstHelp = root.querySelector("#first-help");
+  root.querySelector("#first-help-btn")?.addEventListener("click", () => onOpenGuide?.());
+  async function syncFirstHelp() {
+    if (!firstHelp) return;
+    let empty = false;
+    if (!isStory()) { try { empty = !(await getAllEntries()).length && !(await getAllMemories()).length; } catch { /* */ } }
+    firstHelp.hidden = !empty;
+  }
+
   function applyEntryLayout() {
     const showView = inEditMode && !editingText; // reading a saved day/story
     root.querySelector("#write-form")?.classList.toggle("reading", showView);
@@ -365,6 +376,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     syncDeleteBtn();
     if (!showView) { requestAnimationFrame(autoGrow); setTimeout(autoGrow, 120); } // size the box now, and again once the layout settles
     renderLadder();
+    syncFirstHelp();
   }
 
   // Drafts: what's in the box is kept (per day / per story) while you type, so leaving never loses it.

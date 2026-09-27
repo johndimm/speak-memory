@@ -65,7 +65,7 @@ function ensureDocReader() {
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !ov.hidden) close(); });
   return ov;
 }
-async function openDoc(name, title) {
+export async function openDoc(name, title) {
   const ov = ensureDocReader();
   const body = ov.querySelector(".doc-body");
   ov.querySelector(".doc-title").textContent = title || "";
