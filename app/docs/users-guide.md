@@ -122,6 +122,8 @@ Every page follows the same shape:
 
 ## Futures
 
+The **Futures** tab is where you switch: it lists **Now · Your journal** and every Future. Tap one to go there (✓ marks where you are). Below the list, **＋ New future** makes another.
+
 **Imagine ›** writes raw diary days across the next **10 or 20 years**, or **the rest of your life** (to 95: at 15 that's 80 years, and you grow up and grow old along the way), in your voice, then opens them as a Future you can browse. *Rest of life* needs your age from **Me** (or your birth year in Settings). Choose how many **entries** you want, and optionally add a **nudge**: "we move to the coast", "I finally finish the book", "what if I never do". Leave it blank to see where things drift. A **Bucket list** lets a Future work in the things you want to do.
 
 A Future is built from:

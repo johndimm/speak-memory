@@ -1290,7 +1290,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .show-voice select { font: inherit; font-size: 0.8rem; color: #f4efe6; background: rgba(255,255,255,0.08); border: 1px solid rgba(244,239,230,0.25); border-radius: 8px; padding: 0.3rem 0.5rem; max-width: 12rem; }
 
 /* Bucket list */
-.fut-bucket { margin: 1.75rem 0; padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.fut-bucket { margin: 0 0 1.5rem; }
 .bucket-list { list-style: none; margin: 0 0 0.8rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .bucket-item { display: flex; align-items: center; gap: 0.6rem; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0.55rem 0.5rem 0.55rem 0.85rem; }
 .bucket-item span { flex: 1; line-height: 1.4; }
@@ -1334,7 +1334,7 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .fut-status.error { color: var(--accent); }
 
 /* Gallery of futures you've made — open one to step into it */
-.fut-gallery { margin-top: 2rem; border-top: 1px solid var(--line); padding-top: 1.4rem; }
+.fut-gallery { margin-top: 0.4rem; }
 .fut-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.75rem; }
 .fut-card-wrap { position: relative; }
 .fut-card {
@@ -1980,4 +1980,34 @@ img.sample-photo { object-fit: cover; }
 @media (max-width: 640px) {
   .app-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .title-wrap { min-width: 0; max-width: 100%; }
+}
+
+/* Futures page: one list to switch between your journal (now) and each Future, then a compact
+   "New future". Minimal reading — the rows say where you are and what a tap does. */
+.fut-list { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.2rem 0 1.4rem; }
+.fut-row-wrap { display: flex; align-items: stretch; gap: 0.3rem; }
+.fut-row { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 0.7rem; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 0.9rem; font: inherit; color: var(--ink); cursor: pointer; }
+.fut-row:hover { border-color: var(--accent-soft); }
+.fut-row.active { border-color: var(--accent); background: rgba(196, 92, 38, 0.07); }
+.fr-year { flex: 0 0 3.2rem; font-family: var(--font-display); font-size: 1.25rem; color: var(--accent); }
+.fr-now .fr-year { font-family: inherit; font-size: 0.95rem; font-weight: 700; color: var(--ink); }
+.fr-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fr-yrs { color: var(--ink-soft); font-size: 0.85rem; }
+.fr-tag { flex: 0 0 auto; font-size: 0.82rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
+.fr-here { color: var(--ink); }
+.fut-err { color: #b3261e; }
+.fr-icon { flex: 0 0 2.6rem; border: 1px solid var(--line); background: var(--card); border-radius: var(--radius); color: var(--ink-soft); font: inherit; cursor: pointer; }
+.fr-icon:hover { color: var(--accent); border-color: var(--accent-soft); }
+.fr-del:hover { color: #b3261e; }
+.fut-new { border-top: 1px solid var(--line); padding-top: 1rem; margin-bottom: 1.2rem; }
+.fut-new-title { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; margin: 0 0 0.6rem; }
+.fut-new .fut-nudge { width: 100%; box-sizing: border-box; min-height: 2.6rem; resize: vertical; }
+.fut-new .fut-count { display: inline-flex; align-items: center; gap: 0.3rem; }
+.fut-new .fut-count input { width: 3.4rem; }
+.fut-new .fut-interview { margin-top: 0.7rem; border: none; background: none; padding: 0; font: inherit; font-size: 0.85rem; color: var(--accent); cursor: pointer; }
+.fut-bucket-fold > summary { cursor: pointer; color: var(--accent); font-weight: 600; margin-bottom: 0.6rem; }
+@media (max-width: 640px) {
+  .fut-row { padding: 0.6rem 0.7rem; gap: 0.5rem; }
+  .fr-year { flex-basis: 2.8rem; font-size: 1.1rem; }
+  .fr-yrs { display: none; }
 }

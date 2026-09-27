@@ -124,35 +124,38 @@ export function initFutures(root) {
   let tick = null;
 
   // ---- rendering -------------------------------------------------------------------------
+  // What a row says on its right: where you are, or what tapping does.
   function cardTag(f) {
     const st = statusOf(f);
-    if (st === "generating") return `<span class="fut-card-tag fut-gen" data-gen="${escapeHtml(f.id)}">◷ Imagining…</span>`;
-    if (st === "error") return `<span class="fut-card-tag fut-err">⚠ ${escapeHtml(f.error || "Failed")} — tap to retry</span>`;
-    if (f.id === activeJournalId()) return `<span class="fut-card-tag">${f.years ? `${f.years}-year future` : "future"} · you're in it</span>`;
-    return `<span class="fut-card-tag fut-open">${f.years ? `${f.years}-year future` : "future"} · Open ›</span>`;
+    if (st === "generating") return `<span class="fr-tag fut-gen" data-gen="${escapeHtml(f.id)}">◷ Imagining…</span>`;
+    if (st === "error") return `<span class="fr-tag fut-err">⚠ Retry</span>`;
+    if (f.id === activeJournalId()) return `<span class="fr-tag fr-here">✓ Here</span>`;
+    return `<span class="fr-tag fr-open">Open ›</span>`;
   }
 
-  // The list of futures — rebuilt on its own so a background update never clobbers the composer.
+  // ONE place to switch: your real journal (now) and every Future, as a list. Rebuilt on its own so a
+  // background update never clobbers the composer.
   function galleryHtml() {
-    const futures = futureList();
-    const cards = futures.map((f) => `
-      <div class="fut-card-wrap">
-        <button type="button" class="fut-card fut-${statusOf(f)}${f.id === activeJournalId() ? " active" : ""}" data-open="${escapeHtml(f.id)}">
-          <span class="fut-card-year">${f.endYear || ""}</span>
-          <span class="fut-card-text">
-            <span class="fut-card-title">${escapeHtml(f.nudge ? f.nudge : "Straight ahead")}</span>
-            ${cardTag(f)}
-          </span>
+    const here = activeJournalId();
+    const now = `
+      <div class="fut-row-wrap">
+        <button type="button" class="fut-row fr-now${!here ? " active" : ""}" data-open="__now__">
+          <span class="fr-year">Now</span>
+          <span class="fr-title">Your journal</span>
+          ${!here ? `<span class="fr-tag fr-here">✓ Here</span>` : `<span class="fr-tag fr-open">Open ›</span>`}
         </button>
-        ${statusOf(f) === "ready" ? `<button type="button" class="fut-card-reveal" data-reveal="${escapeHtml(f.id)}" title="Play the audio reveal">▶ Reveal</button>` : ""}
-        <button type="button" class="fut-card-del" data-del="${escapeHtml(f.id)}" title="Delete this future" aria-label="Delete">×</button>
+      </div>`;
+    const rows = futureList().map((f) => `
+      <div class="fut-row-wrap">
+        <button type="button" class="fut-row fut-${statusOf(f)}${f.id === here ? " active" : ""}" data-open="${escapeHtml(f.id)}">
+          <span class="fr-year">${f.endYear || ""}</span>
+          <span class="fr-title">${escapeHtml(f.nudge ? f.nudge : "Straight ahead")}${f.years ? ` <span class="fr-yrs">· ${f.toAge ? `to ${f.toAge}` : `${f.years} yrs`}</span>` : ""}</span>
+          ${cardTag(f)}
+        </button>
+        ${statusOf(f) === "ready" ? `<button type="button" class="fr-icon" data-reveal="${escapeHtml(f.id)}" title="Play the audio reveal" aria-label="Play the reveal">▶</button>` : ""}
+        <button type="button" class="fr-icon fr-del" data-del="${escapeHtml(f.id)}" title="Delete this future" aria-label="Delete">×</button>
       </div>`).join("");
-    return `
-      <p class="nav-hint">Your futures</p>
-      <p class="field-hint" style="margin:0 0 0.8rem">A future appears here as soon as you start it. When it's ready, tap <strong>Open ›</strong>: it opens in Browse at Life, your real past running straight into the imagined years.</p>
-      ${futures.length
-        ? `<div class="fut-grid">${cards}</div>`
-        : `<p class="fut-empty">No futures yet. Imagine one above and it'll show up here.</p>`}`;
+    return `<div class="fut-list">${now}${rows}</div>`;
   }
 
   // Refresh only the list (composer DOM and any half-typed nudge stay put).
@@ -167,36 +170,31 @@ export function initFutures(root) {
     const inFuture = isSampleJournal();
     root.innerHTML = `
       <div class="futures">
-        ${"" /* In a Future, the banner at the top of every page (main.js) says what it is. */}
+        <div class="fut-gallery">${galleryHtml()}</div>
 
-        <div class="fut-compose">
-          <h2 class="fut-title">Imagine forward</h2>
-          <p class="fut-lead">Let the journal keep going. The app writes raw diary days across the coming years —
-            grounded in your real people and threads — then opens them as a life you can browse — your real past
-            running straight into the imagined years — in Browse, Timeline, and Map. Leave the nudge blank to just see where things drift, or push the future one
-            way with a decision, a hope, or a fear.</p>
-          <p class="fut-lead" style="margin-top:0">The more I know about your life, the sharper the fortune.
-            <button type="button" class="fut-interview" id="fut-interview">🎙 Tell me your story</button></p>
-          <textarea id="fut-nudge" class="fut-nudge" rows="2"
-            placeholder="Optional nudge — e.g. “we move to the coast”, “I finally finish the book”, “what if I never do”. Blank is fine."></textarea>
+        <section class="fut-new">
+          <h2 class="fut-new-title">＋ New future</h2>
+          <textarea id="fut-nudge" class="fut-nudge" rows="1" placeholder="Where does it go? (optional)"></textarea>
           <div class="fut-controls">
             <div class="fut-horizons" role="group" aria-label="How far ahead">
-              <button class="fut-h${composeYears === 10 ? " active" : ""}" data-years="10">10 years</button>
-              <button class="fut-h${composeYears === 20 && !composeToAge ? " active" : ""}" data-years="20">20 years</button>
-              <button class="fut-h${composeToAge ? " active" : ""}" data-years="life">Rest of life (to ${LIFE_END_AGE})</button>
+              <button class="fut-h${composeYears === 10 && !composeToAge ? " active" : ""}" data-years="10">10 yrs</button>
+              <button class="fut-h${composeYears === 20 && !composeToAge ? " active" : ""}" data-years="20">20 yrs</button>
+              <button class="fut-h${composeToAge ? " active" : ""}" data-years="life">To ${LIFE_END_AGE}</button>
             </div>
-            <label class="fut-count">
-              <span>Entries</span>
+            <label class="fut-count" title="How many diary days to imagine">
               <input type="number" id="fut-count" min="2" max="40" step="1" value="${composeCount}" inputmode="numeric">
+              <span>days</span>
             </label>
             <button id="fut-go" class="fut-go">Imagine ›</button>
           </div>
           <div id="fut-status" class="fut-status" hidden></div>
-        </div>
+          <button type="button" class="fut-interview" id="fut-interview">🎙 Tell me your story first</button>
+        </section>
 
-        <div class="fut-bucket" id="fut-bucket">${bucketHtml()}</div>
-
-        <div class="fut-gallery">${galleryHtml()}</div>
+        <details class="fut-bucket-fold">
+          <summary>Bucket list${getBucket().length ? ` (${getBucket().length})` : ""}</summary>
+          <div class="fut-bucket" id="fut-bucket">${bucketHtml()}</div>
+        </details>
       </div>`;
 
     wire();
@@ -210,8 +208,6 @@ export function initFutures(root) {
     const items = getBucket();
     const rows = items.map((it, i) => `<li class="bucket-item"><span>${escapeHtml(it)}</span><button type="button" class="bucket-del" data-bucket-del="${i}" aria-label="Remove">×</button></li>`).join("");
     return `
-      <h2 class="fut-title">Bucket list</h2>
-      <p class="fut-lead">Things you want to do while there's time. Add them here, then let the fortune imagine a life that gets to them all.</p>
       <ul class="bucket-list">${rows || `<li class="bucket-empty">Nothing yet — what do you want to do before it's too late?</li>`}</ul>
       <form class="bucket-add" id="bucket-add-form">
         <input type="text" id="bucket-input" autocomplete="off" placeholder="e.g. see the northern lights, learn piano, mend things with Dad…">
@@ -427,6 +423,7 @@ export function initFutures(root) {
       return;
     }
     const open = e.target.closest("[data-open]");
+    if (open && open.dataset.open === "__now__") { if (activeJournalId()) switchJournal(""); return; }
     if (open) {
       const f = getFuture(open.dataset.open);
       if (!f) return;
