@@ -11,14 +11,65 @@
 // and status live on the journals registry (journal.js); nothing is copied into localStorage and
 // nothing lands in your real journal's store.
 
-import { getAllEntries, getAllMemories, seedJournal } from "./db.js";
+import { getAllEntries, getAllMemories, getAllPeriods, getAllEntities, seedJournal } from "./db.js";
 import { escapeHtml } from "./render.js";
 import { primeAudio } from "./voicetts.js";
 import {
   dbNameFor, switchJournal, listJournals, registerJournal, journalExists,
   deleteJournal, slugify, activeJournalId, isSampleJournal, jkey,
 } from "./journal.js";
-import { getAboutText } from "./self.js";
+import { getAboutText, ensureSelf, isSelfEntity } from "./self.js";
+
+// Summaries carry name tokens ({{e:id|Luann}}) — the model just needs the names.
+const detoken = (t) => String(t || "").replace(/\{\{(?:e:)?[^|{}]+\|([^{}]*)\}\}/g, "$1");
+// One sentence about a name: the first that actually mentions it (skips any preamble a profile
+// may carry), markdown stripped; else the first sentence.
+function aboutSentence(t, name) {
+  const x = detoken(t).replace(/[*_`#>]+/g, "").replace(/\s+/g, " ").trim();
+  const sents = x.match(/[^.!?]+[.!?]+(?=\s|$)|[^.!?]+$/g) || [x];
+  // Drop sentences where an older profile talked ABOUT its sources instead of about the name.
+  const META = /\b(you said|you asked|you mentioned|one flag|journal (entries|excerpts)|excerpts?|my notes (are|were)|based on|no (information|details)|not enough|I don't (have|know))\b/i;
+  const clean = sents.filter((s) => !META.test(s));
+  const key = String(name || "").toLowerCase().split(/\s+/)[0];
+  const pick = clean.find((s) => key && s.toLowerCase().includes(key)) || clean[0] || "";
+  return pick.trim().slice(0, 220);
+}
+
+// Everything a future is grounded on besides the days themselves: your whole arc (Life + decade
+// summaries), your life NOW (Me facts), and your cast (Names, one sentence each, most-mentioned first).
+export async function gatherGrounding(entries) {
+  const [periods, ents, self, mems] = await Promise.all([
+    getAllPeriods().catch(() => []), getAllEntities().catch(() => []), ensureSelf().catch(() => null), getAllMemories().catch(() => []),
+  ]);
+  const summaryOf = (p) => detoken((p.levels && (p.levels.summary || p.levels.paragraph)) || p.full || p.brief || "");
+  const arc = periods
+    .filter((p) => p.type === "life" || p.type === "decade")
+    .sort((a, b) => (a.type === "life" ? -1 : b.type === "life" ? 1 : String(a.key).localeCompare(String(b.key))))
+    .map((p) => ({ label: p.type === "life" ? "My whole life" : p.label, text: summaryOf(p) }))
+    .filter((a) => a.text);
+  // Me: the current-state facts (with their "since" years).
+  const f = (self && self.facts) || {};
+  const since = (k) => (f[k + "Since"] ? ` (since ${f[k + "Since"]})` : "");
+  const selfFacts = [
+    f.age != null ? `Age: ${f.age}` : f.birthYear ? `Born: ${f.birthYear}` : "",
+    f.location ? `Home: ${f.location}${since("location")}` : "",
+    f.livesWith ? `Live with: ${f.livesWith}${since("livesWith")}` : "",
+    f.job ? `Work: ${f.job}${since("job")}` : "",
+    f.hobbies ? `For fun: ${f.hobbies}${since("hobbies")}` : "",
+    f.family ? `Family: ${f.family}` : "",
+    f.friends ? `Best friends: ${f.friends}` : "",
+  ].filter(Boolean).join("\n");
+  // Names, one sentence each (your words first, else the profile), ordered by how often they come up.
+  const counts = new Map();
+  for (const s of [...entries, ...mems]) for (const r of (s.entityRefs || [])) counts.set(r, (counts.get(r) || 0) + 1);
+  const names = ents
+    .filter((e) => !isSelfEntity(e) && e.recognized !== false && (e.note || e.profile))
+    .sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0))
+    .slice(0, 80)
+    .map((e) => ({ name: e.canonical, kind: e.entityKind || "person", about: aboutSentence(e.note && e.note.trim() ? e.note : e.profile, e.canonical) }))
+    .filter((n) => n.about);
+  return { arc, selfFacts, names };
+}
 
 const GEN_TIMEOUT_MS = 180000; // one big generation call; abort if it hangs
 
@@ -224,7 +275,7 @@ export function initFutures(root) {
     count = Math.max(2, Math.min(40, Number(count) || 8));
     let entries;
     try {
-      entries = (await getAllEntries()).map((e) => ({ date: e.date, dayOfWeek: e.dayOfWeek, brief: e.brief, full: e.full }));
+      entries = (await getAllEntries()).map((e) => ({ date: e.date, dayOfWeek: e.dayOfWeek, brief: detoken(e.brief), full: detoken(e.full), entityRefs: e.entityRefs }));
     } catch { entries = []; }
     if (!entries.length) { setStatus("error", "Write a few days first — there's nothing to imagine forward from yet."); return; }
 
@@ -265,14 +316,15 @@ export function initFutures(root) {
         baseMemories = (await getAllMemories()).map((m) => ({
           category: m.category || "Life", subject: m.subject || m.label || "",
           startYear: m.startYear, endYear: m.endYear,
-          text: m.text || (m.prose && m.prose.full) || m.brief || "",
+          // The story's summary (it covers the whole story); your raw words if it isn't summarized yet.
+          text: detoken((m.levels && m.levels.summary) || (m.prose && m.prose.full) || m.text || m.brief || ""),
         }));
       } catch { baseMemories = []; }
       let data;
       try {
         const res = await fetch("/api/future", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entries, prompt: nudge, years, count, memories: baseMemories, about: await getAboutText() }), signal: ctrl.signal,
+          body: JSON.stringify({ entries: entries.map(({ entityRefs, ...e }) => e), prompt: nudge, years, count, memories: baseMemories, about: await getAboutText(), ...(await gatherGrounding(entries)) }), signal: ctrl.signal,
         });
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Server ${res.status}`); }
         data = await res.json();
@@ -302,7 +354,7 @@ export function initFutures(root) {
 
   function retry(f) {
     getAllEntries()
-      .then((rows) => rows.map((e) => ({ date: e.date, dayOfWeek: e.dayOfWeek, brief: e.brief, full: e.full })))
+      .then((rows) => rows.map((e) => ({ date: e.date, dayOfWeek: e.dayOfWeek, brief: detoken(e.brief), full: detoken(e.full), entityRefs: e.entityRefs })))
       .then((entries) => {
         if (!entries.length) { setStatus("error", "No entries to imagine from — switch to your real journal first."); return; }
         registerJournal({ ...f, status: "generating", error: "", createdAt: Date.now() });

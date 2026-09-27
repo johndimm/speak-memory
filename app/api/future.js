@@ -128,15 +128,37 @@ export default async function handler(req, res) {
     if (lifeStates.length) {
       const lines = lifeStates.map((m) => {
         const span = m.startYear ? `${m.startYear}${m.endYear && m.endYear !== m.startYear ? "–" + m.endYear : ""}: ` : "";
-        return `- [${m.category || "Life"}] ${span}${m.subject || m.label || ""}${m.text ? ` — ${String(m.text).replace(/\s+/g, " ").slice(0, 300)}` : ""}`;
+        return `- [${m.category || "Life"}] ${span}${m.subject || m.label || ""}${m.text ? ` — ${String(m.text).replace(/\s+/g, " ").slice(0, 500)}` : ""}`;
       }).join("\n");
       system += `\n\n=== MY LIFE SO FAR (homes, schools, jobs, relationships, decisions) ===\n${lines}`;
     }
     const about = String(body.about || "").slice(0, 1500).trim();
     if (about) system += `\n\n=== WHO I AM ===\n${about}`;
+    // My life NOW (home, who with, work, fun — each with since when): where the future starts from.
+    const selfFacts = String(body.selfFacts || "").slice(0, 1000).trim();
+    if (selfFacts) system += `\n\n=== MY LIFE NOW ===\n${selfFacts}`;
+    // The whole arc, already summarized: Life, then each decade — the cheapest way to know the shape.
+    const arc = Array.isArray(body.arc) ? body.arc : [];
+    let arcUsed = 0;
+    const arcLines = [];
+    for (const a of arc) {
+      const t = String((a && a.text) || "").replace(/\s+/g, " ").trim().slice(0, 2500);
+      if (!t || arcUsed + t.length > 9000) continue;
+      arcUsed += t.length;
+      arcLines.push(`## ${String(a.label || "").slice(0, 60)}\n${t}`);
+    }
+    if (arcLines.length) system += `\n\n=== MY LIFE, SUMMARIZED (the whole arc, then by decade) ===\n${arcLines.join("\n\n")}`;
+    // The people, places and things in my life — one sentence each, most-mentioned first.
+    const names = Array.isArray(body.names) ? body.names.slice(0, 80) : [];
+    const nameLines = names
+      .filter((n) => n && n.name && n.about)
+      .map((n) => `- ${String(n.name).slice(0, 80)} (${String(n.kind || "person").slice(0, 10)}): ${String(n.about).replace(/\s+/g, " ").slice(0, 220)}`);
+    if (nameLines.length) system += `\n\n=== WHO'S WHO (keep these people consistent; use their names) ===\n${nameLines.join("\n")}`;
     system += `\n\n=== JOURNAL ENTRIES ===\n${context}`;
 
     const userMsg = `It is now around ${baseYear}. Write my raw future diary days${nudge ? ", steered by what I asked" : ""}.`;
+    // dryRun: return the assembled prompt without calling the model (to inspect what's sent).
+    if (body.dryRun) { res.status(200).json({ system, user: userMsg, chars: system.length }); return; }
 
     const reply = await callChat(
       [{ role: "system", content: system }, { role: "user", content: userMsg }],
