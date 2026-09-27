@@ -356,6 +356,8 @@ try {
 // A sample life is read-only: it never opens Write; the body class hides write/edit/delete (styles.css).
 if (isSampleJournal()) {
   document.body.classList.add("sample-journal");
+  // Same tab bar as your journal, but the writing tabs are off (grayed out by the CSS).
+  for (const b of modeBtns) if (["diary", "memoir", "me"].includes(b.dataset.mode)) { b.disabled = true; b.title = "Read-only — nothing to write here"; }
   // A just-imagined future lands on the Activity page, so you WATCH the summaries run (queued →
   // summarizing → done) instead of staring at a Journal that's silently filling in. Futures sets
   // this flag the first time you step into one; it fires once, then falls back to the Journal.

@@ -1864,8 +1864,6 @@ img.sample-photo { object-fit: cover; }
 .sample-status.error { color: #b3261e; }
 
 /* Sample lives are read-only: hide writing/editing affordances (the journal is a fixed artifact). */
-.sample-journal .mode-btn[data-mode="diary"],
-.sample-journal .mode-btn[data-mode="memoir"],
 .sample-journal .day-actions,
 .sample-journal .period-delete,
 .sample-journal .period-summarize,
@@ -1957,26 +1955,14 @@ img.sample-photo { object-fit: cover; }
 /* A prompt that's a real question (Me's next question, a Stories ladder thread) reads as a sentence. */
 .write-prompt.is-question { text-transform: none; letter-spacing: 0; font-family: var(--font-display); font-size: 1.15rem; font-weight: 400; color: var(--ink); line-height: 1.3; }
 
-/* A Future / sample life has no input tabs (Journal, Stories), so there's room to lay the More
-   menu's items out in the tab bar itself — every view one tap away, no More button. */
-.sample-journal #more-btn,
-.sample-journal .mode-btn[data-mode="me"] { display: none !important; } /* Me is input too — none in a Future */
-.sample-journal .mode-more { display: contents; }
-.sample-journal .more-menu,
-.sample-journal .more-menu[hidden] { display: contents !important; }
-.sample-journal .more-item { flex: 0 0 auto; border: none; background: transparent; color: var(--ink-soft); font: inherit; font-weight: 500; font-size: 0.85rem; padding: 0.5rem 1.1rem; border-radius: 999px; }
-.sample-journal .more-item:hover { background: transparent; color: var(--ink); }
-.sample-journal .more-item.active { background: var(--ink); color: var(--paper); }
-@media (max-width: 640px) {
-  .sample-journal .more-item,
-  .sample-journal .mode-btn { padding: 0.38rem 0.29rem; font-size: 0.72rem; }
-  .sample-journal .mode-nav { gap: 0; }
-}
+/* A Future / sample life keeps the SAME tab bar as your journal (nothing jumps when you switch):
+   the writing tabs — Journal, Me, Stories — are just grayed out and can't be tapped. More stays. */
+.sample-journal .mode-btn[data-mode="diary"],
+.sample-journal .mode-btn[data-mode="memoir"],
+.sample-journal .mode-btn[data-mode="me"] { opacity: 0.35; pointer-events: none; cursor: default; }
 
-/* The Guide in More; in a Future (items laid out in the tab bar) it shrinks to "?" on phones. */
+/* The Guide sits at the bottom of the More menu, set off by a hairline. */
 .more-guide { border-top: 1px solid var(--line) !important; margin-top: 0.15rem; }
-.sample-journal .more-guide { border-top: none !important; margin-top: 0; }
-@media (max-width: 640px) { .sample-journal .more-guide .guide-word { display: none; } }
 /* First run: a one-line pointer to the guide under an empty Journal. */
 .first-help { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--ink-soft); }
 .first-help button { border: none; background: none; padding: 0; font: inherit; color: var(--accent); font-weight: 600; cursor: pointer; }
