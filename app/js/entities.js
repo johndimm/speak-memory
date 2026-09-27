@@ -226,6 +226,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
   // touches the page, so finishing late can never redraw — or pull you back to — a page you've left.
   let viewSeq = 0;
   const processing = new Set(); // ids whose saved words are still being turned into facts + a profile
+  let selecting = false;         // the roster's Select mode (batch delete)
+  const selected = new Set();
   let editSnapshot = null; // the saved version when ✎ Edit was tapped — Cancel restores it
   const entDraftKey = (eid) => jkey(`draft:ent:${eid}`); // unsaved words in the box, kept while you're away
   let scanning = false;
@@ -234,6 +236,21 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
   async function allSources() {
     const [days, mems] = await Promise.all([getAllEntries(), getAllMemories()]);
     return [...days, ...mems];
+  }
+
+  // Remove several names in ONE pass over the entries (batch delete from the roster's Select mode).
+  async function removeEntities(ids) {
+    const gone = new Set(ids);
+    if (!gone.size) return;
+    const sources = await allSources();
+    for (const s of sources) {
+      if (Array.isArray(s.entityRefs) && s.entityRefs.some((x) => gone.has(x))) {
+        const refs = s.entityRefs.filter((x) => !gone.has(x));
+        if (s.date) await putEntry({ ...s, entityRefs: refs }); else await putMemory({ ...s, entityRefs: refs });
+      }
+    }
+    for (const id of gone) await deleteEntity(id);
+    resetEntityIndex();
   }
 
   // Remove a name entirely: drop its id from every entry's refs, then delete the entity record.
@@ -396,12 +413,12 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       const list = byKind.get(k).sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.canonical.localeCompare(b.canonical));
       const cards = list.map((e) => { const empty = needsYou(e, counts.get(e.id) || 0); return `
         <div class="ent-card-wrap">
-          <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}${empty ? " ent-card-empty" : ""}" data-open="${escapeHtml(e.id)}">
-            <span class="ent-name">${escapeHtml(e.canonical)}</span>
+          <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}${empty ? " ent-card-empty" : ""}${selected.has(e.id) ? " ent-card-picked" : ""}" data-open="${escapeHtml(e.id)}"${empty ? ` data-empty="1"` : ""}>
+            ${selecting ? `<span class="ent-pick" aria-hidden="true">${selected.has(e.id) ? "☑" : "☐"}</span>` : ""}<span class="ent-name">${escapeHtml(e.canonical)}</span>
             ${e.recognized === false ? `<span class="ent-flag">🕳 didn't recognize</span>` : empty ? `<span class="ent-need" title="Needs a description" aria-label="needs a description">✎</span>` : (e.aliases && e.aliases.length) ? `<span class="ent-aka">aka ${escapeHtml(e.aliases.join(", "))}</span>` : ""}
             <span class="ent-count">${counts.get(e.id) || 0}</span>
           </button>
-          <button type="button" class="ent-card-del" data-del="${escapeHtml(e.id)}" title="Delete this name" aria-label="Delete">×</button>
+          ${selecting ? "" : `<button type="button" class="ent-card-del" data-del="${escapeHtml(e.id)}" title="Delete this name" aria-label="Delete">×</button>`}
         </div>`; }).join("");
       return `<h3 class="ent-kind">${KIND_LABEL[k] || k}s</h3><div class="ent-grid">${cards}</div>`;
     }).join("");
@@ -412,26 +429,52 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     needOrder = undescribed.map((e) => e.id);
 
     viewSeq++;
+    document.body.classList.toggle("ent-selecting", selecting); // hides the Next nudge while picking
+    const selBar = selecting ? `<div class="ent-selbar" id="ent-selbar">
+          <span class="ent-selcount" id="ent-selcount">${selected.size} selected</span>
+          <button type="button" class="ent-sellink" id="ent-sel-all">All</button>
+          <button type="button" class="ent-sellink" id="ent-sel-empty">Empty ones</button>
+          <button type="button" class="ent-sellink" id="ent-sel-none">None</button>
+          <button type="button" class="delete-entry-btn ent-sel-del" id="ent-sel-del"${selected.size ? "" : " disabled"}>Delete ${selected.size || ""}</button>
+        </div>` : "";
     root.innerHTML = `
-      <div class="entities">
+      <div class="entities${selecting ? " ent-selectmode" : ""}">
         <div class="ent-head">
           <h2 class="ent-title">Names</h2>
           <div class="act-actions">
-            ${entities.length ? `<button type="button" class="ent-scan ent-interview-btn" id="ent-interview">🎙 Interview me</button>` : ""}
+            ${entities.length && !selecting ? `<button type="button" class="ent-scan ent-interview-btn" id="ent-interview">🎙 Interview me</button>` : ""}
+            ${entities.length ? `<button type="button" class="ent-scan ent-select-btn" id="ent-select">${selecting ? "Done" : "Select"}</button>` : ""}
             <button type="button" class="ent-scan" id="ent-scan">${entities.length ? "Scan new entries" : "Scan entries"}</button>
           </div>
         </div>
-        ${undescribed.length ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} still need${undescribed.length === 1 ? "s" : ""} a description <span class="ent-needs-key">(dashed below) — tap to start</span></button>` : ""}
+        ${undescribed.length && !selecting ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} still need${undescribed.length === 1 ? "s" : ""} a description <span class="ent-needs-key">(dashed below) — tap to start</span></button>` : ""}
         ${describing ? `<p class="field-hint">◷ Writing descriptions for ${describing} name${describing === 1 ? "" : "s"} from your journal…</p>` : ""}
         <div id="ent-status" class="ent-status" hidden></div>
         ${total === 0 && entities.length === 0
           ? `<p class="ent-empty">Write or imagine some days and the people, places and things you name will show up here.</p>`
-          : sections
+          : sections + selBar
               + ((manySingles || showSingles) && singles.length ? `<button type="button" class="ent-singles-toggle" id="ent-singles">${showSingles ? "Hide" : "Show"} ${singles.length} name${singles.length === 1 ? "" : "s"} mentioned once</button>` : "")
               + (taggedCount < total ? `<p class="field-hint" style="margin-top:1rem">${total - taggedCount} entr${total - taggedCount === 1 ? "y" : "ies"} not yet scanned — tap “Scan new entries”.</p>` : "")}
       </div>`;
 
     root.querySelector("#ent-scan")?.addEventListener("click", () => scan(setStatus));
+    root.querySelector("#ent-select")?.addEventListener("click", () => { selecting = !selecting; selected.clear(); render(); });
+    const pickAll = (pred) => { for (const c of root.querySelectorAll(".ent-card[data-open]")) if (pred(c)) selected.add(c.dataset.open); render(); };
+    root.querySelector("#ent-sel-all")?.addEventListener("click", () => pickAll(() => true));
+    root.querySelector("#ent-sel-empty")?.addEventListener("click", () => pickAll((c) => c.dataset.empty === "1"));
+    root.querySelector("#ent-sel-none")?.addEventListener("click", () => { selected.clear(); render(); });
+    root.querySelector("#ent-sel-del")?.addEventListener("click", async () => {
+      const ids = [...selected];
+      if (!ids.length) return;
+      const names = entities.filter((e) => selected.has(e.id)).map((e) => e.canonical);
+      const list = names.slice(0, 8).join(", ") + (names.length > 8 ? `, and ${names.length - 8} more` : "");
+      if (!confirm(`Delete ${ids.length} name${ids.length === 1 ? "" : "s"}? (${list})\nTheir mentions stay in the entries; only the names are removed.`)) return;
+      const btn = root.querySelector("#ent-sel-del");
+      if (btn) { btn.disabled = true; btn.textContent = "Deleting…"; }
+      await removeEntities(ids);
+      selected.clear(); selecting = false;
+      render();
+    });
     root.querySelector("#ent-interview")?.addEventListener("click", () => startInterview());
     root.querySelector("#ent-singles")?.addEventListener("click", () => { showSingles = !showSingles; render(); });
     root.querySelector("#ent-needs")?.addEventListener("click", () => { openId = (undescribed[0] || {}).id; if (openId) { entEditing = true; renderEntity(openId); } }); // jump straight into editing the first name that needs a description
@@ -578,6 +621,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         ${selfMode ? "" : `<button type="button" class="delete-entry-btn" id="ent-del-big">Delete</button>`}`;
 
     const mySeq = ++viewSeq;
+    document.body.classList.remove("ent-selecting");
     const live = () => viewSeq === mySeq; // still this page, in this mode?
     root.innerHTML = `
       <div class="entities${selfMode ? " ent-selfpage" : ""}${entEditing ? " ent-editing" : ""}" data-ent="${escapeHtml(id)}">
@@ -1031,6 +1075,17 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       return;
     }
     const card = e.target.closest(".ent-card[data-open]");
+    if (card && selecting && !openId) {
+      // Select mode: a tap picks / unpicks (updated in place — no redraw, so the list doesn't jump).
+      const cid = card.dataset.open;
+      if (selected.has(cid)) selected.delete(cid); else selected.add(cid);
+      const on = selected.has(cid);
+      card.classList.toggle("ent-card-picked", on);
+      const mark = card.querySelector(".ent-pick"); if (mark) mark.textContent = on ? "☑" : "☐";
+      const cnt = root.querySelector("#ent-selcount"); if (cnt) cnt.textContent = `${selected.size} selected`;
+      const del = root.querySelector("#ent-sel-del"); if (del) { del.disabled = !selected.size; del.textContent = `Delete ${selected.size || ""}`; }
+      return;
+    }
     if (card) { openId = card.dataset.open; entEditing = null; renderEntity(openId); return; }
     const m = e.target.closest(".ent-mention[data-goto]");
     if (!m) return;
@@ -1039,9 +1094,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
   });
 
   return {
-    open() { openId = null; render(); }, // Names always lands on the roster (Me lives in its own tab)
-    async openSelf() { const s = await ensureSelf(); openId = s.id; entEditing = null; renderEntity(s.id); }, // Me: write if empty, else read + Edit
-    openEntity(id) { openId = id; entEditing = null; renderEntity(id); }, // a name: write if empty, else read + Edit
+    open() { openId = null; selecting = false; selected.clear(); render(); }, // Names always lands on the roster (Me lives in its own tab)
+    async openSelf() { selecting = false; selected.clear(); const s = await ensureSelf(); openId = s.id; entEditing = null; renderEntity(s.id); }, // Me: write if empty, else read + Edit
+    openEntity(id) { selecting = false; selected.clear(); openId = id; entEditing = null; renderEntity(id); }, // a name: write if empty, else read + Edit
     async nextUndescribed() { // the next name still needing a word, in the list's order — for the guided "Next"
       const [all, sources] = await Promise.all([getAllEntities(), allSources()]);
       const idx = mentionIndex(sources);
