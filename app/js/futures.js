@@ -372,7 +372,8 @@ export function initFutures(root) {
       // Only the imagined years are stored. Your real past (days, stories, names) is NOT copied — a
       // Future reads it live, read-only, from your own journal (db.js), so past + future show together.
       await seedJournal(dbNameFor(id), { entries: data.days.map((d) => ({ date: d.date, text: d.raw })), memories });
-      localStorage.setItem(jkey("journal-title", id), (getFuture(id) || {}).title || `${data.endYear}`);
+      // A short title — the prompt shows in the Future's banner, not in the title (it would crowd the tabs).
+      localStorage.setItem(jkey("journal-title", id), `Future · ${data.endYear || (getFuture(id) || {}).endYear || ""}`.trim());
       localStorage.setItem(jkey("year-grouping", id), "calendar");
       finish({ status: "ready", days: data.days.length });
     } catch (err) {

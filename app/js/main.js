@@ -47,7 +47,16 @@ function applyTitle(t) {
   titleEl.textContent = name;
   document.title = name;
 }
-applyTitle(localStorage.getItem(TITLE_KEY));
+// A Future's title is short ("Future · 2046"): its prompt lives in the banner. Older Futures stored the
+// long auto-name (year + prompt) — show the short one instead, unless you've renamed it yourself.
+function initialTitle() {
+  const stored = localStorage.getItem(TITLE_KEY);
+  if (!isFutureJournal()) return stored;
+  const f = listJournals().find((j) => j.id === activeJournalId()) || {};
+  const short = `Future · ${f.endYear || ""}`.trim();
+  return !stored || stored === f.title || stored === String(f.endYear) ? short : stored;
+}
+applyTitle(initialTitle());
 
 titleEditBtn.addEventListener("click", () => {
   titleEl.contentEditable = "true";
@@ -68,7 +77,7 @@ titleEl.addEventListener("blur", () => {
 });
 titleEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") { e.preventDefault(); titleEl.blur(); }
-  else if (e.key === "Escape") { e.preventDefault(); applyTitle(localStorage.getItem(TITLE_KEY)); titleEl.blur(); }
+  else if (e.key === "Escape") { e.preventDefault(); applyTitle(initialTitle()); titleEl.blur(); }
 });
 
 const writeView = document.getElementById("write-view");
