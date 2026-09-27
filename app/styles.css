@@ -1405,9 +1405,10 @@ button.crumb-root:hover { background: var(--accent-soft); color: var(--ink); tex
 .ent-kind { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; color: var(--ink-soft); margin: 1.4rem 0 0.6rem; }
 .ent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 0.6rem; }
 .ent-card-wrap { position: relative; }
-.ent-card { display: flex; align-items: baseline; gap: 0.5rem; width: 100%; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 2rem 0.7rem 0.9rem; cursor: pointer; font: inherit; color: var(--ink); }
-.ent-card-del { position: absolute; top: 0.35rem; right: 0.35rem; width: 1.6rem; height: 1.6rem; line-height: 1; z-index: 2; border: none; border-radius: 50%; background: transparent; color: var(--ink-soft); font-size: 1.05rem; cursor: pointer; opacity: 0.45; }
-.ent-card-del:hover { opacity: 1; color: #b3261e; background: var(--paper-deep); }
+.ent-card { display: flex; align-items: baseline; gap: 0.5rem; width: 100%; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 3rem 0.7rem 0.9rem; cursor: pointer; font: inherit; color: var(--ink); }
+/* × delete: a full-height tap strip on the card's right edge (≥44px wide), separated by a hairline. */
+.ent-card-del { position: absolute; top: 0; right: 0; bottom: 0; width: 2.75rem; display: flex; align-items: center; justify-content: center; z-index: 2; border: none; border-left: 1px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0; background: transparent; color: var(--ink-soft); font-size: 1.3rem; line-height: 1; cursor: pointer; opacity: 0.7; }
+.ent-card-del:hover, .ent-card-del:active { opacity: 1; color: #b3261e; background: rgba(179, 38, 30, 0.08); }
 .ent-card:hover { border-color: var(--accent-soft); }
 .ent-name { font-weight: 600; }
 .ent-aka { font-size: 0.78rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1433,7 +1434,8 @@ body.ent-selecting:has(#people-view:not([hidden])) #next-step { display: none !i
 /* On phones: tidy single-column rows (not chunky rounded boxes), smaller action buttons. */
 @media (max-width: 640px) {
   .ent-grid { grid-template-columns: 1fr; gap: 0.4rem; }
-  .ent-card { border-radius: 10px; padding: 0.55rem 1.9rem 0.55rem 0.8rem; }
+  .ent-card { border-radius: 10px; padding: 0.55rem 3rem 0.55rem 0.8rem; }
+  .ent-card-del { border-radius: 0 10px 10px 0; }
   .ent-head { flex-wrap: wrap; gap: 0.4rem; }
   .ent-head .act-actions { gap: 0.35rem; }
   .ent-scan { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
