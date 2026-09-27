@@ -11,7 +11,7 @@
 // and status live on the journals registry (journal.js); nothing is copied into localStorage and
 // nothing lands in your real journal's store.
 
-import { getAllEntries, getAllEntities, getAllMemories, seedJournal } from "./db.js";
+import { getAllEntries, getAllMemories, seedJournal } from "./db.js";
 import { escapeHtml } from "./render.js";
 import { primeAudio } from "./voicetts.js";
 import {
@@ -288,13 +288,9 @@ export function initFutures(root) {
         category: s.category || "Life", subject: s.subject || "", label: s.subject || "",
         startYear: s.startYear, endYear: s.endYear, text: s.text || s.subject || "",
       })) : [];
-      // Start the future knowing your real cast; imagined new names stay in the future's own DB.
-      let entities = [];
-      try { entities = await getAllEntities(); } catch { entities = []; }
-      // Carry your real PAST into the future (read-only), so it reads as a continuation of your life.
-      let pastEntries = [];
-      try { pastEntries = await getAllEntries(); } catch { pastEntries = []; }
-      await seedJournal(dbNameFor(id), { entries: data.days.map((d) => ({ date: d.date, text: d.raw })), memories, entities, pastEntries });
+      // Only the imagined years are stored. Your real past (days, stories, names) is NOT copied — a
+      // Future reads it live, read-only, from your own journal (db.js), so past + future show together.
+      await seedJournal(dbNameFor(id), { entries: data.days.map((d) => ({ date: d.date, text: d.raw })), memories });
       localStorage.setItem(jkey("journal-title", id), (getFuture(id) || {}).title || `${data.endYear}`);
       localStorage.setItem(jkey("year-grouping", id), "calendar");
       finish({ status: "ready", days: data.days.length });

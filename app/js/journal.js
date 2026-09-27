@@ -57,6 +57,10 @@ export function registerJournal(entry) {
   localStorage.setItem(REGISTRY_KEY, JSON.stringify(all));
 }
 export function journalExists(id) { return listJournals().some((j) => j.id === id); }
+// A Future continues YOUR life: it stores only the imagined years, and reads your real journal
+// live (read-only) for the past — see db.js. A sample life is self-contained.
+export function isFutureJournal(id = activeJournalId()) { return !!id && listJournals().some((j) => j.id === id && j.kind === "future"); }
+export const BASE_DB_NAME = BASE_DB;
 
 // Delete a sample journal entirely: its database, its registry row, and its namespaced settings.
 export function deleteJournal(id) {

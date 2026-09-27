@@ -237,10 +237,10 @@ function mentionIndex(sources) {
 // Still needs YOUR words: nothing describes it yet — no note of yours, no profile (however it was
 // written), no facts — and too few mentions to write one from.
 const hasFacts = (e) => !!(e.facts && Object.values(e.facts).some((v) => v != null && String(v).trim() !== ""));
-const needsYou = (e, count) => !isSelfEntity(e) && needsDescription(e) && !(e.profile && e.profile.trim()) && !hasFacts(e) && e.recognized !== false && count <= ASK_MAX;
+const needsYou = (e, count) => !isSelfEntity(e) && !e.fromPast && needsDescription(e) && !(e.profile && e.profile.trim()) && !hasFacts(e) && e.recognized !== false && count <= ASK_MAX;
 // Can be described from the journal: no note, no profile yet, and mentioned often enough.
 // Tried once (profileTriedAt) → never retried automatically, so an empty or failing reply can't loop.
-const canAutoDescribe = (e, count) => !isSelfEntity(e) && needsDescription(e) && e.recognized !== false && !e.profile && !e.profileTriedAt && count > ASK_MAX;
+const canAutoDescribe = (e, count) => !isSelfEntity(e) && !e.fromPast && needsDescription(e) && e.recognized !== false && !e.profile && !e.profileTriedAt && count > ASK_MAX;
 
 export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShown } = {}) {
   let openId = null; // entity being viewed, or null = the roster
@@ -304,7 +304,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     scanning = true;
     try {
       const sources = await allSources();
-      const untagged = sources.filter((s) => (s.raw || s.text) && !Array.isArray(s.entityRefs));
+      const untagged = sources.filter((s) => (s.raw || s.text) && !Array.isArray(s.entityRefs) && !s.fromPast); // the past is scanned in your own journal
       let queue = untagged.filter(hasSummary); // leave un-summarized ones to the pass (free NER)
       const deferred = untagged.length - queue.length;
       if (!queue.length) {
@@ -708,9 +708,9 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     // Auto-write on first open, OR refresh a profile that's now stale — written before you added
     // notes (so it won't keep saying "little is known" above your detailed notes).
     const stale = (ent.profileAt || 0) < (ent.updatedAt || 0);
-    if (!processing.has(id) && (!ent.profile || stale) && (mentions.length || ent.note)) genProfile();
+    if (!ent.fromPast && !processing.has(id) && (!ent.profile || stale) && (mentions.length || ent.note)) genProfile();
     // Backfill the standard-facts checklist on open, when it's empty but there's something to read.
-    if (!processing.has(id) && FACT_FIELDS[ent.entityKind || "person"] && !ent.facts && (ent.note || mentions.length)) extractFacts(ent, mentions);
+    if (!ent.fromPast && !processing.has(id) && FACT_FIELDS[ent.entityKind || "person"] && !ent.facts && (ent.note || mentions.length)) extractFacts(ent, mentions);
 
     // Edit/Done toggle — flip between the browse and edit versions of the page.
     // (defined once; see above)

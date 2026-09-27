@@ -1398,8 +1398,9 @@ function makeGraphState(nodes, entryByDate, periodById) {
     // A leaf needs (re)summarizing until it has a FULL summary — not just the cheap rungs — so a
     // day/memory is usable the moment you reach it, without a lazy on-open call. (Older entries that
     // only have the distilled rungs get upgraded to the full summary on the next pass.)
-    if (n.type === "day") { const e = entryByDate.get(n.iso), cd = journal.days[n.iso]; return !!(e && e.raw) && !(cd && cd.levels && cd.levels.summary); }
-    if (n.type === "memory") { const m = memOf(id); return !!m && (!m.levels || !m.levels.summary || m.needsSummary); }
+    // In a Future, your real past (fromPast) is read-only — it's summarized in your own journal, never here.
+    if (n.type === "day") { const e = entryByDate.get(n.iso), cd = journal.days[n.iso]; return !!(e && e.raw && !e.fromPast) && !(cd && cd.levels && cd.levels.summary); }
+    if (n.type === "memory") { const m = memOf(id); return !!m && !m.fromPast && (!m.levels || !m.levels.summary || m.needsSummary); }
     const p = periodById.get(n.key); return !p || p.hash !== inputHash(id);
   };
   const isClean = (id) => !isDirty(id);

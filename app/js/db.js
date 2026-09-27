@@ -7,7 +7,7 @@
 //   items:   { id, kind, category, subject, ... }  (journal: id=date; memory: id=uuid)
 //   periods: cached week/month/year/… summaries  { key, type, label, brief, full, hash, levels }
 
-import { dbNameFor } from "./journal.js";
+import { dbNameFor, isFutureJournal, BASE_DB_NAME } from "./journal.js";
 
 // The active journal's database (your own, or an isolated "sample life"). Fixed for the life of
 // the page — switching journals reloads, so this is re-read fresh each load.
@@ -182,10 +182,93 @@ function reqToPromise(request) {
 }
 
 const kindOf = (i) => i.kind || (i.date ? "journal" : "memory"); // defensive for any unlabeled row
-const getAllItems = () => tx(ITEMS, "readonly", (s) => reqToPromise(s.getAll())).then((r) => r || []);
+const ownItems = () => tx(ITEMS, "readonly", (s) => reqToPromise(s.getAll())).then((r) => r || []);
+
+// ---- A Future sees your real past, live and read-only (nothing is ever copied) -----------
+// In a Future, every read also pulls your own journal's database and merges it in, marked
+// `fromPast`. Writes only ever go to the Future's own database, and never for a past item — so
+// the past can't be copied into (or changed from) a Future. Pure-past summaries (periods) are
+// read from your journal too, so they're reused, not redone.
+const OVERLAY = isFutureJournal();
+let baseDbPromise = null;
+function openBase() {
+  if (!baseDbPromise) {
+    baseDbPromise = new Promise((resolve) => {
+      const req = indexedDB.open(BASE_DB_NAME); // no version → never upgrades your journal from here
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+    });
+  }
+  return baseDbPromise;
+}
+async function baseAll(store) {
+  if (!OVERLAY) return [];
+  const db = await openBase();
+  if (!db || !db.objectStoreNames.contains(store)) return [];
+  return new Promise((res) => {
+    const r = db.transaction(store, "readonly").objectStore(store).getAll();
+    r.onsuccess = () => res(r.result || []);
+    r.onerror = () => res([]);
+  });
+}
+async function baseGet(store, key) {
+  if (!OVERLAY) return undefined;
+  const db = await openBase();
+  if (!db || !db.objectStoreNames.contains(store)) return undefined;
+  return new Promise((res) => {
+    const r = db.transaction(store, "readonly").objectStore(store).get(key);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => res(undefined);
+  });
+}
+let baseIds = null; // ids of your real items — never written from a Future
+async function isBaseId(id) {
+  if (!OVERLAY) return false;
+  if (!baseIds) baseIds = new Set((await baseAll(ITEMS)).map((i) => i.id));
+  return baseIds.has(id);
+}
+// Older Futures were seeded with a COPY of the past; drop those copies once (the live past replaces them).
+let cleaned = !OVERLAY;
+async function dropPastCopies() {
+  if (cleaned) return;
+  cleaned = true;
+  const base = new Set((await baseAll(ITEMS)).map((i) => i.id));
+  const copies = (await ownItems()).filter((i) => i.fromPast || (base.has(i.id) && (i.kind === "journal" || i.kind === "entity")));
+  if (copies.length) await tx(ITEMS, "readwrite", (s) => Promise.all(copies.map((i) => reqToPromise(s.delete(i.id)))));
+}
+// A Future may have made its OWN card for someone you already have (its "Luann" vs your Luann).
+// Same name → same person: the Future's card folds into yours, and its references are re-pointed.
+const normName = (n) => String(n || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+let dupTo = new Map(); // the Future's entity id → your entity id
+function foldDuplicates(mine, past) {
+  const yours = new Map();
+  for (const e of past) if (kindOf(e) === "entity") for (const n of [e.canonical, ...(e.aliases || [])]) { const k = normName(n); if (k && !yours.has(k)) yours.set(k, e.id); }
+  dupTo = new Map();
+  for (const e of mine) if (kindOf(e) === "entity") { const to = yours.get(normName(e.canonical)); if (to && to !== e.id) dupTo.set(e.id, to); }
+}
+const remapRefs = (i) => (Array.isArray(i.entityRefs) && i.entityRefs.some((r) => dupTo.has(r))
+  ? { ...i, entityRefs: [...new Set(i.entityRefs.map((r) => dupTo.get(r) || r))] } : i);
+
+async function getAllItems() {
+  if (!OVERLAY) return ownItems();
+  await dropPastCopies();
+  const [mine, past] = await Promise.all([ownItems(), baseAll(ITEMS)]);
+  foldDuplicates(mine, past);
+  const byId = new Map(past.map((i) => [i.id, { ...i, fromPast: true }]));
+  for (const i of mine) {
+    if (byId.has(i.id) || dupTo.has(i.id)) continue; // never shadow the past; folded duplicates drop out
+    byId.set(i.id, remapRefs(i));
+  }
+  return [...byId.values()];
+}
+// A write from a Future: its own items only; the past is read-only.
+async function writable(id) { return !(await isBaseId(id)); }
 
 // ---- Journal entries (kind "journal", keyed by date) -----------------------------------
-export function getEntry(date) {
+export async function getEntry(date) {
+  const past = await baseGet(ITEMS, date);
+  if (past && kindOf(past) === "journal") return { ...past, fromPast: true };
   return tx(ITEMS, "readonly", (s) => reqToPromise(s.get(date))).then((i) => (i && kindOf(i) === "journal" ? i : undefined));
 }
 
@@ -195,12 +278,14 @@ export function getAllEntries() {
   );
 }
 
-export function putEntry(entry) {
+export async function putEntry(entry) {
+  if (entry.fromPast || !(await writable(entry.date))) return; // the past is read-only in a Future
   const item = { category: "journal", subject: "today", ...entry, id: entry.date, kind: "journal" };
   return tx(ITEMS, "readwrite", (s) => reqToPromise(s.put(item)));
 }
 
-export function deleteEntry(date) {
+export async function deleteEntry(date) {
+  if (!(await writable(date))) return;
   return tx(ITEMS, "readwrite", (s) => reqToPromise(s.delete(date)));
 }
 
@@ -239,12 +324,19 @@ export async function clearAllEntries() {
 }
 
 // ---- Periods (derived summary cache) ---------------------------------------------------
-export function getPeriod(key) {
-  return tx("periods", "readonly", (s) => reqToPromise(s.get(key)));
+// A Future's own period summaries (spanning past → future) win; pure-past ones come from your
+// journal, so they're reused as-is when their inputs match.
+export async function getPeriod(key) {
+  const mine = await tx("periods", "readonly", (s) => reqToPromise(s.get(key)));
+  return mine || (await baseGet("periods", key));
 }
 
-export function getAllPeriods() {
-  return tx("periods", "readonly", (s) => reqToPromise(s.getAll())).then((r) => r || []);
+export async function getAllPeriods() {
+  const mine = await tx("periods", "readonly", (s) => reqToPromise(s.getAll())).then((r) => r || []);
+  if (!OVERLAY) return mine;
+  const byKey = new Map((await baseAll("periods")).map((p) => [p.key, p]));
+  for (const p of mine) byKey.set(p.key, p);
+  return [...byKey.values()];
 }
 
 export function putPeriod(period) {
@@ -260,13 +352,15 @@ export function clearAllPeriods() {
 }
 
 // ---- Memories (kind "memory", keyed by their own id) -----------------------------------
-export function putMemory(m) {
+export async function putMemory(m) {
+  if (m.fromPast || !(await writable(m.id))) return; // the past is read-only in a Future
   return tx(ITEMS, "readwrite", (s) => reqToPromise(s.put({ ...m, kind: "memory" })));
 }
 export function getAllMemories() {
   return getAllItems().then((r) => r.filter((i) => kindOf(i) === "memory"));
 }
-export function deleteMemory(id) {
+export async function deleteMemory(id) {
+  if (!(await writable(id))) return;
   return tx(ITEMS, "readwrite", (s) => reqToPromise(s.delete(id)));
 }
 export async function clearAllMemories() {
@@ -281,13 +375,18 @@ export async function clearAllMemories() {
 export function getAllEntities() {
   return getAllItems().then((r) => r.filter((i) => kindOf(i) === "entity"));
 }
-export function getEntity(id) {
+export async function getEntity(id) {
+  if (OVERLAY && dupTo.has(id)) id = dupTo.get(id); // a folded duplicate opens your real card
+  const past = await baseGet(ITEMS, id);
+  if (past && kindOf(past) === "entity") return { ...past, fromPast: true };
   return tx(ITEMS, "readonly", (s) => reqToPromise(s.get(id))).then((i) => (i && kindOf(i) === "entity" ? i : undefined));
 }
-export function putEntity(ent) {
+export async function putEntity(ent) {
+  if (ent.fromPast || !(await writable(ent.id))) return; // your real names are read-only in a Future
   return tx(ITEMS, "readwrite", (s) => reqToPromise(s.put({ ...ent, kind: "entity" })));
 }
-export function deleteEntity(id) {
+export async function deleteEntity(id) {
+  if (!(await writable(id))) return;
   return tx(ITEMS, "readwrite", (s) => reqToPromise(s.delete(id)));
 }
 export async function clearAllEntities() {
