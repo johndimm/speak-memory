@@ -1980,3 +1980,6 @@ img.sample-photo { object-fit: cover; }
 /* First run: a one-line pointer to the guide under an empty Journal. */
 .first-help { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--ink-soft); }
 .first-help button { border: none; background: none; padding: 0; font: inherit; color: var(--accent); font-weight: 600; cursor: pointer; }
+
+/* A Future is read-only: no "Add your take" box on its pages. */
+.sample-journal .node-comment { display: none !important; }

@@ -405,7 +405,11 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     const toggle = opts.length > 1
       ? `<div class="rep-toggle">${opts.map(([k, l]) => `<button type="button" class="rep-tab${repView === k ? " active" : ""}" data-rep="${k}">${l}</button>`).join("")}</div>`
       : "";
-    entryView.innerHTML = toggle + `<div class="rep-body">${renderRep(reps, repView)}</div>`;
+    // The zoom-out rungs first — the one word and the phrase — then Summary | Outline (same as Browse).
+    const lv = (item && item.levels) || {};
+    const rungs = (lv.word ? `<p class="node-word">${escapeHtml(resolveEntityTokens(lv.word))}</p>` : "")
+      + (lv.phrase ? `<p class="node-phrase">${escapeHtml(resolveEntityTokens(lv.phrase))}</p>` : "");
+    entryView.innerHTML = rungs + toggle + `<div class="rep-body">${renderRep(reps, repView)}</div>`;
   }
   entryView.addEventListener("click", (e) => {
     const t = e.target.closest(".rep-tab[data-rep]");

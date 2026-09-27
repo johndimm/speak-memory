@@ -775,6 +775,23 @@ function nodeScaffold({ name, subtitle = "", levels = {}, elementsHtml = "", ele
       + `</div></section>`
     : "";
 
+  // A LEAF (a day or a story) reads exactly like it does in the Journal/Stories tab: the date/name, the
+  // word, the phrase, then ONE of Summary | Outline (a switch). Your transcript isn't shown here — it's in
+  // ✎ Edit (and a Future, being read-only, has none to show).
+  if (isLeaf) {
+    const outlineBody = hasOutline ? renderOutlineTree(v.outline) : (canSummary ? `<p class="lazy-hint">✦ Building the outline…</p>` : "");
+    return `${name ? `<h2 class="node-name">${escapeHtml(name)}</h2>` : ""}`
+      + (subtitle ? `<p class="node-subtitle">${escapeHtml(subtitle)}</p>` : "")
+      + (summarizing ? summarizingNote() : "")
+      + (v.word ? `<p class="node-word">${escapeHtml(resolveEntityTokens(v.word))}</p>` : "")
+      + (v.phrase ? `<p class="node-phrase">${escapeHtml(resolveEntityTokens(v.phrase))}</p>` : "")
+      + `<div class="rep-toggle leaf-rep-toggle"><button type="button" class="rep-tab active" data-leaf-rep="summary">Summary</button><button type="button" class="rep-tab" data-leaf-rep="outline">Outline</button></div>`
+      + summaryHtml
+      + `<div class="node-outline-body leaf-outline" data-detail="outline" hidden>${outlineBody}</div>`
+      + images
+      + (elementsHtml ? `${elementsLabel ? `<p class="nav-hint">${escapeHtml(elementsLabel)}</p>` : ""}${elementsHtml}` : "");
+  }
+
   return `${name ? `<h2 class="node-name">${escapeHtml(name)}</h2>` : ""}`
     + (subtitle ? `<p class="node-subtitle">${escapeHtml(subtitle)}</p>` : "")
     + (summarizing ? summarizingNote() : "")
@@ -1796,6 +1813,16 @@ export function initCalendar(elements, { onEdit, onEditMemory, onAddMemory, onOp
   // Tapping a name-link in any summary opens that entity's page (all its mentions, in time order).
   const entityClick = (e) => { const a = e.target.closest(".ent-link[data-eid]"); if (a) { e.stopPropagation(); onOpenEntity?.(a.dataset.eid); } };
   els.root.addEventListener("click", entityClick);
+  // A day/story page's Summary | Outline switch — one shown at a time, like the Journal's read view.
+  els.root.addEventListener("click", (e) => {
+    const t = e.target.closest("[data-leaf-rep]");
+    if (!t) return;
+    const which = t.dataset.leafRep;
+    els.root.querySelectorAll("[data-leaf-rep]").forEach((b) => b.classList.toggle("active", b === t));
+    const sum = els.root.querySelector('[data-detail="summary"]'), out = els.root.querySelector(".leaf-outline");
+    if (sum) sum.hidden = which !== "summary";
+    if (out) out.hidden = which !== "outline";
+  });
   els.detailFull.addEventListener("click", entityClick);
   if (els.periodSummary) els.periodSummary.addEventListener("click", entityClick);
   // Restore saved outline expansion whenever a node page (re)renders; save it when the reader
