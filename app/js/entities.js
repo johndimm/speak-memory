@@ -14,6 +14,7 @@ import { add as logAdd, set as logSet } from "./llmlog.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { resolveEntityNames, resetEntityIndex, sanitizeEntities } from "./entityresolve.js";
 import { ensureSelf, isSelfEntity, needsDescription } from "./self.js";
+import { bucketSectionHtml, wireBucketSection } from "./bucket.js";
 import { jkey } from "./journal.js";
 import { createSpeaker, CHARACTERS, savedCharacter } from "./voicetts.js";
 import { listenTurn as vListen, hasSpeechInput } from "./voiceinput.js";
@@ -629,7 +630,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
 
     const askFrag = `<div class="ent-ask">
           <form class="ent-ask-form" id="ent-ask-form">
-            <input type="text" id="ent-ask-input" placeholder="Ask about ${escapeHtml(ent.canonical)}${(ent.entityKind || "person") === "person" ? ` — “when did we meet?”` : ""}">
+            <input type="text" id="ent-ask-input" placeholder="Ask about ${escapeHtml(ent.canonical)}${(ent.entityKind || "person") === "person" && !isSelfEntity(ent) ? ` — “when did we meet?”` : ""}">
             <button type="submit" class="ent-ask-btn">Ask</button>
           </form>
           <div id="ent-ask-answer" class="ent-ask-answer" hidden></div>
@@ -676,6 +677,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         ${subtitle}${flag}
         ${profileFrag}
         ${factsView(ent)}
+        ${selfMode ? bucketSectionHtml() : ""}
         ${mentionsFrag}
         ${askFrag}`;
 
@@ -684,6 +686,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         <h2 class="node-name">${escapeHtml(ent.canonical)}</h2>
         ${subtitle}${flag}
         ${factChips(ent)}
+        ${selfMode ? bucketSectionHtml() : ""}
         ${kindFrag}
         ${actionsFrag}
         ${selfMode ? "" : `<button type="button" class="delete-entry-btn" id="ent-del-big">Delete</button>`}`;
@@ -698,6 +701,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         ${entEditing ? editBody : browseBody}
       </div>`;
 
+    wireBucketSection(root); // Me: the bucket list saves as you add/remove (independent of Save/Cancel)
     const pstatus = (msg, cls) => { const el = live() && root.querySelector("#ent-pstatus"); if (!el) return; el.textContent = msg; el.className = "node-comment-status" + (cls ? " " + cls : ""); };
     const dstatus = (msg, cls) => { const el = live() && root.querySelector("#ent-dstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
 

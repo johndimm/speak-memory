@@ -19,6 +19,7 @@ import {
   deleteJournal, slugify, activeJournalId, isSampleJournal, isFutureJournal, jkey,
 } from "./journal.js";
 import { getAboutText, ensureSelf, isSelfEntity } from "./self.js";
+import { getBucket } from "./bucket.js";
 
 // Summaries carry name tokens ({{e:id|Luann}}) — the model just needs the names.
 const detoken = (t) => String(t || "").replace(/\{\{(?:e:)?[^|{}]+\|([^{}]*)\}\}/g, "$1");
@@ -68,7 +69,7 @@ export async function gatherGrounding(entries) {
     .slice(0, 80)
     .map((e) => ({ name: e.canonical, kind: e.entityKind || "person", about: aboutSentence(e.note && e.note.trim() ? e.note : e.profile, e.canonical) }))
     .filter((n) => n.about);
-  return { arc, selfFacts, names };
+  return { arc, selfFacts, names, bucket: getBucket().slice(0, 40) };
 }
 
 const GEN_TIMEOUT_MS = 180000; // one big generation call; abort if it hangs
@@ -187,35 +188,16 @@ export function initFutures(root) {
             </label>
             <button id="fut-go" class="fut-go">Imagine ›</button>
           </div>
+          ${getBucket().length ? `<label class="fut-dobucket"><input type="checkbox" id="fut-dobucket"> Do my bucket list (${getBucket().length})</label>` : ""}
           <div id="fut-status" class="fut-status" hidden></div>
           <button type="button" class="fut-interview" id="fut-interview">🎙 Tell me your story first</button>
         </details>
 
-        <details class="fut-bucket-fold">
-          <summary>Bucket list${getBucket().length ? ` (${getBucket().length})` : ""}</summary>
-          <div class="fut-bucket" id="fut-bucket">${bucketHtml()}</div>
-        </details>
       </div>`;
 
     wire();
     updateGenLabels();
   }
-
-  // ---- Bucket list (per journal) — things you want to do; a Future can weave them all in ----------
-  function getBucket() { try { return JSON.parse(localStorage.getItem(jkey("bucket-list")) || "[]").filter((x) => typeof x === "string"); } catch { return []; } }
-  function setBucket(items) { try { localStorage.setItem(jkey("bucket-list"), JSON.stringify(items)); } catch { /* */ } }
-  function bucketHtml() {
-    const items = getBucket();
-    const rows = items.map((it, i) => `<li class="bucket-item"><span>${escapeHtml(it)}</span><button type="button" class="bucket-del" data-bucket-del="${i}" aria-label="Remove">×</button></li>`).join("");
-    return `
-      <ul class="bucket-list">${rows || `<li class="bucket-empty">Nothing yet — what do you want to do before it's too late?</li>`}</ul>
-      <form class="bucket-add" id="bucket-add-form">
-        <input type="text" id="bucket-input" autocomplete="off" placeholder="e.g. see the northern lights, learn piano, mend things with Dad…">
-        <button type="submit" class="bucket-addbtn">Add</button>
-      </form>
-      ${items.length ? `<button type="button" class="fut-go bucket-fulfill" id="bucket-fulfill">🔮 Imagine a future that does them all ›</button>` : ""}`;
-  }
-  function refreshBucket() { const el = root.querySelector("#fut-bucket"); if (el) { el.innerHTML = bucketHtml(); wireBucket(); } }
 
   function wire() {
     const nudge = root.querySelector("#fut-nudge");
@@ -238,7 +220,15 @@ export function initFutures(root) {
       const n = parseInt(countEl.value, 10);
       if (Number.isFinite(n)) composeCount = Math.max(2, Math.min(40, n));
     });
-    root.querySelector("#fut-go")?.addEventListener("click", () => startFuture(nudge.value, composeYears, composeCount));
+    root.querySelector("#fut-go")?.addEventListener("click", () => {
+      let n = nudge.value.trim();
+      // "Do my bucket list": the Future finds a way to do each one (your prompt, if any, still applies).
+      if (root.querySelector("#fut-dobucket")?.checked) {
+        const items = getBucket();
+        if (items.length) n = `${n ? n + ". " : ""}Over these years I take on and fulfill my bucket list — I find a way to do each of these, and the diary shows how: ${items.join("; ")}.`;
+      }
+      startFuture(n, composeYears, composeCount);
+    });
     root.querySelector("#fut-interview")?.addEventListener("click", async () => {
       primeAudio(); // unlock audio IN this tap, before the async import
       const { startLifeInterview } = await import("./lifeinterview.js");
@@ -249,28 +239,6 @@ export function initFutures(root) {
       const f = getFuture(activeJournalId()) || {};
       const { playFutureShow } = await import("./audioshow.js");
       playFutureShow({ endYear: f.endYear, years: f.years, nudge: f.nudge });
-    });
-    wireBucket();
-  }
-
-  function wireBucket() {
-    root.querySelector("#bucket-add-form")?.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const input = root.querySelector("#bucket-input");
-      const v = (input && input.value || "").trim();
-      if (!v) return;
-      setBucket([...getBucket(), v]);
-      refreshBucket();
-    });
-    root.querySelectorAll("[data-bucket-del]").forEach((b) => b.addEventListener("click", () => {
-      const i = Number(b.dataset.bucketDel);
-      const items = getBucket(); items.splice(i, 1); setBucket(items); refreshBucket();
-    }));
-    root.querySelector("#bucket-fulfill")?.addEventListener("click", () => {
-      const items = getBucket();
-      if (!items.length) return;
-      const nudge = `Over these years I take on and fulfill my bucket list — I find a way to do each of these, and the diary shows how: ${items.join("; ")}.`;
-      startFuture(nudge, composeYears, composeCount);
     });
   }
 

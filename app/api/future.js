@@ -166,6 +166,9 @@ export default async function handler(req, res) {
     const nameLines = names
       .filter((n) => n && n.name && n.about)
       .map((n) => `- ${String(n.name).slice(0, 80)} (${String(n.kind || "person").slice(0, 10)}): ${String(n.about).replace(/\s+/g, " ").slice(0, 220)}`);
+    // Things I hope to do while there's time — weave in the ones that fit this future's arc.
+    const bucket = Array.isArray(body.bucket) ? body.bucket.filter((x) => typeof x === "string").slice(0, 40) : [];
+    if (bucket.length) system += `\n\n=== MY BUCKET LIST (things I hope to do; some may happen, some may not — follow the arc) ===\n${bucket.map((b) => `- ${b.slice(0, 200)}`).join("\n")}`;
     if (nameLines.length) system += `\n\n=== WHO'S WHO (keep these people consistent; use their names) ===\n${nameLines.join("\n")}`;
     system += `\n\n=== JOURNAL ENTRIES ===\n${context}`;
 
