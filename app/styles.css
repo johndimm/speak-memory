@@ -2002,7 +2002,9 @@ img.sample-photo { object-fit: cover; }
 .fr-icon:hover { color: var(--accent); border-color: var(--accent-soft); }
 .fr-del:hover { color: #b3261e; }
 .fut-new { border-top: 1px solid var(--line); padding-top: 1rem; margin-bottom: 1.2rem; }
-.fut-new-title { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; margin: 0 0 0.6rem; }
+.fut-new-title { font-family: var(--font-display); font-weight: 400; font-size: 1.3rem; margin: 0; cursor: pointer; list-style: none; color: var(--accent); }
+.fut-new-title::-webkit-details-marker { display: none; }
+.fut-new[open] .fut-new-title { margin-bottom: 0.6rem; }
 .fut-new .fut-nudge { width: 100%; box-sizing: border-box; min-height: 2.6rem; resize: vertical; }
 .fut-new .fut-count { display: inline-flex; align-items: center; gap: 0.3rem; }
 .fut-new .fut-count input { width: 3.4rem; }

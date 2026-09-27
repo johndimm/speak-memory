@@ -172,8 +172,8 @@ export function initFutures(root) {
       <div class="futures">
         <div class="fut-gallery">${galleryHtml()}</div>
 
-        <section class="fut-new">
-          <h2 class="fut-new-title">＋ New future</h2>
+        <details class="fut-new">
+          <summary class="fut-new-title">＋ New future</summary>
           <textarea id="fut-nudge" class="fut-nudge" rows="1" placeholder="Where does it go? (optional)"></textarea>
           <div class="fut-controls">
             <div class="fut-horizons" role="group" aria-label="How far ahead">
@@ -189,7 +189,7 @@ export function initFutures(root) {
           </div>
           <div id="fut-status" class="fut-status" hidden></div>
           <button type="button" class="fut-interview" id="fut-interview">🎙 Tell me your story first</button>
-        </section>
+        </details>
 
         <details class="fut-bucket-fold">
           <summary>Bucket list${getBucket().length ? ` (${getBucket().length})` : ""}</summary>
