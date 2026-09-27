@@ -205,7 +205,7 @@ function itemSortKey(it) {
 
 // A name the journal mentions this often gets its description written FROM those entries; only the
 // thinly-mentioned ones (≤ ASK_MAX) are left for you to describe.
-const ASK_MAX = 2;
+const ASK_MAX = 1;
 function mentionIndex(sources) {
   const byId = new Map(); // entity id → the sources that mention it
   for (const s of sources) for (const id of (Array.isArray(s.entityRefs) ? s.entityRefs : [])) {
