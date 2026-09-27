@@ -16,7 +16,7 @@ import { escapeHtml } from "./render.js";
 import { primeAudio } from "./voicetts.js";
 import {
   dbNameFor, switchJournal, listJournals, registerJournal, journalExists,
-  deleteJournal, slugify, activeJournalId, isSampleJournal, jkey,
+  deleteJournal, slugify, activeJournalId, isSampleJournal, isFutureJournal, jkey,
 } from "./journal.js";
 import { getAboutText, ensureSelf, isSelfEntity } from "./self.js";
 
@@ -106,6 +106,15 @@ async function currentAge() {
   const by = Number(localStorage.getItem(jkey("birth-year")));
   return by > 1900 && by <= yearNow ? yearNow - by : null;
 }
+
+// Tomorrow, as a local YYYY-MM-DD — every Future starts here (no gap after today).
+function tomorrowISO() {
+  const d = new Date(); d.setDate(d.getDate() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+// Only your REAL days ground a Future — never another Future's imagined ones (inside a Future, the
+// real past is marked fromPast), and nothing after today.
+const realDay = (e) => e && e.date && (!isFutureJournal() || e.fromPast) && e.date < tomorrowISO();
 
 export function initFutures(root) {
   let composeYears = 10;
@@ -300,12 +309,13 @@ export function initFutures(root) {
     count = Math.max(2, Math.min(40, Number(count) || 8));
     let entries;
     try {
-      entries = (await getAllEntries()).map((e) => ({ date: e.date, dayOfWeek: e.dayOfWeek, brief: detoken(e.brief), full: detoken(e.full), entityRefs: e.entityRefs }));
+      entries = (await getAllEntries()).filter(realDay).map((e) => ({ date: e.date, dayOfWeek: e.dayOfWeek, brief: detoken(e.brief), full: detoken(e.full), entityRefs: e.entityRefs }));
     } catch { entries = []; }
     if (!entries.length) { setStatus("error", "Write a few days first — there's nothing to imagine forward from yet."); return; }
 
-    const lastDate = entries.map((e) => e.date).filter(Boolean).sort().pop();
-    const baseYear = (lastDate && Number(lastDate.slice(0, 4))) || new Date().getFullYear();
+    // A Future always starts TOMORROW and runs `years` from there.
+    const startDate = tomorrowISO();
+    const baseYear = Number(startDate.slice(0, 4));
     const endYear = baseYear + years;
     const id = newFutureId(endYear, nudge);
     const title = nudge
@@ -313,7 +323,7 @@ export function initFutures(root) {
       : `${endYear} — straight ahead`;
 
     // Register it right away so it shows in the list with a live status, then generate.
-    registerJournal({ id, title, kind: "future", subtitle: nudge || "straight ahead", nudge, years, count, toAge: composeToAge, baseYear, endYear, createdAt: Date.now(), status: "generating" });
+    registerJournal({ id, title, kind: "future", subtitle: nudge || "straight ahead", nudge, years, count, toAge: composeToAge, startDate, baseYear, endYear, createdAt: Date.now(), status: "generating" });
     renderGallery();
     runGeneration(id, entries);
   }
@@ -349,7 +359,7 @@ export function initFutures(root) {
       try {
         const res = await fetch("/api/future", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ entries: entries.map(({ entityRefs, ...e }) => e), prompt: nudge, years, count, toAge, currentAge: await currentAge(), memories: baseMemories, about: await getAboutText(), ...(await gatherGrounding(entries)) }), signal: ctrl.signal,
+          body: JSON.stringify({ entries: entries.map(({ entityRefs, ...e }) => e), prompt: nudge, years, count, toAge, startDate: tomorrowISO(), currentAge: await currentAge(), memories: baseMemories, about: await getAboutText(), ...(await gatherGrounding(entries)) }), signal: ctrl.signal,
         });
         if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Server ${res.status}`); }
         data = await res.json();
@@ -379,7 +389,7 @@ export function initFutures(root) {
 
   function retry(f) {
     getAllEntries()
-      .then((rows) => rows.map((e) => ({ date: e.date, dayOfWeek: e.dayOfWeek, brief: detoken(e.brief), full: detoken(e.full), entityRefs: e.entityRefs })))
+      .then((rows) => rows.filter(realDay).map((e) => ({ date: e.date, dayOfWeek: e.dayOfWeek, brief: detoken(e.brief), full: detoken(e.full), entityRefs: e.entityRefs })))
       .then((entries) => {
         if (!entries.length) { setStatus("error", "No entries to imagine from — switch to your real journal first."); return; }
         registerJournal({ ...f, status: "generating", error: "", createdAt: Date.now() });

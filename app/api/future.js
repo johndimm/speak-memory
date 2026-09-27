@@ -23,8 +23,9 @@ already write in this journal — a voice-memo poured out at the end of the day.
 any other day, so write them RAW: first person, unpolished, specific, the texture of a real spoken entry.
 
 Rules:
-- Choose about {DAYS} days total, spread roughly evenly from {START_YEAR} to {END_YEAR} — about one every {GAP} —
-  never all clustered at the end. Give each a real, plausible calendar date.
+- It starts TOMORROW, {START_DATE}: the FIRST entry is within a few weeks of that date, picking up right where the
+  journal leaves off. Then choose about {DAYS} days total, spread roughly evenly out to {END_YEAR} — about one every
+  {GAP} — never skipping years at the start or clustering at the end. Give each a real, plausible calendar date.
 - Ground everything in the real journal: name the ACTUAL people, places, and running threads that appear in it,
   and let them evolve plausibly over the years — people age, move, arrive, drift away; projects finish or fade;
   the body and the seasons keep turning. New things may enter, but they should grow out of what is already there.
@@ -112,16 +113,19 @@ export default async function handler(req, res) {
       ? Math.max(2, Math.min(40, Math.round(requested)))
       : Math.max(4, Math.min(12, years));
 
-    const lastDate = entries.map((e) => e.date).filter(Boolean).sort().pop();
-    const baseYear = (lastDate && Number(lastDate.slice(0, 4))) || new Date().getFullYear();
+    // A Future starts TOMORROW (the caller's local date) — no gap after today — and runs `years`.
+    const startDate = /^\d{4}-\d{2}-\d{2}$/.test(String(body.startDate || "")) ? String(body.startDate)
+      : new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+    const baseYear = Number(startDate.slice(0, 4));
     const endYear = baseYear + years;
 
     const context = buildContext(entries) || "(no entries yet)";
     let system = FUTURE_SYSTEM
       .replace(/{YEARS}/g, String(years))
       .replace(/{DAYS}/g, String(sampleDays))
-      .replace(/{START_YEAR}/g, String(baseYear + 1))
+      .replace(/{START_YEAR}/g, String(baseYear))
       .replace(/{END_YEAR}/g, String(endYear))
+      .replace(/{START_DATE}/g, startDate)
       .replace(/{GAP}/g, years / sampleDays <= 1.5 ? "year" : `${Math.round(years / sampleDays)} years`);
     // "Rest of life": the span runs out to the end — let the life actually reach it.
     const toAge = Number(body.toAge), ageNow = Number(body.currentAge);
@@ -165,7 +169,7 @@ export default async function handler(req, res) {
     if (nameLines.length) system += `\n\n=== WHO'S WHO (keep these people consistent; use their names) ===\n${nameLines.join("\n")}`;
     system += `\n\n=== JOURNAL ENTRIES ===\n${context}`;
 
-    const userMsg = `It is now around ${baseYear}. Write my raw future diary days${nudge ? ", steered by what I asked" : ""}.`;
+    const userMsg = `Today is the day before ${startDate}. Write my raw future diary days, starting tomorrow${nudge ? ", steered by what I asked" : ""}.`;
     // dryRun: return the assembled prompt without calling the model (to inspect what's sent).
     if (body.dryRun) { res.status(200).json({ system, user: userMsg, chars: system.length }); return; }
 
@@ -176,7 +180,7 @@ export default async function handler(req, res) {
     const parsed = parseJson(reply);
     const days = Array.isArray(parsed?.days)
       ? parsed.days
-          .filter((d) => d && d.date && d.raw)
+          .filter((d) => d && d.date && d.raw && String(d.date).slice(0, 10) >= startDate) // never before tomorrow
           .map((d) => ({ date: String(d.date).slice(0, 10), raw: String(d.raw) }))
           .sort((a, b) => a.date.localeCompare(b.date))
       : [];
