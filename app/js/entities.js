@@ -442,19 +442,19 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         <div class="ent-head">
           <h2 class="ent-title">Names</h2>
           <div class="act-actions">
-            ${entities.length && !selecting ? `<button type="button" class="ent-scan ent-interview-btn" id="ent-interview">🎙 Interview me</button>` : ""}
-            ${entities.length ? `<button type="button" class="ent-scan ent-select-btn" id="ent-select">${selecting ? "Done" : "Select"}</button>` : ""}
-            <button type="button" class="ent-scan" id="ent-scan">${entities.length ? "Scan new entries" : "Scan entries"}</button>
+            ${entities.length && !selecting ? `<button type="button" class="ent-scan ent-interview-btn" id="ent-interview" title="Answer questions about each name, hands-free">🎙 Interview</button>` : ""}
+            ${entities.length ? `<button type="button" class="ent-scan ent-select-btn${selecting ? " ent-scan-on" : ""}" id="ent-select" title="Pick several names to delete">${selecting ? "Done" : "Select"}</button>` : ""}
+            ${selecting ? "" : `<button type="button" class="ent-scan" id="ent-scan" title="Find names in entries that haven't been scanned">Scan</button>`}
           </div>
         </div>
-        ${undescribed.length && !selecting ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} still need${undescribed.length === 1 ? "s" : ""} a description <span class="ent-needs-key">(dashed below) — tap to start</span></button>` : ""}
+        ${undescribed.length && !selecting ? `<button type="button" class="ent-needs" id="ent-needs">✎ ${undescribed.length} need${undescribed.length === 1 ? "s" : ""} a description <span class="ent-needs-key">— start ›</span></button>` : ""}
         ${describing ? `<p class="field-hint">◷ Writing descriptions for ${describing} name${describing === 1 ? "" : "s"} from your journal…</p>` : ""}
         <div id="ent-status" class="ent-status" hidden></div>
         ${total === 0 && entities.length === 0
           ? `<p class="ent-empty">Write or imagine some days and the people, places and things you name will show up here.</p>`
           : sections + selBar
               + ((manySingles || showSingles) && singles.length ? `<button type="button" class="ent-singles-toggle" id="ent-singles">${showSingles ? "Hide" : "Show"} ${singles.length} name${singles.length === 1 ? "" : "s"} mentioned once</button>` : "")
-              + (taggedCount < total ? `<p class="field-hint" style="margin-top:1rem">${total - taggedCount} entr${total - taggedCount === 1 ? "y" : "ies"} not yet scanned — tap “Scan new entries”.</p>` : "")}
+              + (taggedCount < total ? `<p class="field-hint" style="margin-top:1rem">${total - taggedCount} entr${total - taggedCount === 1 ? "y" : "ies"} not yet scanned — tap Scan.</p>` : "")}
       </div>`;
 
     root.querySelector("#ent-scan")?.addEventListener("click", () => scan(setStatus));
