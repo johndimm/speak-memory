@@ -2080,3 +2080,4 @@ html.theme-modern .mode-btn:disabled { opacity: 0.35; }
 html.theme-modern .ent-card, html.theme-modern .fut-row, html.theme-modern .lt-block,
 html.theme-modern .fact-chip, html.theme-modern .cap-chip { box-shadow: none; }
 html.theme-modern .rep-tab.active { background: var(--ink); color: #fff; }
+@media (max-width: 640px) { html.theme-modern .mode-btn { font-size: 0.7rem; } } /* Inter runs a hair wider */
