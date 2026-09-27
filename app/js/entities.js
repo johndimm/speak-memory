@@ -85,7 +85,8 @@ const FACT_FIELDS = {
 };
 function factValue(f, k) {
   if (k === "age") return f.age != null ? String(f.age) : (f.birthYear ? `b. ${f.birthYear}` : "");
-  return f[k] ? String(f[k]) : "";
+  if (!f[k]) return "";
+  return f[k + "Since"] ? `${f[k]} · since ${f[k + "Since"]}` : String(f[k]); // Home / Lives with / Work / Hobbies
 }
 function factsChecklist(ent) {
   const fields = FACT_FIELDS[ent.entityKind || "person"];
@@ -99,7 +100,26 @@ function factsChecklist(ent) {
 }
 
 // The fact fields for an entity. "You" gets a life-focused set; anyone else gets their kind's facts.
-const SELF_FIELDS = [["age", "Age"], ["location", "Home"], ["livesWith", "Lives with"], ["job", "Work"], ["family", "Family"], ["friends", "Best friends"]];
+const SELF_FIELDS = [["age", "Age"], ["location", "Home"], ["livesWith", "Lives with"], ["job", "Work"], ["hobbies", "Hobbies"], ["family", "Family"], ["friends", "Best friends"]];
+// Your life NOW, as questions — asked one at a time above your box on Me, each rolling on once it's
+// answered. Home / Lives with / Work / Hobbies also ask "since when", which seeds the Stories ladder.
+const SELF_QUESTIONS = [
+  ["location", "Where do you live, and since when?", (v) => `Since when have you lived in ${v}?`],
+  ["livesWith", "Who do you live with — and since when?", (v) => `Since when have you lived with ${v.replace(/^with\s+/i, "")}?`],
+  ["job", "What do you do for work, and since when?", (v) => `When did you start as ${v.replace(/^(a|an)\s+/i, "")}?`],
+  ["hobbies", "What do you do for fun — since when?", (v) => `When did you take up ${v}?`],
+  ["age", "How old are you?"],
+  ["family", "Who's in your family?"],
+  ["friends", "Who are your best friends?"],
+];
+function nextSelfQuestion(f = {}) {
+  const has = (k) => (k === "age" ? f.age != null || f.birthYear : f[k] && String(f[k]).trim());
+  for (const [k, ask, askSince] of SELF_QUESTIONS) {
+    if (!has(k)) return ask;
+    if (askSince && !f[k + "Since"]) return askSince(String(f[k]));
+  }
+  return "";
+}
 function factFields(ent) {
   if (isSelfEntity(ent)) return SELF_FIELDS;
   return FACT_FIELDS[ent.entityKind || "person"] || [];
@@ -544,6 +564,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
           if (j.location) facts.location = j.location;
           if (j.livesWith) facts.livesWith = j.livesWith;
           if (j.job) facts.job = j.job;
+          if (j.hobbies) facts.hobbies = j.hobbies;
+          for (const k of ["locationSince", "livesWithSince", "jobSince", "hobbiesSince"]) if (j[k]) facts[k] = j[k];
           if (Array.isArray(j.family) && j.family.length) facts.family = j.family.join(", ");
           if (Array.isArray(j.friends) && j.friends.length) facts.friends = j.friends.join(", ");
           return { facts, names: j.names || [] };
@@ -586,8 +608,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
 
     // The transcript box: your own words, prefilled so you can add more below or fix anything.
     const boxFrag = `<label class="field write-main">
-          <span class="field-label write-prompt">${hasContent ? "Your words — add more, or fix anything" : selfMode ? "Tell me about your life" : `Tell me about ${escapeHtml(ent.canonical)}`}</span>
-          <textarea id="ent-note-input" class="node-comment-input" rows="3" placeholder="${selfMode ? "Where you live, who with, your family and best friends…" : ({ person: "Who they are, how you're connected…", animal: "Whose pet, what they were like…", place: "What it is, when you were there…" })[ent.entityKind || "person"] || "What it is, how it fits in your life…"}">${escapeHtml(ent.note || "")}</textarea>
+          <span class="field-label write-prompt${selfMode && nextSelfQuestion(ent.facts) ? " is-question" : ""}" id="ent-prompt">${selfMode ? escapeHtml(nextSelfQuestion(ent.facts) || (hasContent ? "Your words — add more, or fix anything" : "Tell me about your life")) : hasContent ? "Your words — add more, or fix anything" : `Tell me about ${escapeHtml(ent.canonical)}`}</span>
+          <textarea id="ent-note-input" class="node-comment-input" rows="3" placeholder="${selfMode ? "Just talk — where you live, who with, work, fun, family, friends, and since when…" : ({ person: "Who they are, how you're connected…", animal: "Whose pet, what they were like…", place: "What it is, when you were there…" })[ent.entityKind || "person"] || "What it is, how it fits in your life…"}">${escapeHtml(ent.note || "")}</textarea>
         </label>
         <div class="write-tools"><button type="button" class="mic-btn" id="ent-note-mic" hidden><span>🎤 Dictate</span></button></div>
         <div class="cap-found" id="ent-note-found" hidden></div>`;
@@ -702,7 +724,11 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       const fresh = (await getEntity(id)) || ent;
       const facts = { ...(fresh.facts || {}) };
       if (k === "age") { const n = (val.match(/\d{1,3}/) || [])[0]; if (n) facts.age = Number(n); else if (val) facts.age = val; else delete facts.age; }
-      else if (val) facts[k] = val; else delete facts[k];
+      else if (val) {
+        // "Seattle · since 2015" (or "Seattle since 2015") → the value + its since-year.
+        const m = val.match(/^(.*?)\s*(?:·\s*)?since\s+(\d{4})\s*$/i);
+        if (m && m[1].trim()) { facts[k] = m[1].trim(); facts[k + "Since"] = Number(m[2]); } else facts[k] = val;
+      } else { delete facts[k]; delete facts[k + "Since"]; }
       await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() });
       ent.facts = facts; refreshChips();
       onProgress && onProgress();
@@ -723,7 +749,12 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       }
       if (changed) { await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() }); ent.facts = facts; refreshChips(); onProgress && onProgress(); }
     }
-    function refreshChips() { const w = live() && root.querySelector("#fact-chips"); if (w) w.innerHTML = factChipsInner(ent); }
+    function refreshChips() {
+      const w = live() && root.querySelector("#fact-chips"); if (w) w.innerHTML = factChipsInner(ent);
+      // On Me, the prompt rolls on to the next unanswered question as answers land.
+      const q = selfMode && live() && root.querySelector("#ent-prompt");
+      if (q) { const next = nextSelfQuestion(ent.facts); q.textContent = next || "Your words — add more, or fix anything"; q.classList.toggle("is-question", !!next); q.classList.remove("q-roll"); void q.offsetWidth; q.classList.add("q-roll"); }
+    }
     // Tap a chip → correct that one field inline (the only "manual" path; talking is the main one).
     const chipsWrap = root.querySelector("#fact-chips");
     const chipLabels = new Map(factFields(ent));

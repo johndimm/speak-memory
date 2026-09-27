@@ -697,21 +697,30 @@ Return ONLY valid JSON with a "facts" object holding those fields and a "names" 
     // they go, so a checklist can fill in live (fingerprint-registration style). Cumulative transcript.
     if (mode === "onboard") {
       const text = String(body.text || "").slice(0, 8000).trim();
-      if (!text) { res.status(200).json({ age: null, birthYear: null, location: "", livesWith: "", job: "", friends: [], names: [] }); return; }
+      if (!text) { res.status(200).json({ age: null, birthYear: null, location: "", locationSince: null, livesWith: "", livesWithSince: null, job: "", jobSince: null, hobbies: "", hobbiesSince: null, friends: [], names: [] }); return; }
       const sys = `The reader is describing their CURRENT life out loud, to set up their journal. From everything they've said SO FAR (a running transcript), extract only what is actually stated:
 - age: their age in years (integer) if stated, else null
 - birthYear: a 4-digit birth year if stated, else null
 - location: where they live now (city/place), else ""
+- locationSince: the 4-digit YEAR they started living there, else null
 - livesWith: who they live with (e.g. "my wife and two kids"), else ""
+- livesWithSince: the YEAR they started living with them (or got together / married), else null
 - job: what they do for work, else ""
+- jobSince: the YEAR they started that work, else null
+- hobbies: what they do for fun / their main pastimes (short, e.g. "sailing, piano"), else ""
+- hobbiesSince: the YEAR they took up the main one, else null
+For every *Since year: convert what's said to a year using the current year ${new Date().getFullYear()} ("for ten years" → ${new Date().getFullYear() - 10}; "since college" with a known birth year → estimate); null if nothing is said about when.
 - family: array of the names of family members they mention (names only, e.g. "Carol", "my son Dave" → "Dave"), else []
 - friends: array of the names of best/close friends they mention (names only), else []
 - names: EVERY named person, animal, place, or organization mentioned, as {"name","kind":"person|animal|place|org|thing"}
-Return ONLY valid JSON: {"age":<int|null>,"birthYear":<int|null>,"location":"...","livesWith":"...","job":"...","family":["..."],"friends":["..."],"names":[{"name":"...","kind":"..."}]}.`;
+Return ONLY valid JSON: {"age":<int|null>,"birthYear":<int|null>,"location":"...","locationSince":<int|null>,"livesWith":"...","livesWithSince":<int|null>,"job":"...","jobSince":<int|null>,"hobbies":"...","hobbiesSince":<int|null>,"family":["..."],"friends":["..."],"names":[{"name":"...","kind":"..."}]}.`;
       const r = await callJsonObject(sys, text, 0.2, cfg);
       const int = (v) => { const n = parseInt(v, 10); return Number.isFinite(n) ? n : null; };
+      const year = (v) => { const n = int(v); return n && n > 1900 && n <= new Date().getFullYear() ? n : null; };
       const KINDS = ["person", "animal", "place", "org", "thing"];
       res.status(200).json({
+        locationSince: year(r.locationSince), livesWithSince: year(r.livesWithSince), jobSince: year(r.jobSince),
+        hobbies: String(r.hobbies || "").slice(0, 200), hobbiesSince: year(r.hobbiesSince),
         age: int(r.age), birthYear: (int(r.birthYear) && int(r.birthYear) > 1000 && int(r.birthYear) < 2200) ? int(r.birthYear) : null,
         location: String(r.location || "").slice(0, 160), livesWith: String(r.livesWith || "").slice(0, 200), job: String(r.job || "").slice(0, 200),
         family: Array.isArray(r.family) ? r.family.filter((x) => typeof x === "string").map((x) => x.slice(0, 80)).slice(0, 20) : [],

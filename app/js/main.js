@@ -297,7 +297,8 @@ if (moreBtn && moreMenu) {
 
 const recorder = initRecord(writeView, {
   onSaved: (date) => { setMode("diary", date, "day"); offerNext({ saved: true }); }, // completed the day → nudge to the next step
-  onSavedMemory: (mem) => { setMode("memoir-edit", mem); offerNext({ saved: true }); },  // saved story → its READ view, then the next nudge
+  onSavedMemory: (mem) => { setMode("memoir-edit", mem); offerNext({ saved: true }); },
+  onOpenMe: () => setMode("me"),                                  // Stories ladder: "Tell Me where you live ›"  // saved story → its READ view, then the next nudge
   onDeleted: (date) => setMode("diary", date, "week"), // day is gone → land on its week
   onDeletedMemory: (mem) => openMemoryInJournal(mem),   // memory gone → its subject/category list
   onNavigate: (mode) => setMode(mode),                 // past/present/future triptych → jump to a mode

@@ -12,6 +12,7 @@ import { DEFAULT_CATEGORIES } from "./memoryvoice.js";
 import { attachLiveCapture } from "./capture.js";
 import { resolveEntityNames } from "./entityresolve.js";
 import { jkey } from "./journal.js";
+import { ensureSelf } from "./self.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -98,12 +99,28 @@ function nowContext() {
   };
 }
 
-export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate, onBrowse, onOpenName } = {}) {
+// The Stories ladder: your life NOW (from Me) in the four big threads, each a place to start going
+// back in time. `k` is the Me fact that holds the current one (+ `${k}Since`).
+const LADDER = [
+  { cat: "Homes", k: "location", missing: "Tell Me where you live",
+    ask: (cur) => cur ? `Where did you live before ${cur}? When did you move there?` : "Where did you live? When?" },
+  { cat: "Relationships", k: "livesWith", missing: "Tell Me who you live with",
+    ask: (cur) => cur ? `Before ${cur} — who were you with? When?` : "Who were you with? When?" },
+  { cat: "Jobs", k: "job", missing: "Tell Me what you do for work",
+    ask: (cur) => cur ? `What did you do before ${cur}? When did you start?` : "What work did you do? When?" },
+  { cat: "Hobbies", k: "hobbies", missing: "Tell Me what you do for fun",
+    ask: (cur) => cur ? `What did you do for fun before ${cur}? When?` : "What did you do for fun? When?" },
+];
+
+export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedMemory, onNavigate, onBrowse, onOpenName, onOpenMe } = {}) {
   root.innerHTML = `
     <!-- Same layout as every input page (docs/input-method-design.md):
          breadcrumb → text box (EDIT) or ✎ Edit (READ) → title → content → Save/Cancel → Delete. -->
     <form class="write-form" id="write-form">
       <nav class="write-breadcrumb" id="write-breadcrumb" aria-label="Location"></nav>
+
+      <!-- Stories (a new story): your life now, from Me — pick a thread and go back in time. -->
+      <div class="life-ladder edit-only" id="life-ladder" hidden></div>
 
       <button type="button" class="edit-text-btn read-only" id="edit-text-toggle">✎ Edit</button>
       <div class="edit-only">
@@ -292,6 +309,49 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     const m = editingMemOrig || {};
     return [m.category !== titleText() ? m.category : null, m.label && m.label !== "sometime" ? m.label : null, m.place].filter(Boolean).join(" · ");
   }
+  // ---- The Stories ladder -------------------------------------------------------------------
+  const ladderEl = root.querySelector("#life-ladder");
+  let ladderPick = null; // the thread you tapped "Before that" on
+  async function renderLadder() {
+    if (!ladderEl) return;
+    const show = isStory() && !editingMemId; // only when starting a new story
+    ladderEl.hidden = !show;
+    if (!show) return;
+    let facts = {};
+    try { facts = ((await ensureSelf()) || {}).facts || {}; } catch { /* */ }
+    const rows = LADDER.map((L) => {
+      const cur = facts[L.k] ? String(facts[L.k]) : "";
+      const since = facts[L.k + "Since"];
+      const earlier = allMems.filter((m) => (m.category || "") === L.cat);
+      // "Before that" goes back from the EARLIEST one known (a story, else your current one).
+      const oldest = earlier.filter((m) => m.startYear).sort((a, b) => a.startYear - b.startYear)[0];
+      const anchor = oldest ? (oldest.subject || oldest.label || "") : cur;
+      const now = cur
+        ? `<span class="ladder-now">${escapeHtml(cur)}${since ? ` <span class="ladder-yrs">since ${since}</span>` : ""}</span>`
+        : `<button type="button" class="ladder-me">${escapeHtml(L.missing)} ›</button>`;
+      const n = earlier.length;
+      return `<div class="ladder-row${ladderPick === L.cat ? " picked" : ""}">
+          <span class="ladder-cat">${escapeHtml(L.cat)}</span>
+          ${now}
+          ${n ? `<span class="ladder-count">${n} earlier</span>` : ""}
+          <button type="button" class="ladder-add" data-cat="${escapeHtml(L.cat)}" data-ask="${escapeHtml(L.ask(anchor))}">＋ ${cur || n ? "Earlier" : "Add one"}</button>
+        </div>`;
+    }).join("");
+    ladderEl.innerHTML = `<p class="ladder-head">Your life now — tap one to go back in time</p>${rows}`;
+  }
+  ladderEl?.addEventListener("click", (e) => {
+    if (e.target.closest(".ladder-me")) { onOpenMe?.(); return; }
+    const b = e.target.closest(".ladder-add");
+    if (!b) return;
+    ladderPick = b.dataset.cat;
+    catEl.value = b.dataset.cat; subjectEl.value = "";
+    renderCategoryChips(); renderSubjectChips(); syncHeader?.();
+    entryLabel.textContent = b.dataset.ask; // the prompt becomes the question for this thread
+    entryLabel.classList.add("is-question");
+    renderLadder();
+    textEl.focus();
+  });
+
   function applyEntryLayout() {
     const showView = inEditMode && !editingText; // reading a saved day/story
     root.querySelector("#write-form")?.classList.toggle("reading", showView);
@@ -304,6 +364,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     if (cancelBtn) cancelBtn.hidden = !inEditMode; // Cancel only when there's a saved version to go back to
     syncDeleteBtn();
     if (!showView) { requestAnimationFrame(autoGrow); setTimeout(autoGrow, 120); } // size the box now, and again once the layout settles
+    renderLadder();
   }
 
   // Drafts: what's in the box is kept (per day / per story) while you type, so leaving never loses it.
@@ -860,10 +921,12 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     dateEl.value = "";
     catEl.value = seed.category || "";
     subjectEl.value = seed.subject || "";
+    ladderPick = null;
     startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false;
     setFormMode("memory"); // show memory fields + voice tools, hide the diary date
     renderCategoryChips(); renderSubjectChips();
     entryLabel.textContent = "Tell a story";
+    entryLabel.classList.remove("is-question");
     saveBtn.textContent = "Save";
     renderWriteBreadcrumb();
     applyEntryLayout();
