@@ -23,30 +23,60 @@ Two more tabs tell the app **who**:
 
 ---
 
-## How it usually goes
+## Four levels of use
 
-You don't need to do everything at once. Most people move through four phases. After each step a **Next** button in the corner suggests what to do next, and you can ignore it whenever you like.
+You can stop at any level. Each one adds to what the app knows, and **each is useful on its own**. After each step a **Next** button in the corner suggests what to do next; ignore it whenever you like.
 
-### 1. Just the Journal
-Start by talking about your day. Open **Journal**, tap **🎤 Dictate** (or type), and **Save**. Keep it short or let it run. Do this for a few days. Nothing else is needed.
+### Level 1: The Journal (a diary that summarizes itself)
 
-As you talk, names you mention light up under **Found**. The app is quietly building your cast of people and places.
+This is the easiest place to start, and it's already a complete product. Open **Journal**, tap **🎤 Dictate** (or type), say anything at all about your day, as short or as long as you like, and **Save**. That's the whole job. No title, no form, no categories.
 
-### 2. Describe yourself in Me
-Open **Me** and just talk. One question at a time appears above the box: *Where do you live, and since when?* Then *Who do you live with?*, then work, fun, family and best friends. Answer in any order and in your own words. The chips below tick themselves off as they hear the answers, and phrases like "for ten years" or "since I was a kid" become years.
+**What happens when you save:**
 
-### 3. Describe the names you've mentioned
-Open **Names**. Everyone you've mentioned is listed.
+1. **Your words are stored on this device**, in the browser's own storage. There's no account and no server copy.
+2. **The day is summarized.** Your transcript is sent to the AI, which returns a **ladder** for that day, each rung fuller than the one before:
+   - a single **word**,
+   - a **phrase** (2–5 words),
+   - one **sentence**,
+   - a short **paragraph**,
+   - the **complete summary** (a few paragraphs, as long as what you said deserves),
+   - an **outline**: topics, with the detail gathered under each.
 
-- Names that come up **twice or more** get a description written for you from your own entries.
-- Names mentioned **only once** (dashed, with ✎) need a word from you: "Luann is my sister", "Oak Ave was our first house". Tap **✎ N need a description — start ›**, or follow **Next name to describe →** through them one at a time. Tapping Next saves what you typed.
+   The AI also picks out the **names** in it (people, pets, places, organizations) and links each to its page in **Names**.
+3. **Everything above the day is re-summarized.** Days roll up into their **week**, weeks into the **month**, months into the **year**, years into the **decade**, and decades into your whole **Life**. Each level is summarized from the summaries of what's inside it, with the same ladder (word, phrase, sentence, paragraph, summary, outline). So one new day can update its week, month, year, decade and Life.
+4. **It runs in the background, in order.** A level is summarized only after everything inside it is done, so a summary never describes an out-of-date piece. Up to four summaries run at once. When a level contains just one thing (a week with a single day), it's copied up instead of summarized again. Levels whose contents haven't changed are left alone. Watch it all in **More → Activity**, including a **Graph** that lights up as each level is done.
 
-A sentence or two is plenty. Your words always win over anything the app wrote.
+**The rules the summaries follow:**
 
-### 4. Tell Stories, then imagine a Future
-**Stories** opens with **Your life now**: Homes, Relationships, Jobs and Hobbies, each showing the current one from Me. Tap **＋ Earlier** on a row and the app asks the question: *Where did you live before Seattle? When did you move there?* Each story you add pushes that thread further back in time.
+- **Faithful.** Summaries may compress and reword, but they aren't allowed to add details you didn't say.
+- **Your voice.** They're written in the first person. Pick a style under **⚙ → Voice**; changing it re-summarizes everything in the background.
+- **Your words stay the source.** Your exact transcript is kept for your **40 most recent entries**. For older ones the app keeps the complete summary and a full, faithful retelling. On a day, **Edit** shows your own words, to add to or fix; saving re-summarizes that day and everything above it.
+- **What's sent:** only the text being summarized goes to the AI service. For a day that's your transcript; for a week or a year, the summaries of what's inside it. This app keeps nothing on a server. **Export** (⚙) saves everything to a file.
 
-When you're ready, open **Futures** (under **More**) and tap **Imagine ›**. See **Futures** below.
+**Reading it back:** tap **Browse**. Start at **Life**: one word, one sentence, the full story so far. Then zoom down through decades, years, months and weeks to a single day. The whole-life **word** is a wink (no word holds a life). The **sentence** is where it gets interesting.
+
+### Level 2: Me and Names (who's who)
+
+Next, tell the app **who** everyone is.
+
+- **Me.** Open **Me** and just talk. One question at a time appears above the box: *Where do you live, and since when?* Then *Who do you live with?*, then work, fun, family and best friends. Answer in any order, in your own words. The chips tick themselves off as they hear the answers, and "for ten years" or "since I was a kid" become years.
+- **Names.** Everyone your Journal has mentioned is already listed.
+  - Names that come up **twice or more** get a description written for you from your own entries.
+  - Names mentioned **only once** (dashed, with ✎) need a word from you: "Luann is my sister", "Oak Ave was our first house". Follow **Next name to describe →** through them one at a time (Next saves what you typed).
+
+  A sentence each is plenty. Your words always win over anything the app wrote, and it never guesses a relationship (son, daughter, friend) you haven't stated.
+
+### Level 3: Stories (patch in the past)
+
+Your Journal starts today. **Stories** fills in everything before it: any memory you can talk about. Each story has a **category** (Homes, Jobs, Relationships, Hobbies, Schools…), an optional **subject**, and **years**.
+
+**Stories** opens with **Your life now**: Homes, Relationships, Jobs and Hobbies, each showing the current one from Me. Tap **＋ Earlier** and the app asks the question: *Where did you live before Seattle? When did you move there?* Each story pushes that thread further back.
+
+Stories are summarized just like days. A story rolls up into its **decade** (so your Life includes it) and also into its **category** and **subject**, so Browse can show your life by decade or by thread.
+
+### Level 4: A Future (where it all pays off)
+
+Everything from Levels 1–3 comes together in **Futures** (under **More**): the app imagines your journal carrying on from **tomorrow**, for 10 years, 20 years, or the rest of your life. See **Futures** below for what it's built from. The more you've done, the more it sounds like you, with your real people, places and threads.
 
 ---
 
@@ -77,8 +107,6 @@ Every page follows the same shape:
 
 **Every name is a link.** Tap one anywhere to open its page, which lists every mention in time order.
 
-The **sentence** is where it gets interesting. Your whole life also gets a single **word**: obviously no word can hold a life, so take it as a wink. One sentence for a life can land on something true.
-
 ---
 
 ## Names
@@ -104,7 +132,7 @@ A Future is built from:
 - your **Life and decade summaries**, and
 - **Names**, with one sentence each, kept exactly as you describe them.
 
-The more you've done in phases 1–3, the sharper the Future.
+Every Future **starts tomorrow**, picking up where your Journal leaves off, and is built only from your real days, never from another Future's. The more you've done in Levels 1–3, the sharper it is.
 
 **Inside a Future**, your real past and the imagined years appear **together**: Browse shows your real decades running straight into the imagined ones. A Future is **read-only**: there's no Journal, Stories or Me to write in, and every view (Names, Browse, Futures, Timeline, Map, Activity) sits in the tab bar. Your real journal is read live and never copied or changed. Tap **← Back to your real journal** to return. **▶ Play the reveal** narrates the Future aloud.
 
@@ -130,7 +158,6 @@ The more you've done in phases 1–3, the sharper the Future.
 ## Good to know
 
 - **Talk freely.** The app sorts it out, and nothing has to fit a form.
-- **Speed:** a new entry's word, phrase and sentence appear within seconds. Bigger roll-ups (years, decades, Life) update in the background; watch them in **Activity**.
-- **Summaries stay faithful.** They're told not to add details you didn't say.
-- **Privacy:** your journal lives in your browser. Only the text being summarized goes to the AI service, and this app keeps nothing on a server. Export regularly if it matters to you.
+- **Speed:** a new day's summaries arrive within seconds; the roll-ups above it (week up to Life) follow in the background.
+- **Back it up.** Your journal lives only in this browser. Clearing the browser's site data erases it, so **Export** regularly.
 - **Rename it:** tap the ✎ next to the title.
