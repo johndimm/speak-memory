@@ -3,7 +3,7 @@
 // On save we summarize via /api/summarize, store the result + photos in IndexedDB,
 // and throw the raw text away.
 
-import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, deleteEntry, deleteMemory, photoToStored, storedToBlob } from "./db.js";
+import { getEntry, putEntry, getAllEntries, clearAllEntries, putMemory, getAllMemories, deleteEntry, deleteMemory, photoToStored, storedToBlob, getAllPeriods, deletePeriod } from "./db.js";
 import { renderReps, renderRep, wireReps, isOutlineText, escapeHtml, resolveEntityTokens } from "./render.js";
 import { deriveBrief, withMode, repsOf } from "./entry.js";
 import { setupDictation, IS_MOBILE } from "./dictation.js";
@@ -101,14 +101,15 @@ function nowContext() {
 
 // The Stories ladder: your life NOW (from Me) in the four big threads, each a place to start going
 // back in time. `k` is the Me fact that holds the current one (+ `${k}Since`).
+// `alias`: other category names that mean the same thread (your own "Places" is the Homes thread).
 const LADDER = [
-  { cat: "Homes", k: "location", missing: "Tell Me where you live",
+  { cat: "Homes", alias: ["home", "homes", "places", "place", "cities", "city", "houses", "where i lived"], k: "location", missing: "Tell Me where you live",
     ask: (cur) => cur ? `Where did you live before ${cur}? When did you move there?` : "Where did you live? When?" },
-  { cat: "Relationships", k: "livesWith", missing: "Tell Me who you live with",
+  { cat: "Relationships", alias: ["relationship", "relationships", "girl friends", "girlfriends", "boyfriends", "partners", "marriage", "love"], k: "livesWith", missing: "Tell Me who you live with",
     ask: (cur) => cur ? `Before ${cur} — who were you with? When?` : "Who were you with? When?" },
-  { cat: "Jobs", k: "job", missing: "Tell Me what you do for work",
+  { cat: "Jobs", alias: ["job", "jobs", "work", "career", "careers"], k: "job", missing: "Tell Me what you do for work",
     ask: (cur) => cur ? `What did you do before ${cur}? When did you start?` : "What work did you do? When?" },
-  { cat: "Hobbies", k: "hobbies", missing: "Tell Me what you do for fun",
+  { cat: "Hobbies", alias: ["hobby", "hobbies", "pastimes", "fun"], k: "hobbies", missing: "Tell Me what you do for fun",
     ask: (cur) => cur ? `What did you do for fun before ${cur}? When?` : "What did you do for fun? When?" },
 ];
 
@@ -320,29 +321,71 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     if (!show) return;
     let facts = {};
     try { facts = ((await ensureSelf()) || {}).facts || {}; } catch { /* */ }
-    const rows = LADDER.map((L) => {
-      const cur = facts[L.k] ? String(facts[L.k]) : "";
-      const since = facts[L.k + "Since"];
-      const earlier = allMems.filter((m) => (m.category || "") === L.cat);
-      // "Before that" goes back from the EARLIEST one known (a story, else your current one).
-      const oldest = earlier.filter((m) => m.startYear).sort((a, b) => a.startYear - b.startYear)[0];
+    // Each thread is a little timeline, left → right: an empty block to add the one BEFORE, your
+    // stories in that thread in date order (tap to open), and NOW from Me on the right.
+    const yrs = (m) => (m.startYear ? `${m.startYear}${m.endYear && m.endYear !== m.startYear ? `–${m.endYear}` : ""}` : (m.label || ""));
+    // The threads: the four big ones (under YOUR category name when you use another, e.g. "Places"),
+    // then every other category you have stories in.
+    const byCat = new Map();
+    for (const m of allMems) { const c = (m.category || "").trim(); if (c) { if (!byCat.has(c)) byCat.set(c, []); byCat.get(c).push(m); } }
+    // The four big threads always go by their plain names; each gathers the stories from every category
+    // that means the same thing (your "Girl Friends" are Relationships), and offers to refile them.
+    const used = new Set();
+    const threads = LADDER.map((L) => {
+      const cats = [...byCat.keys()].filter((c) => c === L.cat || (L.alias || []).includes(c.toLowerCase()));
+      cats.forEach((c) => used.add(c));
+      used.add(L.cat);
+      return { ...L, stories: cats.flatMap((c) => byCat.get(c)), others: cats.filter((c) => c !== L.cat) };
+    });
+    for (const [c, list] of [...byCat.entries()].sort((a, b) => b[1].length - a[1].length)) {
+      if (!used.has(c)) threads.push({ cat: c, stories: list, ask: (cur) => cur ? `${c}: what came before ${cur}? When?` : `${c}: tell one. When was it?` });
+    }
+    const rows = threads.map((L) => {
+      const cur = L.k && facts[L.k] ? String(facts[L.k]) : "";
+      const since = L.k ? facts[L.k + "Since"] : null;
+      const stories = L.stories.slice()
+        .sort((a, b) => (a.startYear || 0) - (b.startYear || 0) || (a.createdAt || 0) - (b.createdAt || 0));
+      // "Before that" asks about the time before the EARLIEST one known (a story, else your current one).
+      const oldest = stories.find((m) => m.startYear) || stories[0];
       const anchor = oldest ? (oldest.subject || oldest.label || "") : cur;
-      const now = cur
-        ? `<span class="ladder-now">${escapeHtml(cur)}${since ? ` <span class="ladder-yrs">since ${since}</span>` : ""}</span>`
-        : `<button type="button" class="ladder-me">${escapeHtml(L.missing)} ›</button>`;
-      const n = earlier.length;
+      const addBlock = `<button type="button" class="lt-block lt-add" data-cat="${escapeHtml(L.cat)}" data-ask="${escapeHtml(L.ask(anchor))}" title="Add the one before">＋</button>`;
+      const storyBlocks = stories.map((m) => `<button type="button" class="lt-block lt-story" data-mem="${escapeHtml(m.id)}">
+          <span class="lt-name">${escapeHtml(m.subject || m.label || m.category || "Story")}</span>
+          <span class="lt-yrs">${escapeHtml(yrs(m))}</span></button>`).join("");
+      // NOW comes from Me — only the four big threads have one.
+      const nowBlock = !L.k ? ""
+        : cur ? `<div class="lt-block lt-now"><span class="lt-tag">Now</span><span class="lt-name">${escapeHtml(cur)}</span>${since ? `<span class="lt-yrs">since ${since}</span>` : ""}</div>`
+        : `<button type="button" class="lt-block lt-now lt-missing ladder-me"><span class="lt-tag">Now</span><span class="lt-name">${escapeHtml(L.missing)} ›</span></button>`;
+      const refile = (L.others || []).map((c) => `<button type="button" class="lt-refile" data-from="${escapeHtml(c)}" data-to="${escapeHtml(L.cat)}">Rename “${escapeHtml(c)}” → ${escapeHtml(L.cat)}</button>`).join("");
       return `<div class="ladder-row${ladderPick === L.cat ? " picked" : ""}">
-          <span class="ladder-cat">${escapeHtml(L.cat)}</span>
-          ${now}
-          ${n ? `<span class="ladder-count">${n} earlier</span>` : ""}
-          <button type="button" class="ladder-add" data-cat="${escapeHtml(L.cat)}" data-ask="${escapeHtml(L.ask(anchor))}">＋ ${cur || n ? "Earlier" : "Add one"}</button>
+          <span class="ladder-cat">${escapeHtml(L.cat)}${refile}</span>
+          <div class="lt-track">${addBlock}${storyBlocks}${nowBlock}</div>
         </div>`;
     }).join("");
-    ladderEl.innerHTML = `<p class="ladder-head">Your life now — tap one to go back in time</p>${rows}`;
+    ladderEl.innerHTML = `<p class="ladder-head">Your life, thread by thread — tap ＋ to add the one before</p>${rows}`;
+    // Start each track scrolled to NOW (the right end).
+    ladderEl.querySelectorAll(".lt-track").forEach((t) => { t.scrollLeft = t.scrollWidth; });
   }
   ladderEl?.addEventListener("click", (e) => {
     if (e.target.closest(".ladder-me")) { onOpenMe?.(); return; }
-    const b = e.target.closest(".ladder-add");
+    // Refile a category's stories under the thread's name (their summaries stay; the category/subject
+    // roll-ups are rebuilt under the new name, and the old ones are removed).
+    const rf = e.target.closest(".lt-refile");
+    if (rf) {
+      const from = rf.dataset.from, to = rf.dataset.to;
+      const list = allMems.filter((m) => (m.category || "").trim() === from);
+      if (!list.length || !confirm(`File your ${list.length} “${from}” stor${list.length === 1 ? "y" : "ies"} under “${to}”?`)) return;
+      rf.disabled = true; rf.textContent = "Renaming…";
+      (async () => {
+        for (const m of list) await putMemory({ ...m, category: to, updatedAt: Date.now() });
+        for (const p of await getAllPeriods()) if (p.key === `CAT:${from}` || String(p.key).startsWith(`SUB:${from}\u0000`)) await deletePeriod(p.key);
+        await loadMemLists(); renderLadder();
+      })();
+      return;
+    }
+    const st = e.target.closest(".lt-story[data-mem]");
+    if (st) { const m = allMems.find((x) => x.id === st.dataset.mem); if (m) { editMemory(m); window.scrollTo({ top: 0 }); } return; }
+    const b = e.target.closest(".lt-add");
     if (!b) return;
     ladderPick = b.dataset.cat;
     catEl.value = b.dataset.cat; subjectEl.value = "";
