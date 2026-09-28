@@ -368,11 +368,36 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
           <div class="lt-track">${storyBlocks}${addBlock}${nowBlock}</div>
         </div>`;
     }).join("");
-    ladderEl.innerHTML = `<p class="ladder-head">Your life, thread by thread — tap ＋ to add another</p>${rows}`;
+    ladderEl.innerHTML = `<div class="ladder-headrow"><p class="ladder-head">Your life, thread by thread — tap ＋ to add another</p>`
+      + `<button type="button" class="ladder-full" id="ladder-full" title="Full screen" aria-label="Full screen">${ladderIsFull() ? "✕" : "⤢"}</button></div>${rows}`;
     // Start each track scrolled to NOW (the right end).
     ladderEl.querySelectorAll(".lt-track").forEach((t) => { t.scrollLeft = t.scrollWidth; });
   }
+  // Full screen for the Stories timelines (the Fullscreen API, or a CSS fallback where it's missing).
+  function ladderIsFull() { return document.fullscreenElement === ladderEl || ladderEl?.classList.contains("faux-full"); }
+  function fauxFull(on) {
+    ladderEl?.classList.toggle("faux-full", on);
+    document.body.classList.toggle("ladder-full-open", on); // hide the app bar over it
+    if (on) ladderEl.scrollTop = 0;
+    const b = ladderEl?.querySelector("#ladder-full"); if (b) b.textContent = on ? "✕" : "⤢";
+  }
+  function exitLadderFull() {
+    if (document.fullscreenElement === ladderEl) document.exitFullscreen?.();
+    fauxFull(false);
+  }
+  document.addEventListener("fullscreenchange", () => { const b = ladderEl?.querySelector("#ladder-full"); if (b) b.textContent = ladderIsFull() ? "✕" : "⤢"; });
   ladderEl?.addEventListener("click", (e) => {
+    if (e.target.closest("#ladder-full")) {
+      if (ladderIsFull()) { exitLadderFull(); return; }
+      // Real full screen where allowed; if it's refused — or accepted but never happens (some
+      // embedded/controlled browsers) — fill the window instead.
+      if (ladderEl.requestFullscreen) {
+        ladderEl.requestFullscreen().catch(() => {}).finally(() => setTimeout(() => { if (document.fullscreenElement !== ladderEl) fauxFull(true); }, 250));
+      } else fauxFull(true);
+      return;
+    }
+    // Opening a story or starting one needs the page behind — leave full screen first.
+    if (e.target.closest(".lt-story, .lt-add, .ladder-me, .lt-refile") && ladderIsFull()) exitLadderFull();
     if (e.target.closest(".ladder-me")) { onOpenMe?.(); return; }
     // Refile a category's stories under the thread's name (their summaries stay; the category/subject
     // roll-ups are rebuilt under the new name, and the old ones are removed).

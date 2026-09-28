@@ -2122,3 +2122,12 @@ html.theme-modern .life-ladder .ladder-cat { color: #374151; }
 .write-breadcrumb .ent-quick-del:hover { color: #b3261e; border-color: rgba(179, 38, 30, 0.4); }
 .entities .write-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem; }
 .ent-kind-need { color: var(--accent); }
+
+/* Stories timelines: a full-screen button, and the full-screen view (scrolls; wider tracks). */
+.ladder-headrow { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.ladder-full { flex: 0 0 auto; border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); border-radius: 8px; width: 2rem; height: 2rem; font-size: 1rem; line-height: 1; cursor: pointer; }
+.ladder-full:hover { color: var(--accent); border-color: var(--accent-soft); }
+.life-ladder:fullscreen, .life-ladder.faux-full { position: fixed; inset: 0; z-index: 200; margin: 0; border-radius: 0; overflow-y: auto; padding: calc(0.8rem + env(safe-area-inset-top)) 1.2rem 1.2rem; background: var(--card); }
+.life-ladder:fullscreen .lt-block, .life-ladder.faux-full .lt-block { max-width: 13rem; }
+
+body.ladder-full-open .app-bar { display: none; }
