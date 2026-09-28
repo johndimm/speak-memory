@@ -136,12 +136,7 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
             <option value="calendar">Calendar decades (1970s, 1980s…)</option>
             <option value="life">Life decades (childhood, teens, my 20s…)</option>
           </select>
-          <span class="field-hint">How the decade level bundles your years. Life decades need your birth year below. Changing this re-summarizes the decade level in the background next time you open the Journal.</span>
-        </label>
-        <label class="field" id="birth-year-field" hidden>
-          <span class="field-label" for="birth-year">Birth year</span>
-          <input type="number" id="birth-year" class="settings-input" min="1900" max="2100" inputmode="numeric" placeholder="1958" autocomplete="off">
-          <span class="field-hint">Used to name life decades — Childhood (0–12), Teenage years (13–19), then My 20s, My 30s, and so on.</span>
+          <span class="field-hint">How the decade level bundles your years. Life decades (Childhood, Teenage years, My 20s…) use your birth year from <strong>Me</strong>. Changing this re-summarizes the decade level in the background next time you open the Journal.</span>
         </label>
       </section>
 
@@ -369,14 +364,10 @@ export function initSettings(root, { onImported, onOpenLives } = {}) {
   // Year grouping — calendar decades vs life decades (relative to a birth year). Read by the
   // calendar's bucket* helpers; takes effect (and re-summarizes the decade level) next Journal open.
   const groupingEl = root.querySelector("#year-grouping");
-  const birthField = root.querySelector("#birth-year-field");
-  const birthEl = root.querySelector("#birth-year");
-  const syncGrouping = () => { birthField.hidden = groupingEl.value !== "life"; };
+  const syncGrouping = () => {};
   groupingEl.value = localStorage.getItem(jkey("year-grouping")) === "life" ? "life" : "calendar";
-  birthEl.value = localStorage.getItem(jkey("birth-year")) || "";
   syncGrouping();
   groupingEl.addEventListener("change", () => { localStorage.setItem(jkey("year-grouping"), groupingEl.value); syncGrouping(); });
-  birthEl.addEventListener("input", () => save(jkey("birth-year"), birthEl.value));
 
   // Summary voice — an author style applied to all generated prose (stored in localStorage).
   const styleSelect = root.querySelector("#summary-style-select");

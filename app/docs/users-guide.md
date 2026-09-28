@@ -59,7 +59,7 @@ This is the easiest place to start, and it's already a complete product. Open **
 
 Next, tell the app **who** everyone is.
 
-- **Me.** Open **More → Me** and just talk. One question at a time appears above the box: *Where do you live, and since when?* Then *Who do you live with?*, then work, fun, family and best friends. Answer in any order, in your own words. The chips tick themselves off as they hear the answers, and "for ten years" or "since I was a kid" become years. Below them is your **Bucket list**: things you want to do while there's time. Add one and it's saved.
+- **Me.** Open **More → Me** and just talk. One question at a time appears above the box: *Where do you live, and since when?* Then *Who do you live with?*, then work, fun, the year you were born, family and best friends. Answer in any order, in your own words. The chips tick themselves off as they hear the answers, and "for ten years" or "since I was a kid" become years. Below them is your **Bucket list**: things you want to do while there's time. Add one and it's saved.
 - **Names.** Everyone your Journal has mentioned is already listed.
   - Names that come up **twice or more** get a description written for you from your own entries.
   - Names mentioned **only once** (dashed, with ✎) need a word from you: "Luann is my sister", "Oak Ave was our first house". Follow **Next name to describe →** through them one at a time (Next saves what you typed).
@@ -125,7 +125,7 @@ Every page follows the same shape:
 
 The **Futures** tab is where you switch: it lists **Now · Your journal** and every Future. Tap one to go there (✓ marks where you are). Below the list, **＋ New future** makes another.
 
-**Imagine ›** writes raw diary days across the next **10 or 20 years**, or **the rest of your life** (to 95: at 15 that's 80 years, and you grow up and grow old along the way), in your voice, then opens them as a Future you can browse. *Rest of life* needs your age from **Me** (or your birth year in Settings). Choose how many **entries** you want, and optionally add a **nudge**: "we move to the coast", "I finally finish the book", "what if I never do". Leave it blank to see where things drift. Tick **Do my bucket list** (from **Me**) and the Future finds a way to do each one. Even without it, every Future knows what's on your list.
+**Imagine ›** writes raw diary days across the next **10 or 20 years**, or **the rest of your life** (to 95: at 15 that's 80 years, and you grow up and grow old along the way), in your voice, then opens them as a Future you can browse. *Rest of life* needs the year you were born, from **Me**. Choose how many **entries** you want, and optionally add a **nudge**: "we move to the coast", "I finally finish the book", "what if I never do". Leave it blank to see where things drift. Tick **Do my bucket list** (from **Me**) and the Future finds a way to do each one. Even without it, every Future knows what's on your list.
 
 A Future is built from:
 
@@ -153,6 +153,7 @@ A Future is **read-only**. The tab bar stays the same, but Journal, Stories and 
 
 ## Settings (⚙)
 
+- **Life decades** (Childhood, My 20s…) use your birth year from **Me**.
 - **Browse → Opens on**: where Browse starts the first time (Life unless you pick week, month, year or decade). After that it returns to wherever you last were.
 - **Voice**: the author's voice for all summaries (clean and plain by default, or a style you pick). Changing it re-summarizes in the background.
 - **Your data**: **Export** everything to a file (days, stories, names and summaries), **Import** it back, or **Delete everything**.

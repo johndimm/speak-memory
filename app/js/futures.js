@@ -205,7 +205,7 @@ export function initFutures(root) {
       b.addEventListener("click", async () => {
         if (b.dataset.years === "life") {
           const age = await currentAge();
-          if (age == null) { setStatus("error", `Tell Me your age first (or set your birth year in ⚙ Settings) — then I can imagine your life to ${LIFE_END_AGE}.`); return; }
+          if (age == null) { setStatus("error", `Tell Me the year you were born (More → Me) — then I can imagine your life to ${LIFE_END_AGE}.`); return; }
           if (age >= LIFE_END_AGE - 1) { setStatus("error", `You're already ${age} — try 10 years instead.`); return; }
           composeYears = LIFE_END_AGE - age; composeToAge = LIFE_END_AGE;
           // A long life needs more days to not feel sparse — about one every two years (max 40).

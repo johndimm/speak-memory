@@ -86,6 +86,7 @@ const FACT_FIELDS = {
 };
 function factValue(f, k) {
   if (k === "age") return f.age != null ? String(f.age) : (f.birthYear ? `b. ${f.birthYear}` : "");
+  if (k === "birthYear") { const by = birthYearOf(f); return by ? `${by} (age ${new Date().getFullYear() - by})` : ""; }
   if (!f[k]) return "";
   return f[k + "Since"] ? `${f[k]} · since ${f[k + "Since"]}` : String(f[k]); // Home / Lives with / Work / Hobbies
 }
@@ -101,7 +102,21 @@ function factsChecklist(ent) {
 }
 
 // The fact fields for an entity. "You" gets a life-focused set; anyone else gets their kind's facts.
-const SELF_FIELDS = [["age", "Age"], ["location", "Home"], ["livesWith", "Lives with"], ["job", "Work"], ["hobbies", "Hobbies"], ["family", "Family"], ["friends", "Best friends"]];
+const SELF_FIELDS = [["birthYear", "Born"], ["location", "Home"], ["livesWith", "Lives with"], ["job", "Work"], ["hobbies", "Hobbies"], ["family", "Family"], ["friends", "Best friends"]];
+// Your birth year — from Me's facts (a year, or worked out from an age).
+function birthYearOf(f = {}) {
+  const by = Number(f.birthYear);
+  if (by > 1900 && by <= new Date().getFullYear()) return by;
+  const age = Number(f.age);
+  return age > 0 && age < 130 ? new Date().getFullYear() - age : null;
+}
+// Me is where your birth year lives; the rest of the app (life decades, Timeline, Futures) reads it
+// from this setting, so keep it in step whenever Me learns it.
+function syncBirthYear(f) {
+  const by = birthYearOf(f);
+  if (by) { try { localStorage.setItem(jkey("birth-year"), String(by)); } catch { /* */ } }
+}
+
 // Your life NOW, as questions — asked one at a time above your box on Me, each rolling on once it's
 // answered. Home / Lives with / Work / Hobbies also ask "since when", which seeds the Stories ladder.
 const SELF_QUESTIONS = [
@@ -109,12 +124,12 @@ const SELF_QUESTIONS = [
   ["livesWith", "Who do you live with — and since when?", (v) => `Since when have you lived with ${v.replace(/^with\s+/i, "")}?`],
   ["job", "What do you do for work, and since when?", (v) => `When did you start as ${v.replace(/^(a|an)\s+/i, "")}?`],
   ["hobbies", "What do you do for fun — since when?", (v) => `When did you take up ${v}?`],
-  ["age", "How old are you?"],
+  ["birthYear", "What year were you born?"],
   ["family", "Who's in your family?"],
   ["friends", "Who are your best friends?"],
 ];
 function nextSelfQuestion(f = {}) {
-  const has = (k) => (k === "age" ? f.age != null || f.birthYear : f[k] && String(f[k]).trim());
+  const has = (k) => (k === "birthYear" ? !!birthYearOf(f) : f[k] && String(f[k]).trim());
   for (const [k, ask, askSince] of SELF_QUESTIONS) {
     if (!has(k)) return ask;
     if (askSince && !f[k + "Since"]) return askSince(String(f[k]));
@@ -562,6 +577,12 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     setEntityMap(new Map(entities.map((e) => [e.id, e.canonical]))); // resolve {{e:id|Name}} tokens to names
     onShown && onShown(); // a name page is up → the guided Next can point at the next empty one
     if (!ent) { openId = null; render(); return; }
+    if (isSelfEntity(ent) && !ent.fromPast) {
+      const f = ent.facts || {};
+      const saved = Number(localStorage.getItem(jkey("birth-year")));
+      if (!birthYearOf(f) && saved > 1900) { ent.facts = { ...f, birthYear: saved }; await putEntity({ ...ent }); } // from the old Settings field
+      else syncBirthYear(f);
+    }
     const mentions = sources.filter((s) => Array.isArray(s.entityRefs) && s.entityRefs.includes(id))
       .sort((a, b) => itemSortKey(a).localeCompare(itemSortKey(b)));
     const rows = mentions.map((s) => {
@@ -595,8 +616,8 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
           if (!r.ok) return null;
           const j = await r.json();
           const facts = {};
-          if (j.age != null) facts.age = j.age;
           if (j.birthYear != null) facts.birthYear = j.birthYear;
+          else if (j.age != null) facts.birthYear = new Date().getFullYear() - Number(j.age); // "I'm 72" → born ~1954
           if (j.location) facts.location = j.location;
           if (j.livesWith) facts.livesWith = j.livesWith;
           if (j.job) facts.job = j.job;
@@ -763,12 +784,18 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       const fresh = (await getEntity(id)) || ent;
       const facts = { ...(fresh.facts || {}) };
       if (k === "age") { const n = (val.match(/\d{1,3}/) || [])[0]; if (n) facts.age = Number(n); else if (val) facts.age = val; else delete facts.age; }
+      else if (k === "birthYear") {
+        const y = (val.match(/\b(19|20)\d{2}\b/) || [])[0], a = (val.match(/^\s*(\d{1,3})\s*$/) || [])[1];
+        delete facts.age;
+        if (y) facts.birthYear = Number(y); else if (a) facts.birthYear = new Date().getFullYear() - Number(a); else delete facts.birthYear;
+      }
       else if (val) {
         // "Seattle · since 2015" (or "Seattle since 2015") → the value + its since-year.
         const m = val.match(/^(.*?)\s*(?:·\s*)?since\s+(\d{4})\s*$/i);
         if (m && m[1].trim()) { facts[k] = m[1].trim(); facts[k + "Since"] = Number(m[2]); } else facts[k] = val;
       } else { delete facts[k]; delete facts[k + "Since"]; }
       await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() });
+      if (selfMode) syncBirthYear(facts);
       ent.facts = facts; refreshChips();
       onProgress && onProgress();
     }
@@ -786,7 +813,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
         const has = facts[k] != null && String(facts[k]).trim() !== "";
         if (!has && v != null && String(v).trim() !== "") { facts[k] = v; changed = true; }
       }
-      if (changed) { await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() }); ent.facts = facts; refreshChips(); onProgress && onProgress(); }
+      if (changed) { await putEntity({ ...fresh, facts, recognized: true, updatedAt: Date.now() }); if (selfMode) syncBirthYear(facts); ent.facts = facts; refreshChips(); onProgress && onProgress(); }
     }
     function refreshChips() {
       const w = live() && root.querySelector("#fact-chips"); if (w) w.innerHTML = factChipsInner(ent);
