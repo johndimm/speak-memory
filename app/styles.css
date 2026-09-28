@@ -138,6 +138,9 @@ body { position: relative; }
   padding: 0.7rem 0.9rem; max-width: 28rem; width: 100%; box-sizing: border-box;
 }
 .settings-input:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+/* Every select in Settings matches the inputs: normal height, sensible width (not stretched). */
+.settings select { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem 0.9rem; width: 100%; max-width: 28rem; box-sizing: border-box; align-self: flex-start; }
+.settings select:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
 .llm-secret { -webkit-text-security: disc; text-security: disc; }
 .llm-model-row { display: flex; gap: 0.5rem; align-items: center; max-width: 28rem; }
 .llm-model-row .settings-input { flex: 1 1 auto; min-width: 0; }
