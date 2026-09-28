@@ -136,7 +136,11 @@ async function collectPlaces(onProgress, onStatus) {
     places = [];
     let done = 0;
     for (const c of [...byQuery.values()]) {
-      const g = await geocode(c.query);
+      // If the exact address isn't found, step outward — drop the street, then the neighborhood —
+      // so the story still lands on its town ("Waverly Street, La Jolla, …" → "La Jolla, …").
+      let g = await geocode(c.query);
+      const parts = c.query.split(",").map((x) => x.trim()).filter(Boolean);
+      for (let cut = 1; !g && parts.length - cut >= 2; cut++) g = await geocode(parts.slice(cut).join(", "));
       done++;
       onProgress?.(done, byQuery.size);
       if (g) places.push({ ...c, lat: g.lat, lng: g.lng, display: g.display });
