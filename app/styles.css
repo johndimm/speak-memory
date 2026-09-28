@@ -2116,3 +2116,9 @@ html.theme-modern .life-ladder .ladder-cat { color: #374151; }
 #entry-category:not([hidden]) { margin-top: 0.4rem; }
 
 .places-note { margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--ink-soft); }
+
+/* A name page's quick Delete, at the right end of its breadcrumb. */
+.write-breadcrumb .ent-quick-del { margin-left: auto; border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 0.8rem; padding: 0.25rem 0.7rem; border-radius: 999px; cursor: pointer; }
+.write-breadcrumb .ent-quick-del:hover { color: #b3261e; border-color: rgba(179, 38, 30, 0.4); }
+.entities .write-breadcrumb { display: flex; align-items: center; flex-wrap: wrap; gap: 0.3rem; }
+.ent-kind-need { color: var(--accent); }

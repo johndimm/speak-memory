@@ -485,15 +485,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     const visible = (showSingles || !manySingles) ? entities : entities.filter(keep);
 
 
-    const byKind = new Map();
-    for (const e of visible) {
-      const k = e.entityKind || "person";
-      if (!byKind.has(k)) byKind.set(k, []);
-      byKind.get(k).push(e);
-    }
-    const sections = KIND_ORDER.filter((k) => byKind.has(k)).map((k) => {
-      const list = byKind.get(k).sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.canonical.localeCompare(b.canonical));
-      const cards = list.map((e) => { const empty = needsYou(e, counts.get(e.id) || 0); const draft = hasDraft(e); return `
+    const cardHtml = (e) => { const empty = needsYou(e, counts.get(e.id) || 0); const draft = hasDraft(e); return `
         <div class="ent-card-wrap">
           <button type="button" class="ent-card${e.recognized === false ? " ent-card-flag" : ""}${empty ? " ent-card-empty" : ""}${selected.has(e.id) ? " ent-card-picked" : ""}" data-open="${escapeHtml(e.id)}"${empty ? ` data-empty="1"` : ""}>
             ${selecting ? `<span class="ent-pick" aria-hidden="true">${selected.has(e.id) ? "☑" : "☐"}</span>` : ""}<span class="ent-name">${escapeHtml(e.canonical)}</span>
@@ -501,12 +493,25 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
             <span class="ent-count">${counts.get(e.id) || 0}</span>
           </button>
           ${selecting ? "" : `<button type="button" class="ent-card-del" data-del="${escapeHtml(e.id)}" title="Delete this name" aria-label="Delete">×</button>`}
-        </div>`; }).join("");
-      return `<h3 class="ent-kind">${KIND_LABEL[k] || k}s</h3><div class="ent-grid">${cards}</div>`;
-    }).join("");
-    // "Needs a description" = a shown name with no note of your own yet — in the order the list shows
-    // them, so the count, the marked cards, and the guided Next all walk the same names.
-    const undescribed = KIND_ORDER.flatMap((k) => byKind.get(k) || []).filter((e) => e && needsYou(e, counts.get(e.id) || 0));
+        </div>`; };
+    const byCount = (a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0) || a.canonical.localeCompare(b.canonical);
+    // "Needs a description" = a shown name with nothing written about it yet. They're gathered in ONE
+    // group at the top (in kind order), and the count, the dashed cards, and the guided Next all walk
+    // exactly these, in this order. Everything else is listed by kind below.
+    const needs = (e) => needsYou(e, counts.get(e.id) || 0);
+    const undescribed = KIND_ORDER.flatMap((k) => visible.filter((e) => (e.entityKind || "person") === k && needs(e)).sort(byCount));
+    const byKind = new Map();
+    for (const e of visible) {
+      if (needs(e)) continue;
+      const k = e.entityKind || "person";
+      if (!byKind.has(k)) byKind.set(k, []);
+      byKind.get(k).push(e);
+    }
+    const needSection = undescribed.length
+      ? `<h3 class="ent-kind ent-kind-need">Need a description (${undescribed.length})</h3><div class="ent-grid">${undescribed.map(cardHtml).join("")}</div>`
+      : "";
+    const sections = needSection + KIND_ORDER.filter((k) => byKind.has(k)).map((k) =>
+      `<h3 class="ent-kind">${KIND_LABEL[k] || k}s</h3><div class="ent-grid">${byKind.get(k).sort(byCount).map(cardHtml).join("")}</div>`).join("");
     const describing = entities.filter((e) => canAutoDescribe(e, counts.get(e.id) || 0)).length;
     needOrder = undescribed.map((e) => e.id);
 
@@ -663,7 +668,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     //   breadcrumb → text box (EDIT) or ✎ Edit (READ) → title → content → Save/Cancel → Delete.
     const breadcrumb = `<nav class="write-breadcrumb" aria-label="Location">${selfMode
       ? `<span class="crumb crumb-current">Me</span>`
-      : `<button type="button" class="crumb" id="ent-back">Names</button><span class="crumb-sep">›</span><span class="crumb crumb-current">${escapeHtml(ent.canonical)}</span>`}</nav>`;
+      : `<button type="button" class="crumb" id="ent-back">Names</button><span class="crumb-sep">›</span><span class="crumb crumb-current">${escapeHtml(ent.canonical)}</span><button type="button" class="ent-quick-del" id="ent-quick-del" title="Not a real name? Delete it and go on to the next">🗑 Delete</button>`}</nav>`;
 
     // The transcript box: your own words, prefilled so you can add more below or fix anything.
     const boxFrag = `<label class="field write-main">
@@ -996,12 +1001,18 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     root.querySelector("#ent-back")?.addEventListener("click", () => { openId = null; render(); });
 
     // (Name, kind and aliases are saved by the page's Save button, so Cancel can undo them too.)
+    // Delete, then carry on: straight to the next name that needs a description (one at a time), or
+    // back to the list when there are none.
     const deleteThisName = async () => {
       if (!confirm(`Delete “${ent.canonical}”? Its mentions stay in the entries; only the name is removed.`)) return;
+      const nextId = await api.nextUndescribed(); // worked out while this one is still open
       await removeEntity(id);
-      openId = null; render();
+      try { localStorage.removeItem(entDraftKey(id)); } catch { /* */ }
+      if (nextId && nextId !== id) { openId = nextId; entEditing = null; renderEntity(nextId); }
+      else { openId = null; render(); }
     };
     root.querySelector("#ent-del-big")?.addEventListener("click", deleteThisName); // Delete — at the bottom of Edit
+    root.querySelector("#ent-quick-del")?.addEventListener("click", deleteThisName); // …and at the top, by the name
     root.querySelector("#ent-merge-btn")?.addEventListener("click", async () => {
       const targetId = root.querySelector("#ent-merge-sel").value;
       if (!targetId || targetId === id) return;
@@ -1233,7 +1244,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     else onOpenMemory?.(m.dataset.goto);
   });
 
-  return {
+  const api = {
     async commitEdit() { if (commitPending) { const f = commitPending; commitPending = null; await f(); } }, // save the open box, if it has unsaved words
     open() { openId = null; selecting = false; selected.clear(); render(); }, // Names always lands on the roster (Me lives in its own tab)
     async openSelf() { selecting = false; selected.clear(); const s = await ensureSelf(); openId = s.id; entEditing = null; renderEntity(s.id); }, // Me: write if empty, else read + Edit
@@ -1252,4 +1263,5 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
     },
     close() { if (iv) { iv.active = false; endInterview(); } },
   };
+  return api;
 }
