@@ -153,8 +153,9 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
         <div class="mem-row">
           <div class="field">
             <span class="field-label">Category</span>
-            <input type="text" id="entry-category" autocomplete="off" placeholder="places, friends, jobs…">
-            <div class="chip-row" id="entry-category-chips"></div>
+            <select id="entry-category-select" class="cat-select" aria-label="Category"></select>
+            <input type="text" id="entry-category" autocomplete="off" placeholder="New category name" hidden>
+            <div class="chip-row" id="entry-category-chips" hidden></div>
           </div>
           <div class="field">
             <span class="field-label">Subject <em>(optional)</em></span>
@@ -607,7 +608,33 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   const uniq = (vals) => [...new Set(vals.filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const chipsHtml = (vals, current) => vals.map((v) =>
     `<button type="button" class="chip${v.toLowerCase() === current.toLowerCase() ? " chip-on" : ""}" data-val="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join("");
-  const renderCategoryChips = () => { catChips.innerHTML = chipsHtml(uniq([...DEFAULT_CATEGORIES, ...allMems.map((m) => m.category)]), catEl.value.trim()); };
+  // Category is a drop-down: your own categories first (most-used at the top), then the standard
+  // ones, then "＋ New category…" which reveals a box to type a new name. The text box (catEl) stays
+  // the single source of the value, so everything that sets a category keeps working.
+  const catSelect = root.querySelector("#entry-category-select");
+  const NEW_CAT = "__new__";
+  let typingNewCat = false;
+  const renderCategoryChips = () => {
+    const counts = new Map();
+    for (const m of allMems) { const c = (m.category || "").trim(); if (c) counts.set(c, (counts.get(c) || 0) + 1); }
+    const mine = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b));
+    const lower = new Set(mine.map((c) => c.toLowerCase()));
+    const std = DEFAULT_CATEGORIES.filter((c) => !lower.has(c.toLowerCase()));
+    const cur = catEl.value.trim();
+    const known = [...mine, ...std].find((c) => c.toLowerCase() === cur.toLowerCase());
+    if (known) typingNewCat = false;
+    const opt = (v, label) => `<option value="${escapeHtml(v)}"${known === v ? " selected" : ""}>${escapeHtml(label)}</option>`;
+    catSelect.innerHTML = `<option value=""${!cur && !typingNewCat ? " selected" : ""}>Choose a category…</option>`
+      + (mine.length ? `<optgroup label="Yours">${mine.map((c) => opt(c, `${c} (${counts.get(c)})`)).join("")}</optgroup>` : "")
+      + `<optgroup label="${mine.length ? "More" : "Categories"}">${std.map((c) => opt(c, c)).join("")}</optgroup>`
+      + `<option value="${NEW_CAT}"${(cur && !known) || typingNewCat ? " selected" : ""}>＋ New category…</option>`;
+    catEl.hidden = !((cur && !known) || typingNewCat); // the box shows only for a new name
+  };
+  catSelect.addEventListener("change", () => {
+    if (catSelect.value === NEW_CAT) { typingNewCat = true; catEl.value = ""; catEl.hidden = false; catEl.focus(); }
+    else { typingNewCat = false; catEl.value = catSelect.value; catEl.hidden = true; }
+    renderSubjectChips(); syncHeader();
+  });
   const renderSubjectChips = () => {
     const cat = catEl.value.trim().toLowerCase();
     // No category yet → no subject suggestions (subjects belong to a category); once one is
@@ -618,7 +645,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   async function loadMemLists() { allMems = await getAllMemories(); renderCategoryChips(); renderSubjectChips(); }
   loadMemLists();
   const syncHeader = () => { renderWriteBreadcrumb(); if (writeTitle) writeTitle.textContent = titleText(); };
-  catEl.addEventListener("input", () => { renderCategoryChips(); renderSubjectChips(); syncHeader(); });
+  catEl.addEventListener("input", () => { renderSubjectChips(); syncHeader(); }); // typing a new category name
   subjectEl.addEventListener("input", syncHeader);
   subjectEl.addEventListener("input", renderSubjectChips);
   catChips.addEventListener("click", (e) => { const b = e.target.closest(".chip"); if (!b) return; catEl.value = b.dataset.val; renderCategoryChips(); renderSubjectChips(); });
@@ -916,7 +943,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   function resetMemoryFields() {
     editingMemId = null; editingMemOrig = null;
     setFormMode("diary");
-    catEl.value = ""; subjectEl.value = ""; startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false;
+    catEl.value = ""; subjectEl.value = ""; startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false; typingNewCat = false;
     locationEl.value = ""; chosenLocation = null; locSuggest.hidden = true; setLocHint("", false);
     renderCategoryChips(); renderSubjectChips();
   }
@@ -931,7 +958,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     entryLabel.textContent = "Your words — add more, or fix anything";
     pendingPhotos = (mem.photos ?? []).map((ph) => { const b = storedToBlob(ph); return { blob: b, url: URL.createObjectURL(b) }; });
     renderThumbs();
-    catEl.value = mem.category || ""; subjectEl.value = mem.subject || "";
+    catEl.value = mem.category || ""; subjectEl.value = mem.subject || ""; typingNewCat = false;
     startYearEl.value = mem.startYear ?? ""; endYearEl.value = mem.endYear ?? ""; ongoingEl.checked = !!mem.ongoing;
     locationEl.value = mem.place || ""; chosenLocation = null; locSuggest.hidden = true;
     setLocHint(mem.place ? "✓ Location set." : "", !!mem.place);
@@ -1002,7 +1029,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     textEl.value = "";
     pendingPhotos = []; renderThumbs();
     dateEl.value = "";
-    catEl.value = seed.category || "";
+    catEl.value = seed.category || ""; typingNewCat = false;
     subjectEl.value = seed.subject || "";
     ladderPick = null;
     startYearEl.value = ""; endYearEl.value = ""; ongoingEl.checked = false;

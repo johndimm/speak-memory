@@ -2109,3 +2109,8 @@ html.theme-modern .life-ladder .ladder-cat { color: #374151; }
 
 .settings-guide { margin: 0 0 1.2rem; padding: 0.7rem 0.9rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--ink-soft); font-size: 0.9rem; }
 .settings-guide .import-link { font-weight: 600; }
+
+/* Stories: the category drop-down (matches the other fields). */
+.cat-select { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.8rem; width: 100%; box-sizing: border-box; }
+.cat-select:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
+#entry-category:not([hidden]) { margin-top: 0.4rem; }
