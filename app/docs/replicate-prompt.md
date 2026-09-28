@@ -43,7 +43,7 @@ Journal, Stories, Me and each Name page share **one design**:
 - **Browse:** the life tree, Life → decades → years → months → weeks → days, plus stories by category → subject. Every node shows the word, phrase and sentence, then the full summary with a Summary | Outline switch and its children. A day or story shows word, phrase, Summary | Outline, and a closed **Transcript** fold.
 - **Me:** you just talk. One question at a time rolls above the box ("Where do you live, and since when?"), and the answers tick off as chips. Relative times ("for ten years") become years. A **bucket list** lives here.
 - **Names:** a list with dashed cards for names that still need a word from you (0–1 mentions). Names mentioned twice or more are described automatically from the journal. A Name page has a profile, facts, every mention, and "Ask about…". Also: Select for batch delete, and a rename that fixes the spelling everywhere.
-- **Stories:** each thread (Homes, Relationships, Jobs, Hobbies, plus any other category) is a horizontal timeline: `[＋ before] [story] [story] … [NOW from Me]`. Tapping ＋ asks the question ("Where did you live before Elm St? When?").
+- **Stories:** each thread (Homes, Relationships, Jobs, Hobbies, plus any other category) is a horizontal timeline: `[story] [story] … [＋] [NOW from Me]`. Tapping ＋ asks about the gap ("What came between Agate St and San Diego? When?").
 - **Futures:** one list to switch between **Now · Your journal** and each Future, then a folded **＋ New future**: an optional prompt, 10 years / 20 years / to age 95, the number of days, and "Do my bucket list".
 - **More:** Me, a Timeline (life as parallel lanes), a Map of places, Activity (the live job queue plus the graph), and the Guide.
 

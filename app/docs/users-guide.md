@@ -70,7 +70,7 @@ Next, tell the app **who** everyone is.
 
 Your Journal starts today. **Stories** fills in everything before it: any memory you can talk about. Each story has a **category** (Homes, Jobs, Relationships, Hobbies, Schools…), an optional **subject**, and **years**.
 
-**Stories** opens with **Your life now**: Homes, Relationships, Jobs and Hobbies, each showing the current one from Me. Tap **＋ Earlier** and the app asks the question: *Where did you live before Seattle? When did you move there?* Each story pushes that thread further back.
+**Stories** opens with your life, thread by thread: Homes, Relationships, Jobs, Hobbies (and any other category you use). Each row is a timeline of your stories in date order, ending in **Now** from Me. Tap a story to open it. Tap the **＋** just before Now and the app asks about the gap: *What came between Agate St and San Diego? When?* With no stories yet, it asks about the time before now.
 
 Stories are summarized just like days. A story rolls up into its **decade** (so your Life includes it) and also into its **category** and **subject**, so Browse can show your life by decade or by thread.
 

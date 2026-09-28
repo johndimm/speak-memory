@@ -347,10 +347,14 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       const since = L.k ? facts[L.k + "Since"] : null;
       const stories = L.stories.slice()
         .sort((a, b) => (a.startYear || 0) - (b.startYear || 0) || (a.createdAt || 0) - (b.createdAt || 0));
-      // "Before that" asks about the time before the EARLIEST one known (a story, else your current one).
-      const oldest = stories.find((m) => m.startYear) || stories[0];
-      const anchor = oldest ? (oldest.subject || oldest.label || "") : cur;
-      const addBlock = `<button type="button" class="lt-block lt-add" data-cat="${escapeHtml(L.cat)}" data-ask="${escapeHtml(L.ask(anchor))}" title="Add the one before">＋</button>`;
+      // ＋ sits just left of NOW, after your latest story, so it asks about that gap: "What came between
+      // Agate St and San Diego?" With no stories yet, it asks about the time before now.
+      const latest = stories.length ? stories[stories.length - 1] : null;
+      const latestName = latest ? (latest.subject || latest.label || "") : "";
+      const ask = latestName && cur ? `What came between ${latestName} and ${cur}? When?`
+        : latestName ? `What came after ${latestName}? When?`
+        : L.ask(cur);
+      const addBlock = `<button type="button" class="lt-block lt-add" data-cat="${escapeHtml(L.cat)}" data-ask="${escapeHtml(ask)}" title="Add another">＋</button>`;
       const storyBlocks = stories.map((m) => `<button type="button" class="lt-block lt-story" data-mem="${escapeHtml(m.id)}">
           <span class="lt-name">${escapeHtml(m.subject || m.label || m.category || "Story")}</span>
           <span class="lt-yrs">${escapeHtml(yrs(m))}</span></button>`).join("");
@@ -361,10 +365,10 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       const refile = (L.others || []).map((c) => `<button type="button" class="lt-refile" data-from="${escapeHtml(c)}" data-to="${escapeHtml(L.cat)}">Rename “${escapeHtml(c)}” → ${escapeHtml(L.cat)}</button>`).join("");
       return `<div class="ladder-row${ladderPick === L.cat ? " picked" : ""}">
           <span class="ladder-cat">${escapeHtml(L.cat)}${refile}</span>
-          <div class="lt-track">${addBlock}${storyBlocks}${nowBlock}</div>
+          <div class="lt-track">${storyBlocks}${addBlock}${nowBlock}</div>
         </div>`;
     }).join("");
-    ladderEl.innerHTML = `<p class="ladder-head">Your life, thread by thread — tap ＋ to add the one before</p>${rows}`;
+    ladderEl.innerHTML = `<p class="ladder-head">Your life, thread by thread — tap ＋ to add another</p>${rows}`;
     // Start each track scrolled to NOW (the right end).
     ladderEl.querySelectorAll(".lt-track").forEach((t) => { t.scrollLeft = t.scrollWidth; });
   }
