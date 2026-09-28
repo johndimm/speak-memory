@@ -42,11 +42,8 @@ days: where you live, your work, your relationships, your health, ongoing projec
 duration. Each state is a span with a start and (usually) end year across {START_YEAR}–{END_YEAR},
 growing out of where the journal leaves off. These populate a life timeline, so give real year spans.
 
-Return ONLY valid JSON, no markdown fence, in exactly this shape:
-{"bridge":"<one or two short sentences: how you got from now to this stretch of years>",
- "days":[{"date":"YYYY-MM-DD","raw":"<the raw diary entry for that day, first person>"}, ...],
- "states":[{"category":"Home|Work|Relationship|Health|Project|Place","subject":"<short label, e.g. 'the house on Pine St' or 'teaching at the college'>","startYear":YYYY,"endYear":YYYY,"text":"<a sentence or two, first person, on this chapter>"}, ...]}
-Order "days" chronologically. Give about {DAYS} states across the span. Escape any double quotes inside strings with a backslash.`;
+You write this future in two steps (plan, then the days), as the messages below ask. Always return ONLY valid
+JSON, no markdown fence. Escape any double quotes inside strings with a backslash.`;
 
 function buildContext(entries) {
   const sorted = [...entries].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
@@ -71,6 +68,15 @@ function buildContext(entries) {
 }
 
 // Tolerant JSON extraction (the model sometimes wraps JSON in prose or a code fence).
+// A reply cut off mid-JSON (it hit the length cap) still holds complete days — keep every one of them.
+function salvageDays(text) {
+  const out = [];
+  const re = /\{\s*"date"\s*:\s*"(\d{4}-\d{2}-\d{2})"\s*,\s*"raw"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}/g;
+  let m;
+  while ((m = re.exec(String(text || "")))) { try { out.push({ date: m[1], raw: JSON.parse(`"${m[2]}"`) }); } catch { /* skip */ } }
+  return out;
+}
+
 function parseJson(text) {
   const raw = String(text || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   try { return JSON.parse(raw); } catch { /* fall through */ }
@@ -81,7 +87,9 @@ function parseJson(text) {
   return null;
 }
 
-async function callChat(messages, temperature, maxTokens = 8192) { // up to 40 raw days + states in one reply
+// The cap covers the model's hidden REASONING as well as its answer, so it must be generous — 4k cut
+// even a one-line-per-day plan short (finish_reason=length), which is what broke Futures.
+async function callChat(messages, temperature, maxTokens = 16000, tag = "") {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY not set in environment");
   const model = process.env.DEEPSEEK_MODEL || DEFAULT_MODEL;
@@ -92,6 +100,10 @@ async function callChat(messages, temperature, maxTokens = 8192) { // up to 40 r
   });
   if (!res.ok) throw new Error(`DeepSeek API error ${res.status}: ${await res.text()}`);
   const data = await res.json();
+  const finish = data.choices?.[0]?.finish_reason;
+  const u = data.usage || {};
+  console.log(`future ${tag}: finish=${finish} out=${u.completion_tokens}${u.completion_tokens_details?.reasoning_tokens != null ? ` (reasoning ${u.completion_tokens_details.reasoning_tokens})` : ""}`);
+  if (finish && finish !== "stop") console.warn(`future ${tag}: finish_reason=${finish}`); // "length" = cut off at the cap
   return data.choices[0]?.message?.content ?? "";
 }
 
@@ -176,18 +188,48 @@ export default async function handler(req, res) {
     // dryRun: return the assembled prompt without calling the model (to inspect what's sent).
     if (body.dryRun) { res.status(200).json({ system, user: userMsg, chars: system.length }); return; }
 
-    const reply = await callChat(
-      [{ role: "system", content: system }, { role: "user", content: userMsg }],
-      0.9,
-    );
-    const parsed = parseJson(reply);
-    const days = Array.isArray(parsed?.days)
-      ? parsed.days
-          .filter((d) => d && d.date && d.raw && String(d.date).slice(0, 10) >= startDate) // never before tomorrow
-          .map((d) => ({ date: String(d.date).slice(0, 10), raw: String(d.raw) }))
-          .sort((a, b) => a.date.localeCompare(b.date))
-      : [];
+    // Step 1 — the PLAN: every date with a one-line gist, plus the life's lasting chapters. Small, so
+    // it never runs into the reply cap however long the future is.
+    const planMsg = `${userMsg}
+
+STEP 1 — PLAN. Don't write the entries yet. Return {"bridge":"<one or two short sentences: how you got from now to this stretch of years>","plan":[{"date":"YYYY-MM-DD","gist":"<one sentence: what this day holds — who, where, what's going on>"}],"states":[{"category":"Home|Work|Relationship|Health|Project|Place","subject":"<short label>","startYear":YYYY,"endYear":YYYY,"text":"<a sentence or two, first person, on this chapter>"}]}.
+The plan has about ${sampleDays} dates following the date rules above, in order. Give about ${Math.min(sampleDays, 12)} states across the span.`;
+    const planReply = await callChat([{ role: "system", content: system }, { role: "user", content: planMsg }], 0.9, 16000, "plan");
+    const planned = parseJson(planReply) || {};
+    const plan = (Array.isArray(planned.plan) ? planned.plan : [])
+      .filter((p) => p && /^\d{4}-\d{2}-\d{2}/.test(String(p.date)) && String(p.date).slice(0, 10) >= startDate)
+      .map((p) => ({ date: String(p.date).slice(0, 10), gist: String(p.gist || "").slice(0, 300) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (!plan.length) { res.status(502).json({ error: "The model didn't return a plan — try again." }); return; }
+
+    // Step 2 — the DAYS, a few at a time and in parallel. Every group sees the whole plan, so the story
+    // stays continuous; each reply stays well under the cap.
+    const planText = plan.map((p) => `${p.date}: ${p.gist}`).join("\n");
+    const groups = [];
+    for (let i = 0; i < plan.length; i += 6) groups.push(plan.slice(i, i + 6));
+    const written = await Promise.all(groups.map(async (g, gi) => {
+      const msg = `${userMsg}
+
+THE PLAN for the whole future (for continuity):
+${planText}
+
+STEP 2 — WRITE the raw diary entries for ONLY these dates, following their gists, in my voice, each as it would sound on that day:
+${g.map((p) => `${p.date}: ${p.gist}`).join("\n")}
+Return {"days":[{"date":"YYYY-MM-DD","raw":"<the raw diary entry for that day, first person>"}]} with exactly these ${g.length} dates, in order.`;
+      try {
+        const reply = await callChat([{ role: "system", content: system }, { role: "user", content: msg }], 0.9, 16000, `days ${gi + 1}/${groups.length}`);
+        const got = parseJson(reply);
+        return Array.isArray(got?.days) ? got.days : salvageDays(reply);
+      } catch (e) { console.warn(`future days ${gi + 1}: ${e.message}`); return []; }
+    }));
+    const byDate = new Map();
+    for (const d of written.flat()) if (d && d.date && d.raw) byDate.set(String(d.date).slice(0, 10), String(d.raw));
+    const days = [...byDate.entries()]
+      .filter(([date]) => date >= startDate) // never before tomorrow
+      .map(([date, raw]) => ({ date, raw }))
+      .sort((a, b) => a.date.localeCompare(b.date));
     if (!days.length) { res.status(502).json({ error: "The model didn't return any days — try again." }); return; }
+    const parsed = planned;
 
     // Enduring life-states (year spans) → the future's Timeline lanes.
     const yr = (v) => { const n = parseInt(String(v).slice(0, 4), 10); return Number.isFinite(n) ? n : null; };

@@ -72,7 +72,7 @@ export async function gatherGrounding(entries) {
   return { arc, selfFacts, names, bucket: getBucket().slice(0, 40) };
 }
 
-const GEN_TIMEOUT_MS = 180000; // one big generation call; abort if it hangs
+const GEN_TIMEOUT_MS = 290000; // plan + days (in parallel) — just under the server's 300s limit
 
 // The futures created on this device — sample journals tagged kind:"future", newest first.
 function futureList() {
@@ -129,7 +129,7 @@ export function initFutures(root) {
   function cardTag(f) {
     const st = statusOf(f);
     if (st === "generating") return `<span class="fr-tag fut-gen" data-gen="${escapeHtml(f.id)}">◷ Imagining…</span>`;
-    if (st === "error") return `<span class="fr-tag fut-err">⚠ Retry</span>`;
+    if (st === "error") return `<span class="fr-tag fut-err" title="${escapeHtml(f.error || "Failed")}">⚠ ${escapeHtml((f.error || "Failed").slice(0, 40))} · Retry</span>`;
     if (f.id === activeJournalId()) return `<span class="fr-tag fr-here">✓ Here</span>`;
     return `<span class="fr-tag fr-open">Open ›</span>`;
   }
