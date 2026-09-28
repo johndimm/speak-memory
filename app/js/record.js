@@ -545,11 +545,30 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     const bits = [streetLine, place && place !== streetLine ? place : null, P.state, P.country].filter(Boolean);
     return [...new Set(bits)].join(", ");
   };
+  // Where you live (from Me), as coordinates — found once and remembered — so suggestions for a bare
+  // street ("Agate St") start near home instead of anywhere in the world.
+  async function homeBias() {
+    let home = "";
+    try { home = (((await ensureSelf()) || {}).facts || {}).location || ""; } catch { /* */ }
+    if (!home) return null;
+    const key = "home-coords::" + home.toLowerCase();
+    try { const c = JSON.parse(localStorage.getItem(key) || "null"); if (c) return c; } catch { /* */ }
+    try {
+      const r = await fetch(`https://photon.komoot.io/api/?limit=1&q=${encodeURIComponent(home)}`);
+      const f = r.ok ? ((await r.json()).features || [])[0] : null;
+      if (!f) return null;
+      const c = { lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0] };
+      localStorage.setItem(key, JSON.stringify(c));
+      return c;
+    } catch { return null; }
+  }
   async function queryLocations(q) {
     if (locCtrl) locCtrl.abort();
     locCtrl = new AbortController();
     try {
-      const url = `https://photon.komoot.io/api/?limit=6&q=${encodeURIComponent(q)}`;
+      const bias = await homeBias();
+      const near = bias ? `&lat=${bias.lat}&lon=${bias.lng}&zoom=10&location_bias_scale=0.1` : "";
+      const url = `https://photon.komoot.io/api/?limit=6&q=${encodeURIComponent(q)}${near}`;
       const r = await fetch(url, { signal: locCtrl.signal });
       if (!r.ok) return [];
       return ((await r.json()).features || []).filter((f) => f.geometry && f.geometry.coordinates);

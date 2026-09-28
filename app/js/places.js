@@ -126,25 +126,19 @@ async function collectPlaces(onProgress, onStatus) {
       byQuery.set(query.toLowerCase(), { query, subject: label, startYear: m.startYear, endYear: m.endYear || m.startYear, image: memImage(m), sentence: memSentence(m) });
     }
   }
-  // If you've provided real locations (picked coordinates), the map shows ONLY those — accurate and
-  // clean, no fuzzy free-text guessing. Fall back to geocoding subjects only when nothing was picked
-  // (e.g. the sample lives, which carry place names but no chosen coordinates).
-  let places;
-  if (exact.length) {
-    places = exact;
-  } else {
-    places = [];
-    let done = 0;
-    for (const c of [...byQuery.values()]) {
-      // If the exact address isn't found, step outward — drop the street, then the neighborhood —
-      // so the story still lands on its town ("Waverly Street, La Jolla, …" → "La Jolla, …").
-      let g = await geocode(c.query);
-      const parts = c.query.split(",").map((x) => x.trim()).filter(Boolean);
-      for (let cut = 1; !g && parts.length - cut >= 2; cut++) g = await geocode(parts.slice(cut).join(", "));
-      done++;
-      onProgress?.(done, byQuery.size);
-      if (g) places.push({ ...c, lat: g.lat, lng: g.lng, display: g.display });
-    }
+  // Stories whose location you picked are plotted exactly; every other place story is located from its
+  // resolved place (with a fallback to its neighborhood/town). Both show together.
+  const places = [...exact];
+  let done = 0;
+  for (const c of [...byQuery.values()]) {
+    // If the exact address isn't found, step outward — drop the street, then the neighborhood —
+    // so the story still lands on its town ("Waverly Street, La Jolla, …" → "La Jolla, …").
+    let g = await geocode(c.query);
+    const parts = c.query.split(",").map((x) => x.trim()).filter(Boolean);
+    for (let cut = 1; !g && parts.length - cut >= 2; cut++) g = await geocode(parts.slice(cut).join(", "));
+    done++;
+    onProgress?.(done, byQuery.size);
+    if (g) places.push({ ...c, lat: g.lat, lng: g.lng, display: g.display });
   }
   places.sort((a, b) => a.startYear - b.startYear || a.endYear - b.endYear);
   return places;
