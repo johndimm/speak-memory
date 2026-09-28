@@ -63,8 +63,11 @@ const memSentence = (m) => (m.levels && m.levels.sentence) || (m.prose && m.pros
 // a job, a theme). The model sees the story's own summary and where you live (Me), so a bare street
 // becomes "Werner Street, San Diego, California, USA" instead of the first "Werner St" on Earth.
 // The answer is saved on the story (`place`: a geocodable string, or null = not a place).
+// Bump when the place rules improve: answers the app worked out (no coordinates = not picked by you)
+// from an older version are worked out again, once, on every device. Your picks are never touched.
+const PLACE_V = 2;
 async function resolvePlaces(mems, onProgress) {
-  const todo = mems.filter((m) => m.startYear != null && !Number.isFinite(m.lat) && m.place !== null && !(m.place && String(m.place).trim()) && (m.subject || m.label));
+  const todo = mems.filter((m) => m.startYear != null && !Number.isFinite(m.lat) && m.placeV !== PLACE_V && (m.subject || m.label));
   if (!todo.length) return;
   let context = "";
   try {
@@ -94,6 +97,7 @@ async function resolvePlaces(mems, onProgress) {
       for (const m of batch) {
         if (!(m.id in places)) continue;
         m.place = places[m.id]; // string, or null = not a place
+        m.placeV = PLACE_V;
         try { await putMemory({ ...m }); } catch { /* read-only (a Future's past) — use it for this view only */ }
       }
     } catch { /* offline — try again next time */ }
@@ -106,11 +110,23 @@ async function resolvePlaces(mems, onProgress) {
 // Priority: (1) exact coordinates the user picked via the Location field (memory.lat/lng) — no
 // geocoding needed, always right; (2) an LLM-assigned clean place name (sample lives); (3) the raw
 // subject. `place === null` explicitly means "not a physical place" → skip.
-async function collectPlaces(onProgress, onStatus) {
+// The places to pin. `network: false` uses only what's already known — picked coordinates and
+// locations saved on the stories — so the map appears instantly. `network: true` also works out any
+// story not placed yet (the model) and finds its coordinates (the geocoder), SAVING both on the story
+// so they're never looked up again. A lookup that fails waits a day before it's tried again.
+const RETRY_AFTER = 24 * 3600 * 1000;
+function needsPlacing(m) {
+  if (m.startYear == null || Number.isFinite(m.lat)) return false;
+  if (m.placeV !== PLACE_V && (m.subject || m.label)) return true;              // not worked out (yet)
+  const q = (m.place || "").trim();
+  if (!q || (m.geo && m.geo.q === q)) return false;                              // not a place / found
+  return !(m.geoFail && m.geoFail.q === q && Date.now() - m.geoFail.at < RETRY_AFTER);
+}
+async function collectPlaces({ network = false, onStatus } = {}) {
   const mems = await getAllMemories();
-  await resolvePlaces(mems, onStatus);
+  if (network) await resolvePlaces(mems, onStatus);
   const exact = [];   // user-picked coords, plotted directly
-  const byQuery = new Map(); // needs geocoding, deduped by query
+  const byQuery = new Map(); // deduped by query; `mems` = the stories sharing it
   for (const m of mems) {
     if (m.startYear == null) continue;
     if (Number.isFinite(m.lat) && Number.isFinite(m.lng)) {
@@ -120,24 +136,34 @@ async function collectPlaces(onProgress, onStatus) {
     // Only stories that ARE places: `place` is the resolved, geocodable name; null means not a place.
     const query = (m.place || "").trim();
     if (!query) continue;
-    const prev = byQuery.get(query.toLowerCase());
-    const label = (m.subject || query).trim();
-    if (!prev || m.startYear < prev.startYear) {
-      byQuery.set(query.toLowerCase(), { query, subject: label, startYear: m.startYear, endYear: m.endYear || m.startYear, image: memImage(m), sentence: memSentence(m) });
+    const k = query.toLowerCase();
+    const prev = byQuery.get(k);
+    if (!prev) byQuery.set(k, { query, subject: (m.subject || query).trim(), startYear: m.startYear, endYear: m.endYear || m.startYear, image: memImage(m), sentence: memSentence(m), mems: [m] });
+    else {
+      prev.mems.push(m);
+      if (m.startYear < prev.startYear) Object.assign(prev, { subject: (m.subject || query).trim(), startYear: m.startYear, endYear: m.endYear || m.startYear, image: memImage(m), sentence: memSentence(m) });
     }
   }
-  // Stories whose location you picked are plotted exactly; every other place story is located from its
-  // resolved place (with a fallback to its neighborhood/town). Both show together.
   const places = [...exact];
+  const todo = [...byQuery.values()].filter((c) => !c.mems.some((m) => m.geo && m.geo.q === c.query));
   let done = 0;
-  for (const c of [...byQuery.values()]) {
+  for (const c of byQuery.values()) {
+    const known = c.mems.find((m) => m.geo && m.geo.q === c.query);
+    if (known) { places.push({ ...c, lat: known.geo.lat, lng: known.geo.lng, display: known.geo.display || "" }); continue; }
+    if (!network) continue;
+    if (c.mems.every((m) => m.geoFail && m.geoFail.q === c.query && Date.now() - m.geoFail.at < RETRY_AFTER)) continue;
     // If the exact address isn't found, step outward — drop the street, then the neighborhood —
     // so the story still lands on its town ("Waverly Street, La Jolla, …" → "La Jolla, …").
     let g = await geocode(c.query);
     const parts = c.query.split(",").map((x) => x.trim()).filter(Boolean);
     for (let cut = 1; !g && parts.length - cut >= 2; cut++) g = await geocode(parts.slice(cut).join(", "));
     done++;
-    onProgress?.(done, byQuery.size);
+    onStatus?.(`Placing ${todo.length - done} more on the map…`);
+    for (const m of c.mems) {
+      if (g) { m.geo = { q: c.query, lat: g.lat, lng: g.lng, display: g.display || "" }; delete m.geoFail; }
+      else m.geoFail = { q: c.query, at: Date.now() };
+      try { await putMemory({ ...m }); } catch { /* read-only here (a Future's past) */ }
+    }
     if (g) places.push({ ...c, lat: g.lat, lng: g.lng, display: g.display });
   }
   places.sort((a, b) => a.startYear - b.startYear || a.endYear - b.endYear);
@@ -149,11 +175,16 @@ async function collectPlaces(onProgress, onStatus) {
 // rather than a broken image.
 const svThumb = (p) => `./api/streetview?lat=${p.lat}&lng=${p.lng}&size=96x96`;
 const svLarge = (p) => `./api/streetview?lat=${p.lat}&lng=${p.lng}&size=480x300`;
-async function enrichStreetView(places) {
+// Coverage is remembered per spot, so it's checked once — not on every visit.
+async function enrichStreetView(places, { network = true } = {}) {
   await Promise.all(places.map(async (p) => {
+    const key = `sv::${p.lat.toFixed(5)},${p.lng.toFixed(5)}`;
+    const seen = localStorage.getItem(key);
+    if (seen !== null) { p.streetview = seen === "1"; return; }
+    if (!network) return;
     try {
       const r = await fetch(`./api/streetview?meta=1&lat=${p.lat}&lng=${p.lng}`);
-      if (r.ok) { const j = await r.json(); if (j.ok) p.streetview = true; }
+      if (r.ok) { const j = await r.json(); p.streetview = !!j.ok; try { localStorage.setItem(key, p.streetview ? "1" : "0"); } catch { /* */ } }
     } catch { /* no street view → keep the dot / era image */ }
   }));
 }
@@ -176,9 +207,13 @@ export function initPlaces(root) {
     root.innerHTML = `<div class="places-wrap">${body}</div>`;
   }
 
-  async function render() {
+  async function render({ refreshed = false } = {}) {
     destroyed = false;
+    // Redrawing (e.g. after new places land) — tear down the previous map first.
+    if (fsCleanup) { fsCleanup(); fsCleanup = null; }
+    if (map) { map.remove(); map = null; } markers = []; trail = null;
     shell(`<p class="places-status" id="places-status">Loading the map…</p>
+      <p class="places-note" id="places-note" hidden></p>
       <div class="places-mapwrap" id="places-mapwrap" hidden>
         <div id="places-map" class="places-map"></div>
         <button type="button" class="places-full" id="places-full" title="Full screen" aria-label="Full screen">⤢</button>
@@ -192,13 +227,24 @@ export function initPlaces(root) {
     try { L = await ensureLeaflet(); } catch (e) { statusEl.textContent = e.message; return; }
     if (destroyed) return;
 
-    statusEl.textContent = "Finding the places in this life…";
-    places = await collectPlaces(
-      (d, n) => { if (!destroyed) statusEl.textContent = `Locating places… ${d}/${n}`; },
-      (msg) => { if (!destroyed) statusEl.textContent = msg; });
+    // 1) Instantly: everything already placed. 2) In the background: place anything new (saved on the
+    //    story, so it's done once), then redraw. Opening the map never waits on lookups it's done before.
+    places = await collectPlaces({ network: false });
+    await enrichStreetView(places, { network: false });
     if (destroyed) return;
-    await enrichStreetView(places); // flag which places have Street View coverage (falls back to dots)
-    if (destroyed) return;
+    const pending = !refreshed && (await getAllMemories()).some(needsPlacing);
+    const noteEl = root.querySelector("#places-note");
+    const placeInBackground = async () => {
+      const say = (msg) => { if (destroyed) return; const el = places.length ? noteEl : statusEl; el.hidden = false; el.textContent = msg; };
+      say("Finding where your places are…");
+      await collectPlaces({ network: true, onStatus: say });
+      if (destroyed) return;
+      const all = await collectPlaces({ network: false });
+      await enrichStreetView(all, { network: true });
+      if (!destroyed) render({ refreshed: true }); // redraw with the new pins (no second background pass)
+    };
+    if (!places.length && pending) { placeInBackground(); return; } // nothing to show yet — just the status
+    if (pending) placeInBackground();
 
     if (!places.length) {
       statusEl.innerHTML = `No mappable places yet. Places come from your memories' subjects (a city, a house, a school) — add a memory with a place as its subject, and it'll appear here.`;

@@ -2114,3 +2114,5 @@ html.theme-modern .life-ladder .ladder-cat { color: #374151; }
 .cat-select { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 0.6rem 0.8rem; width: 100%; box-sizing: border-box; }
 .cat-select:focus { outline: 2px solid var(--accent-soft); outline-offset: 1px; }
 #entry-category:not([hidden]) { margin-top: 0.4rem; }
+
+.places-note { margin: 0 0 0.5rem; font-size: 0.82rem; color: var(--ink-soft); }
