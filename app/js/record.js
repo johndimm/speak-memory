@@ -13,6 +13,7 @@ import { attachLiveCapture } from "./capture.js";
 import { resolveEntityNames } from "./entityresolve.js";
 import { jkey } from "./journal.js";
 import { ensureSelf } from "./self.js";
+import { syncStorySubjects } from "./storynames.js";
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -933,6 +934,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       if (editingMemOrig?.levels) mem.levels = editingMemOrig.levels;
       await putMemory(mem);
       editingMemId = null; editingMemOrig = null;
+      syncStorySubjects().catch(() => {}); // the story's subject becomes (or links to) a Name
       if (onSavedMemory) onSavedMemory(mem);
       else { statusEl.textContent = "Saved ✓"; statusEl.className = "write-status ok"; }
     } catch (err) {

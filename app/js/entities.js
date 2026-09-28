@@ -15,6 +15,7 @@ import { setupDictation, IS_MOBILE } from "./dictation.js";
 import { resolveEntityNames, resetEntityIndex, sanitizeEntities } from "./entityresolve.js";
 import { ensureSelf, isSelfEntity, needsDescription } from "./self.js";
 import { bucketSectionHtml, wireBucketSection } from "./bucket.js";
+import { syncStorySubjects } from "./storynames.js";
 import { jkey } from "./journal.js";
 import { createSpeaker, CHARACTERS, savedCharacter } from "./voicetts.js";
 import { listenTurn as vListen, hasSpeechInput } from "./voiceinput.js";
@@ -455,6 +456,7 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
   async function render() {
     await sanitizeEntities(); // repair any names that are leftover {{tokens}}
     await ensureSelf(); // the journal-keeper is the first Name, there by default
+    await syncStorySubjects(); // your story subjects are Names too ("the house my dad built")
     const all = await getAllEntities();
     setEntityMap(new Map(all.map((e) => [e.id, e.canonical]))); // so {{e:id|Name}} tokens resolve to names here
     if (openId) { renderEntity(openId); return; }
