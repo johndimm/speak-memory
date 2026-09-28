@@ -46,10 +46,8 @@ Then **Names**. Sam and Marisol come up often, so the app writes their descripti
 
 **Stories** opens with her life, thread by thread. Each thread is a row of blocks ending in **Now**, which comes straight from Me:
 
-```
-HOMES   [ ＋ ]  [NOW  Alder Street · since 1976]
-JOBS    [ ＋ ]  [NOW  Fennwick Books · since 1978]
-```
+> **Homes:** [ ＋ ] [ **Now** · Alder Street · since 1976 ]
+> **Jobs:** [ ＋ ] [ **Now** · Fennwick Books · since 1978 ]
 
 She taps **＋** on Homes and the box asks: *Where did you live before Alder Street? When did you move there?* She tells it about **Chicago, 1970**: nineteen, a bus ticket, waitressing doubles, the folk clubs on the North Side. Then ＋ again, before Chicago: **the Nebraska farm**, her father who spoke mostly to the animals, the brown river she wasn't allowed near and swam in anyway.
 
