@@ -8,8 +8,9 @@
 // Leaflet + OSM tiles are pulled from a CDN, lazy-loaded the first time the tab opens. Everything
 // else stays on-device; the tab only reads existing memories plus the coordinate cache.
 
-import { getAllMemories } from "./db.js";
+import { getAllMemories, putMemory } from "./db.js";
 import { activeJournalId } from "./journal.js";
+import { ensureSelf } from "./self.js";
 
 const LEAFLET_CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -58,12 +59,56 @@ async function geocode(query) {
 const memImage = (m) => (m.images && m.images[0] && m.images[0].url) || (m.imageUrls && m.imageUrls[0]) || null;
 const memSentence = (m) => (m.levels && m.levels.sentence) || (m.prose && m.prose.brief) || m.label || "";
 
+// Work out, ONCE per story, the real place it happened — or that it isn't a place at all (a person,
+// a job, a theme). The model sees the story's own summary and where you live (Me), so a bare street
+// becomes "Werner Street, San Diego, California, USA" instead of the first "Werner St" on Earth.
+// The answer is saved on the story (`place`: a geocodable string, or null = not a place).
+async function resolvePlaces(mems, onProgress) {
+  const todo = mems.filter((m) => m.startYear != null && !Number.isFinite(m.lat) && m.place !== null && !(m.place && String(m.place).trim()) && (m.subject || m.label));
+  if (!todo.length) return;
+  let context = "";
+  try {
+    const f = ((await ensureSelf()) || {}).facts || {};
+    if (f.location) context = `I live in ${f.location}${f.locationSince ? ` (since ${f.locationSince})` : ""}. Unless a memory says otherwise, streets and schools are probably near where I lived at the time.`;
+  } catch { /* */ }
+  // Your own model/key from Settings, if you chose one (same rule as the rest of the app).
+  const provider = localStorage.getItem("llm-provider") || "";
+  const overrides = provider ? { provider, apiKey: localStorage.getItem("llm-api-key") || "", model: localStorage.getItem("llm-model") || "", baseUrl: localStorage.getItem("llm-base-url") || "" } : {};
+  // Small batches (whole memories, never cut off mid-list), a few at a time.
+  const batches = [];
+  for (let i = 0; i < todo.length; i += 12) batches.push(todo.slice(i, i + 12));
+  let done = 0;
+  onProgress?.(`Finding where your places are… 0 of ${todo.length}`);
+  await Promise.all(batches.map(async (batch) => {
+    try {
+      const r = await fetch("/api/summarize", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...overrides, mode: "geoplaces", context, memories: batch.map((m) => ({
+          id: m.id, subject: m.subject || m.label || "", category: m.category || "",
+          years: m.startYear ? `${m.startYear}${m.endYear && m.endYear !== m.startYear ? "–" + m.endYear : ""}` : "",
+          hint: String((m.levels && (m.levels.paragraph || m.levels.sentence)) || (m.prose && m.prose.brief) || m.text || "").replace(/\{\{(?:e:)?[^|{}]+\|([^{}]*)\}\}/g, "$1"),
+        })) }),
+      });
+      if (!r.ok) return;
+      const { places = {} } = await r.json();
+      for (const m of batch) {
+        if (!(m.id in places)) continue;
+        m.place = places[m.id]; // string, or null = not a place
+        try { await putMemory({ ...m }); } catch { /* read-only (a Future's past) — use it for this view only */ }
+      }
+    } catch { /* offline — try again next time */ }
+    done += batch.length;
+    onProgress?.(`Finding where your places are… ${done} of ${todo.length}`);
+  }));
+}
+
 // Candidate places from the active journal's memories.
 // Priority: (1) exact coordinates the user picked via the Location field (memory.lat/lng) — no
 // geocoding needed, always right; (2) an LLM-assigned clean place name (sample lives); (3) the raw
 // subject. `place === null` explicitly means "not a physical place" → skip.
-async function collectPlaces(onProgress) {
+async function collectPlaces(onProgress, onStatus) {
   const mems = await getAllMemories();
+  await resolvePlaces(mems, onStatus);
   const exact = [];   // user-picked coords, plotted directly
   const byQuery = new Map(); // needs geocoding, deduped by query
   for (const m of mems) {
@@ -72,7 +117,8 @@ async function collectPlaces(onProgress) {
       exact.push({ subject: (m.place || m.subject || "").trim(), startYear: m.startYear, endYear: m.endYear || m.startYear, image: memImage(m), sentence: memSentence(m), lat: m.lat, lng: m.lng, display: m.place || "" });
       continue;
     }
-    const query = "place" in m ? (m.place || "").trim() : (m.subject || "").trim();
+    // Only stories that ARE places: `place` is the resolved, geocodable name; null means not a place.
+    const query = (m.place || "").trim();
     if (!query) continue;
     const prev = byQuery.get(query.toLowerCase());
     const label = (m.subject || query).trim();
@@ -149,7 +195,9 @@ export function initPlaces(root) {
     if (destroyed) return;
 
     statusEl.textContent = "Finding the places in this life…";
-    places = await collectPlaces((d, n) => { if (!destroyed) statusEl.textContent = `Locating places… ${d}/${n}`; });
+    places = await collectPlaces(
+      (d, n) => { if (!destroyed) statusEl.textContent = `Locating places… ${d}/${n}`; },
+      (msg) => { if (!destroyed) statusEl.textContent = msg; });
     if (destroyed) return;
     await enrichStreetView(places); // flag which places have Street View coverage (falls back to dots)
     if (destroyed) return;

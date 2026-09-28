@@ -147,8 +147,10 @@ You are given a JSON list of memories: [{"id","subject","category","hint"}].
 Return ONLY valid JSON: {"places":{"<id>":"<place>"|null, ...}} with an entry for EVERY id.
 - "<place>" is a clean, geocodable real-world location — a city, town, landmark, or institution with its country, e.g. "Berlin, Germany", "Ithaca, New York, USA", "Trinity College, Cambridge, UK", "Montreux, Switzerland". Prefer the most specific place that actually geocodes.
 - Use null when the memory is NOT tied to a physical place — a book or work ("Lolita", "Pale Fire"), a person, an abstract theme (butterflies, fame), etc.
+- Only a memory whose SUBJECT IS a place gets one: a home or street, a city, a school, a workplace, a trip. A memory about a PERSON or a relationship (a girlfriend, a friend, a teacher) is null — even though it happened somewhere.
 - Resolve vague or descriptive subjects to their real location: "Vyra estate" → "Rozhdestveno, Russia"; "Berlin emigre years" → "Berlin, Germany"; "Wellesley and Cornell" → "Ithaca, New York, USA"; "the American West" → a representative real place if one is clearly implied, else null.
-- Draw on the subject, category, and hint together. Escape any double quotes inside strings with a backslash.`;
+- A STREET, house, school or neighborhood on its own ("Werner St", "Agate St", "the Elm St. house") is ambiguous worldwide: ALWAYS add the city, state/region and country it's in, from the memory's hint, from the memories around it, or from CONTEXT (where I live). E.g. "Werner St" for someone in San Diego → "Werner Street, San Diego, California, USA". Never leave a street without its city.
+- Draw on the subject, category, hint, and CONTEXT together. Escape any double quotes inside strings with a backslash.`;
 
 const PERIOD_SYSTEM = `You summarize journal entries spanning multiple days.
 Return ONLY valid JSON with no markdown: {"brief":"...","full":"..."}
@@ -495,8 +497,9 @@ REUSE the SAME category wording across quotes so themes cluster (aim for ~8–12
     if (mode === "geoplaces") {
       const list = Array.isArray(body.memories) ? body.memories : [];
       if (!list.length) { res.status(200).json({ places: {} }); return; }
-      const compact = list.map((m) => ({ id: String(m.id), subject: String(m.subject || "").slice(0, 120), category: String(m.category || "").slice(0, 60), hint: String(m.hint || "").slice(0, 200) }));
-      const r = await callJsonObject(GEOPLACES_SYSTEM, `Memories:\n${JSON.stringify(compact).slice(0, 12000)}`, 0.1, cfg);
+      const compact = list.map((m) => ({ id: String(m.id), subject: String(m.subject || "").slice(0, 120), category: String(m.category || "").slice(0, 60), years: String(m.years || "").slice(0, 20), hint: String(m.hint || "").slice(0, 400) }));
+      const context = String(body.context || "").slice(0, 600);
+      const r = await callJsonObject(GEOPLACES_SYSTEM, `${context ? `CONTEXT: ${context}\n\n` : ""}Memories:\n${JSON.stringify(compact.slice(0, 20))}`, 0.1, cfg);
       const out = {};
       const src = (r && typeof r.places === "object" && r.places) || {};
       for (const m of compact) { const v = src[m.id]; out[m.id] = (typeof v === "string" && v.trim()) ? v.trim() : null; }
