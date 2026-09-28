@@ -28,8 +28,28 @@ With the data unified, the two input screens (Today, Before) merged into a singl
 ## 8. The Graph
 To make the whole structure legible (and a little alive), the node graph got a **visual**: Life at the top, leaves at the bottom, dirty nodes glowing and the active one pulsing as summarization climbs. It gained pan/zoom, full-screen, and **tap-a-node previews** with an "Open ›" link into the Journal.
 
+## 9. Names become a cast
+Summaries started carrying **name tokens** (`{{e:id|Name}}`), rendered as links. Name-finding rides along with summarization and resolves names by normalized match and aliases, so no growing roster is ever sent to the model. Each name got a page: a profile, every mention in time order, and "Ask about…". Names mentioned twice or more get their description written from the journal; only the rest wait for you. Descriptions never guess a relationship or gender that isn't stated. A misspelling can be fixed **everywhere** by renaming it: every entry, story and summary level is rewritten in place.
+
+## 10. Past · present · future
+The app grew into three linked worlds: **Stories** (the past), the **Journal** (the present) and **Futures** (imagined years). **Me** and **Names** tell it who's who. Use settled into **four levels**: just the Journal; then Me and Names; then Stories; then a Future, where all of it pays off. A small **Next** button walks new users through them, and a Browse tab reads everything as one tree.
+
+## 11. One way to enter anything
+The four input pages (Journal, Stories, Me, a Name) each had grown their own buttons and modes, which confused people. They were redesigned to **one layout**: breadcrumb, then the text box (in edit) or ✎ Edit (in reading), then the title, the content, Save/Cancel and Delete. Empty pages open ready to write; pages with content open for reading. Drafts are kept as you type, and Save never pulls you back to a page you've left. Reading a day or story is also uniform: word, phrase, then Summary | Outline, with the transcript one tap away.
+
+## 12. Talking fills the form
+The long-standing goal, "freely fill out a form using voice", arrived in **Me**: you just talk, and one question at a time rolls above the box while the answers (home, who with, work, fun, each with *since when*, and your birth year) tick off as chips. **Stories** builds on that: each thread (Homes, Relationships, Jobs, Hobbies…) is a visual timeline ending in **Now** from Me, with an empty block on the left that asks about the one before.
+
+## 13. Futures read the past; they don't copy it
+Futures first seeded their own database with a *copy* of the past, which went stale and grew with every Future. Now a Future stores **only its imagined years** and reads your real journal **live and read-only**, merging it in. Pure-past summaries are reused, and only the levels that span past and future are summarized again. A Future starts **tomorrow**, and it's grounded in your whole arc (Life and decade summaries), Me, one sentence per name, and your bucket list, so a "rest of life" future can run from fifteen to ninety-five in your own voice.
+
+## 14. Faster leaves, reversed
+Section 5's lazy prose was eventually walked back. Leaves get their complete summary in the background pass, so a day is fully readable the moment you open it. The call stays quick because roll-ups summarize *summaries*, never raw text.
+
 ## Principles that kept showing up
 - **Capture never blocks on the model** — save is instant; summaries fill in behind you.
 - **Distilled first; prose on demand** — the ladder leads, the long text waits to be asked for.
 - **Verbatim is the source of truth** — the AI's summaries sit on top of your exact words.
 - **Don't create entities beyond necessity** — every time two concepts turned out to be one, we merged them.
+- **One way to do a thing** — the same layout, labels and modes on every input page, so nothing has to be relearned.
+- **Faithful over fluent** — summaries may compress, never invent; a guessed relationship is worse than none.

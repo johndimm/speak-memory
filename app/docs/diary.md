@@ -6,6 +6,47 @@
 
 A running log of what we changed and when — the moves forward, and the sideways ones.
 
+## 2026-09-27 — one way in, four levels of use, and futures that read the past
+
+Three days of reshaping the app around how people actually use it: one consistent way to put
+things in, a path through Journal → Me/Names → Stories → Futures, and Futures rebuilt to read
+your real past live instead of copying it.
+
+**Forward**
+- **One design for every input page.** Journal, Stories, Me and each Name page share a layout (see `docs/input-method-design.md`). Empty pages open ready to write; pages with content open for reading, with ✎ Edit. Drafts are kept as you type; Cancel restores. Reading a day or story is uniform everywhere: word, phrase, Summary | Outline, and a closed Transcript fold.
+- **Tabs:** Journal · Browse · Names · Stories · Futures · More (Me, Timeline, Map, Activity, Guide). **Browse** opens the life tree where you last were, or Life the first time. The header is two rows everywhere. A guided **Next** button walks new users through the levels.
+- **Me:** talk freely while one question at a time rolls above the box. Home, who with, work and hobbies (each with a *since* year), birth year, family and friends tick off as chips. Birth year lives here now, synced to the app-wide setting. Bucket list moved here.
+- **Names:**
+  - Names mentioned twice or more are described automatically (profile plus facts, one at a time in the background); dashed cards and Next only ask about the rest.
+  - Save returns you to reading at once, with the slow work running in the background; it never pulls you back to a page you've left.
+  - Next saves what you typed; unsaved drafts show as "● unsaved".
+  - Select for batch delete, and a 44px × delete target.
+  - **Rename fixes the spelling everywhere** (Zay → Ze: 159 places in one Future).
+  - Profiles never guess a relationship or gender.
+- **Stories:** each thread is a visual timeline, `[＋ before] [stories…] [NOW from Me]`. The ＋ asks the question ("Where did you live before Waverly?"). Your own categories are gathered under their thread (Places → Homes, Girl Friends → Relationships), with a one-tap refile.
+- **Futures:**
+  - A Future stores only its imagined years and reads your real journal **live, read-only** (`db.js` overlay). Old copies are dropped, and duplicate names fold into your real ones.
+  - Always starts **tomorrow**; **To 95** runs a whole life.
+  - Grounded in the Life and decade arc, Me's facts, one sentence per name, and the bucket list.
+  - The Futures page is a switcher (Now · Your journal + each Future); opening one lands in Browse with a banner showing its prompt. The tab bar stays put, with the writing tabs grayed out.
+- **Found** chips follow the text, carry an icon per kind, skip non-names (C++, Windows, 90210), and cap at 8.
+- **Looks:** Classic (default) and Modern (Inter interface, Source Serif 4 for reading). ⚙ → Look.
+- **User's Guide** rewritten around the four levels, including a step-by-step account of how summarizing works. One tap away from More, the top of Settings, and first run; it reopens where you left off.
+
+**Sideways**
+- **"Are we rate limiting ourselves?"** Not quite: the client gave up at 60s while the server could spend 90s × 3 retries, so abandoned calls piled up and were re-sent. The client now waits 150s, and the server retries only bad JSON. Restores re-summarized everything because the summary-style setting (part of every period's hash) wasn't exported; it is now.
+- **A future started in 2047.** Inside a Future (which now includes the real past), "the last entry" was the old Future's last imagined day. Futures now start tomorrow and are built only from real days.
+- **Save pulled you back.** Save awaited the slow facts and profile work and then re-rendered the saved name, wherever the user was by then. Every late write is now gated on a view counter.
+- **The More menu wouldn't open in portrait.** The sideways-scrolling tab row clipped the dropdown; it's now positioned against the screen on phones.
+- **Two browser "freezes" during testing** couldn't be reproduced; likely the test harness running many steps around a page load.
+- The shared localStorage means switching journals in a test tab can switch the user's own tabs on reload; tests now switch only for about a second.
+
+**Open threads**
+- Bucket list and settings aren't in Export.
+- Existing Futures keep what they already wrote (gaps, old guesses); delete and re-imagine for the new behaviour.
+- The first-run "New here? Read the guide" line hasn't been seen with a truly empty journal.
+- Stories thread aliases are a fixed list; a user's odd category names land in their own rows.
+
 ## 2026-09-24 — past · present · future: futures you can hear, a cast that knows itself, and a memoir you talk into
 
 A long arc that grew the app from a diary into three linked worlds — **Memoir (past)**, **Diary

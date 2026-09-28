@@ -12,11 +12,13 @@ A few design decisions I'm happy with:
 
 **The summarizer is a dependency graph, not a script.** Each node is *dirty* (needs summarizing) or *clean*; a parent is *ready* only when its children are clean. A small loop repeatedly summarizes whatever is dirty-and-ready, in parallel, until nothing's left. Add one entry and the "dirty" flag climbs a single spine — day → week → month → year → decade → life — instead of rebuilding the tree.
 
-**Distilled first, heavy prose on demand.** The short rungs (word/phrase/sentence) are generated instantly; the long-form summary and outline are written lazily, only when a reader opens them. Leaf summarization went from minutes to seconds.
+**Futures read the past; they don't copy it.** The app can imagine your journal carrying on from tomorrow, ten years, twenty, or to 95, grounded in your whole arc, your life now, and your cast of people. A Future stores only its imagined years and reads your real journal live and read-only, so the past and future show together, and summaries of the past are reused rather than redone.
 
-**It's honest about being AI-assisted.** If a summary is wrong, you say *why*, it re-summarizes with your correction, and it remembers the note for next time. Your verbatim words are always the source of truth.
+**Talking fills the form.** On "Me" you just talk; one question at a time rolls into view and the answers (where you live, since when, who with) tick off as you say them. That current state becomes the right-hand end of a timeline per thread (homes, relationships, jobs), and the app asks about the one before.
 
-It's a phone-first PWA, runs entirely in the browser with local storage, and uses an LLM only for the summaries. There's even a live graph view where you can watch the summarization climb from a new entry up to "a life."
+**It's honest about being AI-assisted.** Summaries are told to compress, never invent; they don't guess a relationship you haven't stated; your own words are always one tap away. Misspelled a name? Rename it once and it's fixed in every entry and every summary level.
+
+It's a phone-first PWA that runs entirely in the browser with local storage and uses an LLM only for the words it writes. There's even a live graph where you can watch the summarizing climb from a new entry up to "a life."
 
 Built with a lot of iteration and a coding agent as a pair. Happy to talk architecture with anyone building AI features that have to stay fast and trustworthy.
 

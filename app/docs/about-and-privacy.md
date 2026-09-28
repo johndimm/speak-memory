@@ -1,28 +1,42 @@
 # About & privacy
 
 ## What this is
-*Speak, Memory* is a personal journal that summarizes everything you write — at every scale, from a single day to your whole life — and lets you zoom between the one-word gist and your exact words.
+*Speak, Memory* is a personal journal you talk to. It summarizes everything you say at every scale, from a single day up to your whole life, and lets you zoom from the one-word gist down to your exact words. Around the journal: **Me** (you, now), **Names** (who's who), **Stories** (your past, thread by thread) and **Futures** (imagined years ahead, built from all of it).
 
 The name is borrowed, with affection, from Nabokov's memoir.
 
 ## Where your data lives
-Everything you write is stored **locally in your browser**, on this device, using IndexedDB. There are no accounts and no server-side database in this app.
+Everything is stored **locally in your browser**, on this device, using IndexedDB: your days, stories, names, Me, every summary, and each Future. There are no accounts and no server-side database.
 
-- **Back it up** yourself: **⚙ Settings → Your data → Export everything** writes a single file with all your entries and memories. Keep it somewhere safe; **Import** restores it (on this or another device).
-- Clearing your browser's site data, or "Delete everything" in Settings, removes it. There's no cloud copy unless you exported one.
+- **Back it up yourself:** **⚙ Settings → Your data → Export** writes one file with your days, stories, names and summaries. **Import** restores it, on this or another device. Your bucket list and settings (look, voice) stay on the device and aren't in the file.
+- **Only your 40 most recent transcripts are kept word for word.** Older days keep their complete summary and a faithful, full-length retelling.
+- **Clearing the browser's site data**, or **Delete everything** in Settings, removes it all. There's no cloud copy unless you exported one.
+- **A Future keeps only its own imagined years.** Your real past is read from your journal live and is never copied into a Future or changed by one.
 
 ## What's sent to the AI
-To write summaries, the text of the thing being summarized is sent to an LLM service over the network, and the summary comes back. That's the only thing that leaves your device, and only when a summary is being generated. Your verbatim words remain on your device as the source of truth.
+Summaries, descriptions and Futures are written by an AI service over the network. Only the text needed for each job is sent:
+
+- **A day or story:** your transcript.
+- **A week, month, year, decade or Life:** the summaries of what's inside it, not your raw words.
+- **A name's description:** your note about them and the entries that mention them.
+- **Me, as you talk:** your words, to pick out the answers (where you live, since when…).
+- **A Future:** your day summaries, your stories, your Me facts, your Life and decade summaries, one sentence per name, your bucket list, and your prompt.
+
+Nothing is sent otherwise, and nothing is kept on a server by this app.
 
 ## How to trust the summaries
-- Every day and memory keeps a **Verbatim transcript** — your exact words, untouched.
-- If a summary is wrong, use **"The summary isn't right?"** to say why. It re-summarizes with your note and remembers it.
-- The **Voice** setting only changes the *style* of generated prose, never your verbatim text.
+- **Your words are always there.** On any day or story, **Transcript** (one tap) shows them; **✎ Edit** lets you add to them or fix them, and saving re-summarizes.
+- **Summaries are told to stay faithful:** to compress and reword, never to add details you didn't say.
+- **Relationships are never guessed.** The app says "my daughter" or "my friend" only if you said so.
+- **Misspelled name?** Rename it on its Names page, and the app offers to fix the spelling in every entry, story and summary at once.
+- **Voice** (⚙) changes only the *style* of the summaries, never your words.
 
 ## Installing it
-It's a Progressive Web App. In your phone browser, use "Add to Home screen" to keep it a tap away and run it full-bleed. It works offline for reading; summarizing needs a connection.
+It's a Progressive Web App. In your phone's browser, use **Add to Home screen** to keep it a tap away and run it full-screen. Reading works offline; summarizing needs a connection.
 
 ## Tips
 - Rename your journal with the ✎ by the title.
-- Set where the Journal opens (Settings → Opens on).
-- Rotate to landscape and go full-screen on the **Graph** to explore a large life.
+- **⚙ → Look**: Classic (paper and serif) or Modern (clean and sans-serif).
+- **⚙ → Browse → Opens on** sets where Browse starts the first time; after that it remembers where you were.
+- **More → Activity** shows the summarizer at work, with a **Graph** that lights up level by level.
+- **More → ? Guide** is the User's Guide.

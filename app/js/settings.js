@@ -108,6 +108,7 @@ function dataURLtoBlob(dataURL) {
 export function initSettings(root, { onImported, onOpenLives } = {}) {
   root.innerHTML = `
     <div class="settings">
+      <p class="settings-guide"><button type="button" class="import-link doc-open" data-doc="users-guide">? User's Guide</button> — how it works, the four levels of use</p>
       <section class="settings-group">
         <h2 class="settings-h">Look</h2>
         <label class="field">
