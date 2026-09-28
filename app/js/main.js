@@ -286,6 +286,18 @@ modeBtns.forEach((btn) => btn.addEventListener("click", () => (btn.dataset.mode 
 document.getElementById("browse-add")?.addEventListener("click", () => setMode(inputTab === "memoir" ? "memoir-edit" : "diary-edit"));
 
 // The "More" menu (Timeline / Map / Activity) — toggle open, pick an item, close on outside click.
+// Full screen is for landscape. Rotating back to portrait leaves it — real full screen and the
+// fill-the-window fallbacks alike (Graph, Map, Timeline, Stories) — and lets each view refit.
+const portraitMQ = window.matchMedia ? window.matchMedia("(orientation: portrait)") : null;
+portraitMQ?.addEventListener?.("change", (e) => {
+  if (!e.matches) return; // rotated to landscape — nothing to do
+  if (document.fullscreenElement) document.exitFullscreen?.()?.catch?.(() => {});
+  document.querySelectorAll(".faux-full, .tl-faux-full").forEach((el) => el.classList.remove("faux-full", "tl-faux-full"));
+  document.body.classList.remove("ladder-full-open");
+  document.dispatchEvent(new Event("fullscreenchange")); // views update their buttons / sizes
+  setTimeout(() => window.dispatchEvent(new Event("resize")), 60);
+});
+
 const moreBtn = document.getElementById("more-btn"), moreMenu = document.getElementById("more-menu");
 if (moreBtn && moreMenu) {
   moreBtn.addEventListener("click", (e) => {
