@@ -358,7 +358,8 @@ button.tri:active { transform: translateY(1px); }
 }
 .entry-view p { margin: 0 0 0.9rem; line-height: 1.65; }
 .entry-view p:last-child { margin-bottom: 0; }
-.edit-text-btn { align-self: flex-start; }
+.edit-text-btn { align-self: flex-start; border: 1px solid var(--line); background: var(--card); color: var(--ink-soft); font: inherit; font-size: 0.85rem; font-weight: 500; padding: 0.35rem 0.95rem; border-radius: 999px; cursor: pointer; }
+.edit-text-btn:hover { border-color: var(--accent-soft); color: var(--accent); }
 
 /* Single-select toggle: show ONE representation at a time (Summary ⇄ Outline). */
 .rep-toggle { display: inline-flex; gap: 0.2rem; background: var(--paper-deep); border: 1px solid var(--line); border-radius: 999px; padding: 0.2rem; margin: 0 0 1rem; }
@@ -2067,7 +2068,8 @@ html.theme-modern .app-title { font-weight: 700; letter-spacing: -0.02em; font-s
 html.theme-modern .node-name, html.theme-modern .write-title, html.theme-modern .ent-title,
 html.theme-modern .fut-title, html.theme-modern .fut-new-title, html.theme-modern h2 { font-weight: 700; letter-spacing: -0.02em; }
 html.theme-modern .node-word { font-weight: 700; letter-spacing: -0.01em; }
-html.theme-modern .node-phrase { font-style: normal; font-weight: 500; color: var(--ink-soft); }
+/* The phrase stays a reading line — italic serif, like Classic — so each page keeps its hierarchy. */
+html.theme-modern .node-phrase { font-family: "Source Serif 4", Georgia, serif; font-style: italic; font-weight: 400; font-size: 1.3rem; color: var(--ink-soft); letter-spacing: 0; }
 html.theme-modern .write-prompt:not(.is-question) { letter-spacing: 0.04em; }
 html.theme-modern .write-prompt.is-question { font-weight: 600; letter-spacing: -0.01em; }
 /* The header: plain white with a hairline, no heavy shadow. */
@@ -2081,3 +2083,23 @@ html.theme-modern .ent-card, html.theme-modern .fut-row, html.theme-modern .lt-b
 html.theme-modern .fact-chip, html.theme-modern .cap-chip { box-shadow: none; }
 html.theme-modern .rep-tab.active { background: var(--ink); color: #fff; }
 @media (max-width: 640px) { html.theme-modern .mode-btn { font-size: 0.7rem; } } /* Inter runs a hair wider */
+
+/* Modern, readable: the INTERFACE is Inter, but the words you READ — summaries, transcripts, stories,
+   profiles, answers — are set in a text serif, a touch larger with generous leading, at a
+   comfortable measure. (Classic reads well because of exactly this contrast.) */
+html.theme-modern .node-summary, html.theme-modern .rep-body, html.theme-modern .entry-view p:not(.node-word):not(.node-phrase),
+html.theme-modern .node-fold-body, html.theme-modern .verbatim, html.theme-modern .node-verbatim,
+html.theme-modern .ent-summary, html.theme-modern .ent-note-existing, html.theme-modern .ent-ask-answer,
+html.theme-modern .node-outline-body {
+  font-family: "Source Serif 4", Georgia, serif;
+  font-size: 1.09rem;
+  line-height: 1.72;
+  color: #1f2937;
+}
+html.theme-modern .node-summary, html.theme-modern .rep-body { max-width: 40rem; }
+html.theme-modern .node-summary p, html.theme-modern .rep-body p { margin: 0 0 1rem; }
+/* Stories timelines: a bit more size and contrast in the blocks. */
+html.theme-modern .lt-block { border-color: rgba(17, 24, 39, 0.16); }
+html.theme-modern .lt-name { font-size: 0.9rem; font-weight: 600; color: var(--ink); }
+html.theme-modern .lt-yrs { font-size: 0.76rem; color: #4b5563; }
+html.theme-modern .life-ladder .ladder-cat { color: #374151; }
