@@ -725,6 +725,12 @@ export function initEntities(root, { onOpenDay, onOpenMemory, onProgress, onShow
       </div>`;
 
     wireBucketSection(root); // Me: the bucket list saves as you add/remove (independent of Save/Cancel)
+    // Renaming (in Edit): the heading and breadcrumb follow as you type; Save keeps it, Cancel reverts.
+    root.querySelector("#ent-rename")?.addEventListener("input", (e) => {
+      const v = e.target.value.trim() || ent.canonical;
+      const h = root.querySelector(".node-name"); if (h) h.textContent = v;
+      const crumb = root.querySelector(".write-breadcrumb .crumb-current"); if (crumb && !selfMode) crumb.textContent = v;
+    });
     const pstatus = (msg, cls) => { const el = live() && root.querySelector("#ent-pstatus"); if (!el) return; el.textContent = msg; el.className = "node-comment-status" + (cls ? " " + cls : ""); };
     const dstatus = (msg, cls) => { const el = live() && root.querySelector("#ent-dstatus"); if (!el) return; el.hidden = !msg; el.className = "ent-status" + (cls ? " " + cls : ""); el.textContent = msg; };
 
