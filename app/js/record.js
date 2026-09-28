@@ -339,9 +339,13 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
       used.add(L.cat);
       return { ...L, stories: cats.flatMap((c) => byCat.get(c)), others: cats.filter((c) => c !== L.cat) };
     });
+    const otherAsk = (c) => (cur) => cur ? `${c}: what came before ${cur}? When?` : `${c}: tell one. When was it?`;
     for (const [c, list] of [...byCat.entries()].sort((a, b) => b[1].length - a[1].length)) {
-      if (!used.has(c)) threads.push({ cat: c, stories: list, ask: (cur) => cur ? `${c}: what came before ${cur}? When?` : `${c}: tell one. When was it?` });
+      if (!used.has(c)) { used.add(c); threads.push({ cat: c, stories: list, ask: otherAsk(c) }); }
     }
+    // Threads you started that have no stories yet (remembered on this device until the first one).
+    const lowerUsed = new Set([...used].map((c) => c.toLowerCase()));
+    for (const c of getCustomThreads()) if (!lowerUsed.has(c.toLowerCase())) threads.push({ cat: c, stories: [], ask: otherAsk(c), custom: true });
     const rows = threads.map((L) => {
       const cur = L.k && facts[L.k] ? String(facts[L.k]) : "";
       const since = L.k ? facts[L.k + "Since"] : null;
@@ -364,15 +368,39 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
         : `<button type="button" class="lt-block lt-now lt-missing ladder-me"><span class="lt-tag">Now</span><span class="lt-name">${escapeHtml(L.missing)} ›</span></button>`;
       const refile = (L.others || []).map((c) => `<button type="button" class="lt-refile" data-from="${escapeHtml(c)}" data-to="${escapeHtml(L.cat)}">Rename “${escapeHtml(c)}” → ${escapeHtml(L.cat)}</button>`).join("");
       return `<div class="ladder-row${ladderPick === L.cat ? " picked" : ""}">
-          <span class="ladder-cat">${escapeHtml(L.cat)}${refile}</span>
+          <span class="ladder-cat">${escapeHtml(L.cat)}${refile}${L.custom ? `<button type="button" class="lt-thread-del" data-thread="${escapeHtml(L.cat)}" title="Remove this empty thread" aria-label="Remove">×</button>` : ""}</span>
           <div class="lt-track">${storyBlocks}${addBlock}${nowBlock}</div>
         </div>`;
     }).join("");
     ladderEl.innerHTML = `<div class="ladder-headrow"><p class="ladder-head">Your life, thread by thread — tap ＋ to add another</p>`
-      + `<button type="button" class="ladder-full" id="ladder-full" title="Full screen" aria-label="Full screen">${ladderIsFull() ? "✕" : "⤢"}</button></div>${rows}`;
+      + `<button type="button" class="ladder-full" id="ladder-full" title="Full screen" aria-label="Full screen">${ladderIsFull() ? "✕" : "⤢"}</button></div>${rows}`
+      // Not a <form>: this panel already sits inside the entry form, and forms can't nest (a submit here
+      // would save the story instead). Enter and Add are handled directly.
+      + `<div class="lt-newthread" id="lt-newthread"><button type="button" class="lt-newthread-btn" id="lt-newthread-btn">＋ New thread</button>`
+      + `<input type="text" id="lt-newthread-name" placeholder="e.g. Cars, Pets, Bands, Trips" autocomplete="off" enterkeyhint="done" hidden><button type="button" class="lt-newthread-add" id="lt-newthread-add" hidden>Add</button></div>`;
     // Start each track scrolled to NOW (the right end).
     ladderEl.querySelectorAll(".lt-track").forEach((t) => { t.scrollLeft = t.scrollWidth; });
   }
+  // Your own threads, kept here until they have a story (after that the category itself carries them).
+  const THREADS_KEY = jkey("story-threads");
+  function getCustomThreads() { try { return JSON.parse(localStorage.getItem(THREADS_KEY) || "[]").filter((x) => typeof x === "string"); } catch { return []; } }
+  function setCustomThreads(list) { try { localStorage.setItem(THREADS_KEY, JSON.stringify(list)); } catch { /* */ } }
+  function addThread() {
+    const name = (ladderEl.querySelector("#lt-newthread-name")?.value || "").trim().replace(/\s+/g, " ");
+    if (!name) return;
+    const cap = name.charAt(0).toUpperCase() + name.slice(1);
+    const exists = [...getCustomThreads(), ...allMems.map((m) => m.category || ""), ...LADDER.map((L) => L.cat)].some((c) => c.toLowerCase() === cap.toLowerCase());
+    if (!exists) setCustomThreads([...getCustomThreads(), cap]);
+    renderLadder().then(() => {
+      // Scroll the new thread into view, ready for its first story.
+      const row = [...ladderEl.querySelectorAll(".ladder-row")].find((r) => r.querySelector(".ladder-cat")?.firstChild?.textContent.trim().toLowerCase() === cap.toLowerCase());
+      row?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  }
+  ladderEl?.addEventListener("keydown", (e) => {
+    if (e.target.id === "lt-newthread-name" && e.key === "Enter") { e.preventDefault(); addThread(); }
+  });
+
   // Full screen for the Stories timelines (the Fullscreen API, or a CSS fallback where it's missing).
   function ladderIsFull() { return document.fullscreenElement === ladderEl || ladderEl?.classList.contains("faux-full"); }
   function fauxFull(on) {
@@ -387,6 +415,16 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
   }
   document.addEventListener("fullscreenchange", () => { const b = ladderEl?.querySelector("#ladder-full"); if (b) b.textContent = ladderIsFull() ? "✕" : "⤢"; });
   ladderEl?.addEventListener("click", (e) => {
+    if (e.target.closest("#lt-newthread-btn")) {
+      const f = ladderEl.querySelector("#lt-newthread");
+      f.querySelector("#lt-newthread-btn").hidden = true;
+      f.querySelector("#lt-newthread-name").hidden = false; f.querySelector(".lt-newthread-add").hidden = false;
+      f.querySelector("#lt-newthread-name").focus();
+      return;
+    }
+    if (e.target.closest("#lt-newthread-add")) { addThread(); return; }
+    const td = e.target.closest(".lt-thread-del");
+    if (td) { setCustomThreads(getCustomThreads().filter((c) => c !== td.dataset.thread)); renderLadder(); return; }
     if (e.target.closest("#ladder-full")) {
       if (ladderIsFull()) { exitLadderFull(); return; }
       // Real full screen where allowed; if it's refused — or accepted but never happens (some
@@ -649,7 +687,7 @@ export function initRecord(root, { onSaved, onSavedMemory, onDeleted, onDeletedM
     for (const m of allMems) { const c = (m.category || "").trim(); if (c) counts.set(c, (counts.get(c) || 0) + 1); }
     const mine = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b));
     const lower = new Set(mine.map((c) => c.toLowerCase()));
-    const std = DEFAULT_CATEGORIES.filter((c) => !lower.has(c.toLowerCase()));
+    const std = [...new Set([...getCustomThreads(), ...DEFAULT_CATEGORIES])].filter((c) => !lower.has(c.toLowerCase())); // your new threads, then the standard ones
     const cur = catEl.value.trim();
     const known = [...mine, ...std].find((c) => c.toLowerCase() === cur.toLowerCase());
     if (known) typingNewCat = false;

@@ -2131,3 +2131,11 @@ html.theme-modern .life-ladder .ladder-cat { color: #374151; }
 .life-ladder:fullscreen .lt-block, .life-ladder.faux-full .lt-block { max-width: 13rem; }
 
 body.ladder-full-open .app-bar { display: none; }
+
+/* Stories: start a new thread. */
+.lt-newthread { display: flex; gap: 0.4rem; align-items: center; padding: 0.7rem 0 0.2rem; border-top: 1px solid var(--line); margin-top: 0.3rem; }
+.lt-newthread-btn { border: 1px dashed var(--accent-soft); background: var(--paper); color: var(--accent); font: inherit; font-size: 0.85rem; font-weight: 600; border-radius: 999px; padding: 0.35rem 0.9rem; cursor: pointer; }
+#lt-newthread-name { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.9rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.45rem 0.7rem; background: var(--card); color: var(--ink); }
+.lt-newthread-add { border: none; background: var(--accent); color: #fff; font: inherit; font-size: 0.85rem; font-weight: 600; border-radius: 999px; padding: 0.4rem 0.9rem; cursor: pointer; }
+.lt-thread-del { margin-left: 0.4rem; border: none; background: none; color: var(--ink-soft); font: inherit; font-size: 0.9rem; cursor: pointer; padding: 0 0.2rem; }
+.lt-thread-del:hover { color: #b3261e; }
