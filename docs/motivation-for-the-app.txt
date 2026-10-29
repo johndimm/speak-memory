@@ -1,0 +1,11 @@
+The problem with keeping a diary is the effort it takes to decide what to put down and how to say it.  I wanted to make it as easy as telling a friend about your day.  So it has to accept voice input.  
+
+The problem is that my voice input is boring to read.  I change subjects in the middle of a sentence, speak in fragments, I'm always making grammatical mistakes.  I want to make my diary entries easy to read.  The solution to this problem is to perform summarization using AI.  The first amazing thing about language models is that they can produce a polished statement of facts.  This is not a feature for poets.
+
+Now we have nice summary diary entries done without forethought, just by babbling into your phone.  The next issues how to scan or browse the diary.  It's very granular, just one day after another. To allow visibility we create a "time tree" of summarizations by summarizing days into weeks, weeks into months, months into years, years into decades, and decades into the root node which is your Life.
+
+The new problem is that this only becomes interesting after keeping the diary for a long time.  Years.  So we add the idea of a memoire, a place to tell the facts of your life.  Give them a category, like my relationships, my family, the places I've lived, the schools I attended, and the jobs I have done.  The app handles these as if they were diary entries created years ago.
+
+And now finally we get the payoff.  After providing some basic info about yourself, with some cokor that seeps in because you are saying whatever comes to mind, the AI can project the diary into the future.  It will happily make up a story for the rest of your life that is consistent with the info you have given,  
+
+The benefit is first the summarization.  The LLM picks out trends and key moments and it is fun to see.   The second is the ability to generate alternative futures.
